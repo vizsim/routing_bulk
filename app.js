@@ -14,6 +14,8 @@ let layerGroup;
 let lastTarget = null; // Speichert den letzten Zielpunkt für Neuberechnung
 let lastStarts = null; // Speichert die letzten Startpunkte für Neuberechnung
 let lastColors = null; // Speichert die letzten Farben für Neuberechnung
+let startMarkers = []; // Referenzen zu den Startpunkt-Markern
+let routePolylines = []; // Referenzen zu den Route-Polylines
 
 // ==== Config-Management ====
 function updateConfigFromUI() {
@@ -44,6 +46,19 @@ function initConfigUI() {
 
 // ==== Initialisierung ====
 function init() {
+  // Unterdrücke Leaflet Mozilla-Deprecation-Warnungen
+  const originalWarn = console.warn;
+  console.warn = function(...args) {
+    if (args[0] && typeof args[0] === 'string') {
+      const message = args[0];
+      // Unterdrücke mozPressure und mozInputSource Warnungen
+      if (message.includes('mozPressure') || message.includes('mozInputSource')) {
+        return; // Unterdrücke diese Warnungen
+      }
+    }
+    originalWarn.apply(console, args);
+  };
+  
   // Config UI initialisieren
   initConfigUI();
 
@@ -123,7 +138,7 @@ function drawRoute(ghResponse, color) {
   const path = ghResponse.paths?.[0];
   if (!path) {
     console.warn("Kein path in Response:", ghResponse);
-    return;
+    return null;
   }
 
   let coords = null;
@@ -136,21 +151,23 @@ function drawRoute(ghResponse, color) {
   } else if (path.points && typeof path.points === 'string') {
     // Encoded polyline - würde Decoding benötigen, aber wir haben points_encoded: false gesetzt
     console.warn("Encoded points gefunden, aber Decoder nicht implementiert");
-    return;
+    return null;
   }
 
   if (!coords || !coords.length) {
     console.warn("Keine Koordinaten gefunden in:", path);
-    return;
+    return null;
   }
 
   // GraphHopper gibt [lon, lat] zurück, Leaflet braucht [lat, lon]
   const latlngs = coords.map(([lon, lat]) => [lat, lon]);
-  L.polyline(latlngs, { 
+  const polyline = L.polyline(latlngs, { 
     weight: 4, 
     opacity: 0.8, 
     color: color
   }).addTo(layerGroup);
+  
+  return polyline; // Referenz zurückgeben
 }
 
 function drawTargetPoint(latlng) {
@@ -163,15 +180,64 @@ function drawTargetPoint(latlng) {
 }
 
 function drawStartPoints(starts, colors) {
+  // Alte Marker entfernen
+  startMarkers.forEach(marker => layerGroup.removeLayer(marker));
+  startMarkers = [];
+  
   starts.forEach((s, index) => {
     const color = colors[index] || '#0066ff'; // Fallback falls keine Farbe vorhanden
-    L.circleMarker(s, { 
-      radius: 4,
-      color: color,
-      fillColor: color,
-      fillOpacity: 0.8,
-      weight: 2
+    
+    // Erstelle ein Circle-Icon für den Marker
+    const icon = L.divIcon({
+      className: 'start-point-marker',
+      html: `<div style="
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: ${color};
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px ${color};
+        cursor: move;
+      "></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+    
+    // Erstelle einen draggable Marker
+    const marker = L.marker(s, {
+      icon: icon,
+      draggable: true
     }).addTo(layerGroup);
+    
+    // Event Listener für Drag-Ende
+    marker.on('dragend', async (e) => {
+      const newPosition = e.target.getLatLng();
+      const newStart = [newPosition.lat, newPosition.lng];
+      
+      // Startpunkt in lastStarts aktualisieren
+      lastStarts[index] = newStart;
+      
+      // Alte Route entfernen
+      if (routePolylines[index]) {
+        layerGroup.removeLayer(routePolylines[index]);
+        routePolylines[index] = null;
+      }
+      
+      // Neue Route berechnen
+      try {
+        const result = await fetchRoute(newStart, lastTarget);
+        if (result.paths?.[0]) {
+          const newRoute = drawRoute(result, colors[index]);
+          if (newRoute) {
+            routePolylines[index] = newRoute;
+          }
+        }
+      } catch (err) {
+        console.error(`Route-Fehler für Startpunkt ${index}:`, err);
+      }
+    });
+    
+    startMarkers.push(marker);
   });
 }
 
@@ -203,6 +269,9 @@ async function calculateRoutes(target, reuseStarts = false) {
     lastColors = colors; // Speichere die neuen Farben
   }
 
+  // Route-Polylines zurücksetzen
+  routePolylines = [];
+  
   // Startpunkte mit Farben zeichnen
   drawStartPoints(starts, colors);
 
@@ -218,11 +287,13 @@ async function calculateRoutes(target, reuseStarts = false) {
       if (r.__err) { 
         fail++; 
         console.error("Route-Fehler:", r.__err);
+        routePolylines.push(null); // Platzhalter für fehlgeschlagene Route
         continue; 
       }
       ok++;
-      // Route mit der entsprechenden Farbe zeichnen
-      drawRoute(r, colors[i]);
+      // Route mit der entsprechenden Farbe zeichnen und Referenz speichern
+      const polyline = drawRoute(r, colors[i]);
+      routePolylines.push(polyline);
     }
     console.log(`Routen ok=${ok}, fail=${fail}`);
     
