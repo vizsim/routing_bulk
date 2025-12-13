@@ -46,6 +46,33 @@
       </div>
       <div class="config-group">
         <label>Längenverteilung (Beeline):</label>
+        <div class="distribution-buttons">
+          <button class="dist-btn active" data-dist="lognormal" title="Lognormalverteilung">
+            <svg width="20" height="12" viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 5 55 C 7 15, 13 5, 19 18 C 28 35, 43 45, 68 52 C 83 55, 95 56, 98 56"></path>
+            </svg>
+          </button>
+          <button class="dist-btn" data-dist="uniform" title="Gleichmäßig">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="2" y1="6" x2="18" y2="6"></line>
+            </svg>
+          </button>
+          <button class="dist-btn" data-dist="near" title="Mehr nah">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="2" y1="2" x2="18" y2="10"></line>
+            </svg>
+          </button>
+          <button class="dist-btn" data-dist="far" title="Mehr fern">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="2" y1="10" x2="18" y2="2"></line>
+            </svg>
+          </button>
+          <button class="dist-btn" data-dist="normal" title="Normal (Glockenkurve)">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M2 10 Q10 2 18 10"></path>
+            </svg>
+          </button>
+        </div>
         <canvas id="distance-histogram" width="250" height="120"></canvas>
       </div>
       <div class="config-group config-group-with-border">
@@ -82,13 +109,15 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js"></script>
+  <script src="utils.js"></script>
   <script src="state.js"></script>
   <script src="geo.js"></script>
   <script src="api.js"></script>
+  <script src="distribution.js"></script>
   <script src="visualization.js"></script>
   <script src="aggregation.js"></script>
   <script src="map.js"></script>
   <script src="app.js"></script>
+  <script src="config.js"></script>
 </body>
 </html>

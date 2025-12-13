@@ -92,6 +92,27 @@ const Visualization = {
     
     const maxCount = Math.max(...bins);
     
+    // Berechne erwartete Verteilung basierend auf ausgewählter Verteilung
+    let expectedBins = State.getExpectedDistribution();
+    const totalPoints = distances.length;
+    
+    // Bestimme aktiven Verteilungstyp
+    const activeDistBtn = document.querySelector('.dist-btn.active');
+    const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+    
+    // Wenn keine Verteilung vorhanden oder falsche Größe, berechne neue
+    if (!expectedBins || expectedBins.length !== numBins) {
+      expectedBins = Distribution.calculateDistribution(
+        distType,
+        numBins,
+        maxDist,
+        totalPoints
+      );
+      State.setExpectedDistribution(expectedBins);
+    }
+    
+    const maxExpected = Math.max(...expectedBins, maxCount);
+    
     // Canvas leeren
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#f9f9f9';
@@ -123,6 +144,42 @@ const Visualization = {
       ctx.lineWidth = 1;
       ctx.strokeRect(xStart, y, actualBarWidth, barHeight);
     });
+    
+    // Zeichne erwartete Verteilung als Linienplot
+    ctx.strokeStyle = '#ff6600';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    
+    const expectedPoints = [];
+    bins.forEach((_, i) => {
+      const binStartDist = i * binSize;
+      const binEndDist = (i + 1) * binSize;
+      const binCenterDist = (binStartDist + binEndDist) / 2;
+      const xRatio = maxDist > 0 ? binCenterDist / maxDist : 0;
+      const x = padding + xRatio * (width - 2 * padding);
+      
+      const expectedHeight = maxExpected > 0 ? (expectedBins[i] / maxExpected) * chartHeight : 0;
+      const y = height - padding - expectedHeight;
+      
+      expectedPoints.push({ x, y, binIndex: i });
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    
+    ctx.stroke();
+    
+    // Zeichne Punkte bei jedem Bin
+    expectedPoints.forEach(point => {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+    
     
     // Achsen-Beschriftungen
     ctx.fillStyle = '#666';

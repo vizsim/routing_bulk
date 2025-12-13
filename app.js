@@ -1,10 +1,21 @@
 // ==== Haupt-Orchestrierung ====
 const App = {
   async calculateRoutes(target, reuseStarts = false) {
+    // Validierung
+    if (!Utils.assertExists(target, 'Target')) return;
+    if (!Array.isArray(target) || target.length !== 2) {
+      Utils.showError('Ungültiger Zielpunkt', true);
+      return;
+    }
+    
     // Config-Werte aktualisieren
     updateConfigFromUI();
     
     const layerGroup = State.getLayerGroup();
+    if (!layerGroup) {
+      Utils.logError('calculateRoutes', 'LayerGroup nicht initialisiert');
+      return;
+    }
     layerGroup.clearLayers();
 
     Visualization.drawTargetPoint(target);
@@ -16,8 +27,18 @@ const App = {
       starts = State.getLastStarts(); // Wiederverwende die gespeicherten Startpunkte
       colors = State.getLastColors(); // Wiederverwende die gespeicherten Farben
     } else {
-      starts = Array.from({ length: CONFIG.N }, () => 
-        Geo.randomPointInRadius(target[0], target[1], CONFIG.RADIUS_M)
+      // Setze Standard-Verteilung falls noch keine gesetzt
+      const activeDistBtn = document.querySelector('.dist-btn.active');
+      const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+      const numBins = Math.min(15, CONFIG.N);
+      Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
+      
+      // Verwende angepasste Verteilung falls vorhanden, sonst zufällig
+      starts = Geo.generatePointsFromDistribution(
+        target[0], 
+        target[1], 
+        CONFIG.RADIUS_M, 
+        CONFIG.N
       );
       State.setLastStarts(starts); // Speichere die neuen Startpunkte
       
@@ -90,22 +111,20 @@ const App = {
       console.log(`Routen ok=${ok}, fail=${fail}`);
       
       // Histogramm aktualisieren
-      if (starts && target) {
+      if (starts && target && starts.length > 0) {
         Visualization.updateDistanceHistogram(starts, target);
       }
       
       // Export-Button aktivieren
-      if (typeof updateExportButtonState === 'function') {
-        updateExportButtonState();
-      }
+      updateExportButtonState();
       
       // Info anzeigen
       if (ok === 0 && fail > 0) {
-        alert(`Alle ${fail} Routen fehlgeschlagen. Bitte Browser-Konsole prüfen.`);
+        Utils.showError(`Alle ${fail} Routen fehlgeschlagen. Bitte Browser-Konsole prüfen.`, true);
       }
     } catch (err) {
-      console.error(err);
-      alert(String(err));
+      Utils.logError('calculateRoutes', err);
+      Utils.showError(`Fehler beim Berechnen der Routen: ${err.message}`, true);
     }
   },
   
@@ -186,7 +205,7 @@ const App = {
     const allRouteResponses = State.getAllRouteResponses();
     
     if (!allRouteData || allRouteData.length === 0) {
-      alert('Keine Routen zum Exportieren vorhanden.');
+      Utils.showError('Keine Routen zum Exportieren vorhanden.', true);
       return;
     }
     

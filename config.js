@@ -13,22 +13,41 @@ const CONFIG = {
 // ==== Config-Management ====
 function updateConfigFromUI() {
   // Profil vom aktiven Button
-  const activeProfileBtn = document.querySelector('.profile-btn.active');
+  const activeProfileBtn = Utils.getElement('.profile-btn.active');
   if (activeProfileBtn) {
-    CONFIG.PROFILE = activeProfileBtn.dataset.profile;
+    CONFIG.PROFILE = activeProfileBtn.dataset.profile || CONFIG.PROFILE;
   }
-  CONFIG.N = parseInt(document.getElementById('config-n').value, 10);
-  // Radius von km zu m konvertieren
-  const radiusKm = parseFloat(document.getElementById('config-radius').value);
-  CONFIG.RADIUS_M = radiusKm * 1000;
-  CONFIG.AGGREGATED = document.getElementById('config-aggregated').checked;
-  CONFIG.AGGREGATION_METHOD = document.getElementById('config-aggregation-method').value;
+  
+  // Anzahl der Routen validieren
+  const nInput = Utils.getElement('#config-n');
+  if (nInput) {
+    CONFIG.N = Utils.validateNumber(nInput.value, 1, 100, CONFIG.N);
+  }
+  
+  // Radius validieren und von km zu m konvertieren
+  const radiusInput = Utils.getElement('#config-radius');
+  if (radiusInput) {
+    const radiusKm = Utils.validateNumber(radiusInput.value, 0.1, 100, CONFIG.RADIUS_M / 1000);
+    CONFIG.RADIUS_M = radiusKm * 1000;
+  }
+  
+  // Aggregierte Darstellung
+  const aggregatedInput = Utils.getElement('#config-aggregated');
+  if (aggregatedInput) {
+    CONFIG.AGGREGATED = aggregatedInput.checked;
+  }
+  
+  // Aggregierungsmethode
+  const methodInput = Utils.getElement('#config-aggregation-method');
+  if (methodInput) {
+    CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
+  }
 }
 
 function initConfigUI() {
   // Initiale Werte setzen (Radius in km)
   // Profil-Buttons initialisieren
-  const profileBtns = document.querySelectorAll('.profile-btn');
+  const profileBtns = Utils.getElements('.profile-btn');
   profileBtns.forEach(btn => {
     if (btn.dataset.profile === CONFIG.PROFILE) {
       btn.classList.add('active');
@@ -37,10 +56,17 @@ function initConfigUI() {
     }
   });
   
-  document.getElementById('config-n').value = CONFIG.N;
-  document.getElementById('config-radius').value = CONFIG.RADIUS_M / 1000; // m zu km
-  document.getElementById('config-aggregated').checked = CONFIG.AGGREGATED;
-  document.getElementById('config-aggregation-method').value = CONFIG.AGGREGATION_METHOD;
+  // Input-Felder holen (einmalig)
+  const nInput = Utils.getElement('#config-n');
+  const radiusInput = Utils.getElement('#config-radius');
+  const aggregatedInput = Utils.getElement('#config-aggregated');
+  const methodInput = Utils.getElement('#config-aggregation-method');
+  
+  // Initiale Werte setzen
+  if (nInput) nInput.value = CONFIG.N;
+  if (radiusInput) radiusInput.value = CONFIG.RADIUS_M / 1000; // m zu km
+  if (aggregatedInput) aggregatedInput.checked = CONFIG.AGGREGATED;
+  if (methodInput) methodInput.value = CONFIG.AGGREGATION_METHOD;
 
   // Event Listener für Profil-Buttons
   profileBtns.forEach(btn => {
@@ -58,46 +84,43 @@ function initConfigUI() {
     });
   });
   
-  document.getElementById('config-n').addEventListener('change', updateConfigFromUI);
-  document.getElementById('config-radius').addEventListener('change', updateConfigFromUI);
-  
-  document.getElementById('config-aggregated').addEventListener('change', async () => {
-    updateConfigFromUI();
-    // Legende und Methode-Auswahl ein-/ausblenden
-    const legend = document.getElementById('legend');
-    const methodGroup = document.getElementById('aggregation-method-group');
-    if (legend) {
-      legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-    }
-    if (methodGroup) {
-      methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-    }
-    // Wenn Routen vorhanden sind, Darstellung aktualisieren
-    if (State.getLastTarget() && State.getAllRouteData().length > 0) {
-      await App.redrawRoutes();
-    }
-  });
-  
-  document.getElementById('config-aggregation-method').addEventListener('change', async () => {
-    updateConfigFromUI();
-    // Wenn Routen vorhanden sind, Darstellung aktualisieren
-    if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
-      await App.redrawRoutes();
-    }
-  });
-  
-  // Initiale Legende- und Methode-Sichtbarkeit setzen
-  const legend = document.getElementById('legend');
-  const methodGroup = document.getElementById('aggregation-method-group');
-  if (legend) {
-    legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  // Input-Event-Listener mit Validierung
+  if (nInput) {
+    nInput.addEventListener('change', updateConfigFromUI);
   }
-  if (methodGroup) {
-    methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  
+  if (radiusInput) {
+    radiusInput.addEventListener('change', updateConfigFromUI);
   }
+  
+  // Aggregierte Darstellung Toggle
+  if (aggregatedInput) {
+    aggregatedInput.addEventListener('change', async () => {
+      updateConfigFromUI();
+      toggleAggregationUI();
+      // Wenn Routen vorhanden sind, Darstellung aktualisieren
+      if (State.getLastTarget() && State.getAllRouteData().length > 0) {
+        await App.redrawRoutes();
+      }
+    });
+  }
+  
+  // Aggregierungsmethode
+  if (methodInput) {
+    methodInput.addEventListener('change', async () => {
+      updateConfigFromUI();
+      // Wenn Routen vorhanden sind, Darstellung aktualisieren
+      if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
+        await App.redrawRoutes();
+      }
+    });
+  }
+  
+  // Initiale UI-Sichtbarkeit setzen
+  toggleAggregationUI();
   
   // Export-Button Handler
-  const exportBtn = document.getElementById('export-btn');
+  const exportBtn = Utils.getElement('#export-btn');
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
       App.exportToGeoJSON();
@@ -106,11 +129,83 @@ function initConfigUI() {
   
   // Initiale Button-Status setzen
   updateExportButtonState();
+  
+  // Verteilungs-Buttons initialisieren
+  initDistributionButtons();
+  
+  // Initiale Verteilung setzen (lognormal) - wird beim ersten Klick gesetzt
+  const defaultDistBtn = Utils.getElement('.dist-btn[data-dist="lognormal"]');
+  if (defaultDistBtn) {
+    defaultDistBtn.classList.add('active');
+  }
+}
+
+// ==== Helper-Funktionen für Config-UI ====
+function toggleAggregationUI() {
+  const legend = Utils.getElement('#legend');
+  const methodGroup = Utils.getElement('#aggregation-method-group');
+  
+  if (legend) {
+    legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
+  if (methodGroup) {
+    methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
+}
+
+function initDistributionButtons() {
+  const distBtns = Utils.getElements('.dist-btn');
+  distBtns.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      // Alle Buttons deaktivieren
+      distBtns.forEach(b => b.classList.remove('active'));
+      // Aktiven Button aktivieren
+      btn.classList.add('active');
+      
+      const distType = btn.dataset.dist;
+      if (!distType) {
+        Utils.logError('Distribution', 'Button hat kein data-dist Attribut');
+        return;
+      }
+      
+      // Wenn Routen vorhanden sind, Verteilung aktualisieren
+      const lastTarget = State.getLastTarget();
+      const lastStarts = State.getLastStarts();
+      
+      if (lastTarget && lastStarts && lastStarts.length > 0) {
+        try {
+          // Berechne Verteilung basierend auf aktuellen Parametern
+          const numBins = Math.min(15, lastStarts.length);
+          Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
+          
+          // Histogramm aktualisieren
+          Visualization.updateDistanceHistogram(lastStarts, lastTarget);
+          
+          // Neue Startpunkte generieren basierend auf der Verteilung
+          const newStarts = Geo.generatePointsFromDistribution(
+            lastTarget[0],
+            lastTarget[1],
+            CONFIG.RADIUS_M,
+            CONFIG.N
+          );
+          
+          // Startpunkte aktualisieren
+          State.setLastStarts(newStarts);
+          
+          // Routen neu berechnen (mit neuen Startpunkten)
+          await App.calculateRoutes(lastTarget, false);
+        } catch (error) {
+          Utils.logError('Distribution', error);
+          Utils.showError('Fehler beim Ändern der Verteilung', true);
+        }
+      }
+    });
+  });
 }
 
 // ==== Export-Button State Management ====
 function updateExportButtonState() {
-  const exportBtn = document.getElementById('export-btn');
+  const exportBtn = Utils.getElement('#export-btn');
   if (!exportBtn) return;
   
   const hasRoutes = State.getAllRouteData() && State.getAllRouteData().length > 0;

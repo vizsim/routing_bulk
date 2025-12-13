@@ -12,6 +12,7 @@ const State = {
   routePolylines: [],
   allRouteData: [],
   allRouteResponses: [],
+  expectedDistribution: null, // Manuell angepasste erwartete Verteilung
   
   // Getter
   getMap() { return this.map; },
@@ -23,6 +24,7 @@ const State = {
   getRoutePolylines() { return this.routePolylines; },
   getAllRouteData() { return this.allRouteData; },
   getAllRouteResponses() { return this.allRouteResponses; },
+  getExpectedDistribution() { return this.expectedDistribution; },
   
   // Setter
   setMap(map) { this.map = map; },
@@ -34,6 +36,7 @@ const State = {
   setRoutePolylines(polylines) { this.routePolylines = polylines; },
   setAllRouteData(data) { this.allRouteData = data; },
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
+  setExpectedDistribution(dist) { this.expectedDistribution = dist; },
   
   // Reset
   resetRouteData() {
