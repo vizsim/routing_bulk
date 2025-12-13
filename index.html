@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>10 Bike-Routen zum Klickpunkt</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Routen-Planer</h3>
+      <p class="panel-description">Klick in die Karte → Zufällige Startpunkte → Routen zum Ziel.</p>
+    </div>
+    <div class="panel-section">
+      <h4>Konfiguration</h4>
+      <div class="config-group">
+        <label for="config-profile">Profil:</label>
+        <select id="config-profile">
+          <option value="bike">Bike</option>
+          <option value="car">Auto</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label for="config-n">Anzahl Routen:</label>
+        <input type="number" id="config-n" min="1" max="50" value="10" />
+      </div>
+      <div class="config-group">
+        <label for="config-radius">Radius (km):</label>
+        <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
+      </div>
+    </div>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
