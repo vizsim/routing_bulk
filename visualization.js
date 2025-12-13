@@ -254,6 +254,21 @@ const Visualization = {
     }
   },
   
+  toggleStartPointsVisibility() {
+    const startMarkers = State.getStartMarkers();
+    const isHidden = CONFIG.HIDE_START_POINTS;
+    
+    startMarkers.forEach(marker => {
+      if (marker) {
+        if (isHidden) {
+          marker.setOpacity(0);
+        } else {
+          marker.setOpacity(1);
+        }
+      }
+    });
+  },
+  
   drawStartPoints(starts, colors) {
     const layerGroup = State.getLayerGroup();
     const startMarkers = State.getStartMarkers();
@@ -293,6 +308,11 @@ const Visualization = {
         icon: icon,
         draggable: true
       }).addTo(layerGroup);
+      
+      // Opacity basierend auf CONFIG.HIDE_START_POINTS setzen
+      if (CONFIG.HIDE_START_POINTS) {
+        marker.setOpacity(0);
+      }
       
       // Event Listener für Drag-Ende
       marker.on('dragend', async (e) => {

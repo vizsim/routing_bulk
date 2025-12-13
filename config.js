@@ -7,7 +7,8 @@ const CONFIG = {
   MAP_CENTER: [52.52, 13.405], // [lat, lon]
   MAP_ZOOM: 13,
   AGGREGATED: false, // Aggregierte Darstellung
-  AGGREGATION_METHOD: "simple" // "simple" oder "lazyOverlap"
+  AGGREGATION_METHOD: "simple", // "simple" oder "lazyOverlap"
+  HIDE_START_POINTS: false // Startpunkte ausblenden
 };
 
 // ==== Config-Management ====
@@ -42,6 +43,12 @@ function updateConfigFromUI() {
   if (methodInput) {
     CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
   }
+  
+  // Startpunkte ausblenden
+  const hideStartPointsInput = Utils.getElement('#config-hide-start-points');
+  if (hideStartPointsInput) {
+    CONFIG.HIDE_START_POINTS = hideStartPointsInput.checked;
+  }
 }
 
 function initConfigUI() {
@@ -61,12 +68,14 @@ function initConfigUI() {
   const radiusInput = Utils.getElement('#config-radius');
   const aggregatedInput = Utils.getElement('#config-aggregated');
   const methodInput = Utils.getElement('#config-aggregation-method');
+  const hideStartPointsInput = Utils.getElement('#config-hide-start-points');
   
   // Initiale Werte setzen
   if (nInput) nInput.value = CONFIG.N;
   if (radiusInput) radiusInput.value = CONFIG.RADIUS_M / 1000; // m zu km
   if (aggregatedInput) aggregatedInput.checked = CONFIG.AGGREGATED;
   if (methodInput) methodInput.value = CONFIG.AGGREGATION_METHOD;
+  if (hideStartPointsInput) hideStartPointsInput.checked = CONFIG.HIDE_START_POINTS;
 
   // Event Listener für Profil-Buttons
   profileBtns.forEach(btn => {
@@ -116,6 +125,15 @@ function initConfigUI() {
     });
   }
   
+  // Startpunkte ausblenden
+  if (hideStartPointsInput) {
+    hideStartPointsInput.addEventListener('change', () => {
+      updateConfigFromUI();
+      // Startpunkte sofort ausblenden/einblenden
+      Visualization.toggleStartPointsVisibility();
+    });
+  }
+  
   // Initiale UI-Sichtbarkeit setzen
   toggleAggregationUI();
   
@@ -144,12 +162,16 @@ function initConfigUI() {
 function toggleAggregationUI() {
   const legend = Utils.getElement('#legend');
   const methodGroup = Utils.getElement('#aggregation-method-group');
+  const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
   
   if (legend) {
     legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
   if (methodGroup) {
     methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
+  if (hideStartPointsGroup) {
+    hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
 }
 

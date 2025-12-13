@@ -156,6 +156,8 @@ const App = {
     // Startpunkte neu zeichnen (mit neuer Größe basierend auf Modus)
     if (State.getLastStarts() && State.getLastColors()) {
       Visualization.drawStartPoints(State.getLastStarts(), State.getLastColors());
+      // Sichtbarkeit basierend auf CONFIG setzen
+      Visualization.toggleStartPointsVisibility();
     }
     
     // Neu zeichnen basierend auf Modus

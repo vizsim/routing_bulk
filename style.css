@@ -245,6 +245,29 @@ html, body {
   align-self: flex-start;
 }
 
+/* Kleinerer Switch für "Startpunkte ausblenden" */
+.switch-toggle-small .switch-slider {
+  width: 32px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.switch-toggle-small .switch-slider::before {
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+}
+
+.switch-toggle-small input[type="checkbox"]:checked + .switch-slider::before {
+  transform: translateX(16px);
+}
+
+.switch-toggle-small .switch-text {
+  font-size: 13px;
+  margin-top: 1px;
+}
+
 .aggregated-route-tooltip {
   background-color: rgba(0, 0, 0, 0.8);
   color: white;
