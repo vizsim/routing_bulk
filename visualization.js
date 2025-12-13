@@ -136,19 +136,19 @@ const Visualization = {
       const y = height - padding - barHeight;
       
       // Balken zeichnen
-      ctx.fillStyle = '#0066ff';
+      ctx.fillStyle = 'rgba(0, 102, 255, 0.5)'; // #0066ff mit 0.7 Opacity
       ctx.fillRect(xStart, y, actualBarWidth, barHeight);
       
       // Rahmen
-      ctx.strokeStyle = '#0052cc';
+      ctx.strokeStyle = 'rgba(0, 82, 204, 0.6)'; // #0052cc mit 0.7 Opacity
       ctx.lineWidth = 1;
       ctx.strokeRect(xStart, y, actualBarWidth, barHeight);
     });
     
     // Zeichne erwartete Verteilung als Linienplot
-    ctx.strokeStyle = '#ff6600';
+    ctx.strokeStyle = '#666';
     ctx.lineWidth = 2;
-    ctx.fillStyle = '#ff6600';
+    ctx.fillStyle = '#666';
     ctx.beginPath();
     
     const expectedPoints = [];
@@ -162,7 +162,7 @@ const Visualization = {
       const expectedHeight = maxExpected > 0 ? (expectedBins[i] / maxExpected) * chartHeight : 0;
       const y = height - padding - expectedHeight;
       
-      expectedPoints.push({ x, y, binIndex: i });
+      expectedPoints.push({ x, y });
       
       if (i === 0) {
         ctx.moveTo(x, y);
@@ -173,10 +173,10 @@ const Visualization = {
     
     ctx.stroke();
     
-    // Zeichne Punkte bei jedem Bin
+    // Zeichne kleine Punkte bei jedem Bin
     expectedPoints.forEach(point => {
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+      ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
       ctx.fill();
     });
     
@@ -400,39 +400,144 @@ const Visualization = {
     State.setStartMarkers(newMarkers);
   },
   
-  getColorForCount(count, maxCount) {
-    // Klassischer Heatmap-Gradient: Blau → Cyan → Grün → Gelb → Rot
-    const ratio = count / maxCount;
-    let hue;
+  // Gewichtete Verteilung: Mischung aus linearer und quantil-basierter Verteilung
+  // weight = 0.0: rein linear, weight = 1.0: rein quantil-basiert
+  calculateWeightedLevel(count, minCount, maxCount, counts, weight = 0.3) {
+    // Lineare Verteilung
+    const linearLevel = (count - minCount) / (maxCount - minCount || 1);
     
-    if (ratio <= 0.2) {
-      // Blau zu Cyan (0-20%)
-      hue = 240 - (ratio / 0.2) * 40; // 240 -> 200
-    } else if (ratio <= 0.4) {
-      // Cyan zu Grün (20-40%)
-      hue = 200 - ((ratio - 0.2) / 0.2) * 80; // 200 -> 120
-    } else if (ratio <= 0.6) {
-      // Grün zu Gelb (40-60%)
-      hue = 120 - ((ratio - 0.4) / 0.2) * 60; // 120 -> 60
-    } else if (ratio <= 0.8) {
-      // Gelb zu Orange (60-80%)
-      hue = 60 - ((ratio - 0.6) / 0.2) * 30; // 60 -> 30
-    } else {
-      // Orange zu Rot (80-100%)
-      hue = 30 - ((ratio - 0.8) / 0.2) * 30; // 30 -> 0
+    // Quantil-basierte Verteilung (vereinfacht)
+    const sortedCounts = [...counts].sort((a, b) => a - b);
+    const quantileIndex = sortedCounts.findIndex(c => c >= count);
+    const quantileLevel = quantileIndex >= 0 ? quantileIndex / sortedCounts.length : 1.0;
+    
+    // Gewichtete Kombination
+    return linearLevel * (1 - weight) + quantileLevel * weight;
+  },
+  
+  // Colormap-Funktionen
+  getColormapColor(t, colormapName) {
+    t = Math.max(0, Math.min(1, t));
+    
+    let colors;
+    switch (colormapName) {
+      case 'plasma_r':
+        colors = [
+          [253, 231, 37],   // Gelb (t=0)
+          [240, 201, 95],   // Gelb-Orange
+          [220, 170, 141],  // Orange
+          [188, 128, 189],  // Rosa
+          [153, 87, 204],   // Lila
+          [123, 50, 148],   // Dunkel-Lila
+          [93, 15, 109],    // Sehr dunkel-Lila
+          [72, 1, 101]      // Dunkelst (t=1)
+        ];
+        break;
+      case 'inferno_r':
+        colors = [
+          [252, 255, 164],  // Gelb (t=0)
+          [251, 191, 95],   // Orange
+          [240, 125, 58],   // Rot-Orange
+          [202, 71, 1],     // Rot
+          [133, 20, 75],    // Dunkel-Rot
+          [66, 9, 59],      // Sehr dunkel
+          [25, 7, 26],      // Fast schwarz
+          [0, 0, 4]         // Schwarz (t=1)
+        ];
+        break;
+      case 'magma_r':
+        colors = [
+          [252, 253, 191],  // Gelb-Weiß (t=0)
+          [247, 210, 130],  // Gelb
+          [231, 138, 195],  // Rosa
+          [221, 90, 161],   // Magenta
+          [185, 37, 122],   // Lila
+          [124, 29, 111],   // Dunkel-Lila
+          [68, 1, 84],      // Sehr dunkel
+          [0, 0, 4]         // Schwarz (t=1)
+        ];
+        break;
+      case 'viridis_r':
+      default:
+        colors = [
+          [253, 231, 37],   // Gelb (t=0)
+          [181, 222, 43],   // Gelb-Grün
+          [110, 206, 88],   // Grün
+          [53, 183, 121],   // Grün-Türkis
+          [31, 158, 137],   // Türkis
+          [38, 130, 142],   // Türkis-Blau
+          [49, 104, 142],   // Blau
+          [62, 73, 137],    // Blau-Lila
+          [72, 40, 120],    // Lila
+          [68, 1, 84]       // Dunkel-Lila (t=1)
+        ];
+        break;
     }
     
-    return `hsl(${hue}, 70%, 50%)`;
+    // Interpolation zwischen den Farben
+    const numColors = colors.length;
+    const scaledT = t * (numColors - 1);
+    const index = Math.floor(scaledT);
+    const fraction = scaledT - index;
+    
+    const color1 = colors[Math.min(index, numColors - 1)];
+    const color2 = colors[Math.min(index + 1, numColors - 1)];
+    
+    const r = Math.round(color1[0] + (color2[0] - color1[0]) * fraction);
+    const g = Math.round(color1[1] + (color2[1] - color1[1]) * fraction);
+    const b = Math.round(color1[2] + (color2[2] - color1[2]) * fraction);
+    
+    return `rgb(${r}, ${g}, ${b})`;
+  },
+  
+  // Aktualisiert die Legende mit der aktuellen Colormap
+  updateLegendGradient() {
+    const gradientBar = Utils.getElement('#legend-gradient-bar');
+    if (!gradientBar) return;
+    
+    const colormap = CONFIG.COLORMAP || 'viridis_r';
+    const numSteps = 10;
+    let gradientStops = [];
+    
+    for (let i = 0; i <= numSteps; i++) {
+      const t = i / numSteps;
+      const color = this.getColormapColor(t, colormap);
+      const percent = (i / numSteps) * 100;
+      gradientStops.push(`${color} ${percent}%`);
+    }
+    
+    gradientBar.style.background = `linear-gradient(to right, ${gradientStops.join(', ')})`;
+  },
+  
+  getColorForCount(count, weightedLevel) {
+    // Verwende ausgewählte Colormap
+    return this.getColormapColor(weightedLevel, CONFIG.COLORMAP || 'viridis_r');
   },
   
   drawAggregatedRoutes(aggregatedSegments, maxCount) {
     const layerGroup = State.getLayerGroup();
     
+    // Berechne Min/Max und alle Counts für gewichtete Verteilung
+    const counts = aggregatedSegments.map(seg => seg.count);
+    const minCount = Math.min(...counts);
+    const maxCountValue = Math.max(...counts);
+    
     aggregatedSegments.forEach(seg => {
-      const ratio = seg.count / maxCount;
-      const weight = 2 + (ratio * 10); // 2-12px
-      const opacity = 0.3 + (ratio * 0.7); // 0.3-1.0
-      const color = this.getColorForCount(seg.count, maxCount);
+      // Gewichtete Verteilung: 15% Quantil, 85% linear (Zwischenlösung)
+      const weightedLevel = this.calculateWeightedLevel(
+        seg.count, 
+        minCount, 
+        maxCountValue, 
+        counts, 
+        0.15 // 15% Quantil-Gewichtung
+      );
+      
+      // Gewicht und Opacity basierend auf gewichtetem Level
+      const weight = 2 + (weightedLevel * 10); // 2-12px
+      const opacity = 0.7 + (weightedLevel * 0.7); // 0.3-1.0
+      
+      // Farbe basierend auf gewichtetem Level mit viridis_r
+      const color = this.getColorForCount(seg.count, weightedLevel);
       
       const polyline = L.polyline([seg.start, seg.end], {
         weight: weight,

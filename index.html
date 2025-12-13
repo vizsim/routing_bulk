@@ -36,13 +36,15 @@
           </button>
         </div>
       </div>
-      <div class="config-group">
-        <label for="config-n">Anzahl Routen:</label>
-        <input type="number" id="config-n" min="1" max="50" value="10" />
-      </div>
-      <div class="config-group">
-        <label for="config-radius">Radius (km):</label>
-        <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
+      <div class="config-group config-group-inline">
+        <div class="config-field-half">
+          <label for="config-n">Anzahl Routen:</label>
+          <input type="number" id="config-n" min="1" max="1000" value="10" />
+        </div>
+        <div class="config-field-half">
+          <label for="config-radius">Radius (km):</label>
+          <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
+        </div>
       </div>
       <div class="config-group">
         <label>Längenverteilung (Beeline):</label>
@@ -103,11 +105,25 @@
       <div id="legend" class="legend" style="display: none;">
         <div class="legend-title">Anzahl Routen</div>
         <div class="legend-gradient">
-          <div class="legend-gradient-bar"></div>
+          <div class="legend-gradient-bar" id="legend-gradient-bar"></div>
         </div>
         <div class="legend-labels">
           <span>Wenig</span>
           <span>Viel</span>
+        </div>
+        <div class="colormap-selector">
+          <button class="colormap-button" id="colormap-button" title="Colormap auswählen">
+            <span id="colormap-label">viridis_r</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 4 L6 8 L10 4"></path>
+            </svg>
+          </button>
+          <div class="colormap-menu" id="colormap-menu" style="display: none;">
+            <button class="colormap-option" data-colormap="viridis_r">viridis_r</button>
+            <button class="colormap-option" data-colormap="plasma_r">plasma_r</button>
+            <button class="colormap-option" data-colormap="inferno_r">inferno_r</button>
+            <button class="colormap-option" data-colormap="magma_r">magma_r</button>
+          </div>
         </div>
       </div>
       <div class="config-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">

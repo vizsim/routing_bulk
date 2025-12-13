@@ -78,6 +78,22 @@ html, body {
   color: #555;
 }
 
+/* Inline config group für nebeneinander liegende Felder */
+.config-group-inline {
+  display: flex;
+  gap: 12px;
+}
+
+.config-field-half {
+  flex: 1;
+  min-width: 0; /* Verhindert Overflow */
+}
+
+.config-field-half input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .distribution-buttons {
   display: flex;
   gap: 6px;
@@ -146,11 +162,13 @@ html, body {
 }
 
 .profile-btn {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid #ddd;
   border-radius: 4px;
   background: white;
@@ -303,12 +321,16 @@ html, body {
   width: 100%;
   border-radius: 4px;
   background: linear-gradient(to right, 
-    hsl(240, 70%, 50%) 0%,
-    hsl(200, 70%, 50%) 20%,
-    hsl(160, 70%, 50%) 40%,
-    hsl(120, 70%, 50%) 60%,
-    hsl(60, 70%, 50%) 80%,
-    hsl(0, 70%, 50%) 100%
+    rgb(253, 231, 37) 0%,
+    rgb(181, 222, 43) 11.11%,
+    rgb(110, 206, 88) 22.22%,
+    rgb(53, 183, 121) 33.33%,
+    rgb(31, 158, 137) 44.44%,
+    rgb(38, 130, 142) 55.56%,
+    rgb(49, 104, 142) 66.67%,
+    rgb(62, 73, 137) 77.78%,
+    rgb(72, 40, 120) 88.89%,
+    rgb(68, 1, 84) 100%
   );
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
@@ -318,6 +340,79 @@ html, body {
   justify-content: space-between;
   font-size: 10px;
   color: #888;
+  margin-bottom: 8px;
+}
+
+.colormap-selector {
+  position: relative;
+  margin-top: 8px;
+}
+
+.colormap-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.colormap-button:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.colormap-button svg {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.colormap-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.colormap-option {
+  width: 100%;
+  padding: 8px 10px;
+  background: white;
+  border: none;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.colormap-option:last-child {
+  border-bottom: none;
+}
+
+.colormap-option:hover {
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.colormap-option.active {
+  background: #0066ff;
+  color: white;
 }
 
 .export-button {

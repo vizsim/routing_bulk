@@ -8,7 +8,8 @@ const CONFIG = {
   MAP_ZOOM: 13,
   AGGREGATED: false, // Aggregierte Darstellung
   AGGREGATION_METHOD: "simple", // "simple" oder "lazyOverlap"
-  HIDE_START_POINTS: false // Startpunkte ausblenden
+  HIDE_START_POINTS: false, // Startpunkte ausblenden
+  COLORMAP: "viridis_r" // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"
 };
 
 // ==== Config-Management ====
@@ -22,7 +23,7 @@ function updateConfigFromUI() {
   // Anzahl der Routen validieren
   const nInput = Utils.getElement('#config-n');
   if (nInput) {
-    CONFIG.N = Utils.validateNumber(nInput.value, 1, 100, CONFIG.N);
+    CONFIG.N = Utils.validateNumber(nInput.value, 1, 1000, CONFIG.N);
   }
   
   // Radius validieren und von km zu m konvertieren
@@ -137,6 +138,9 @@ function initConfigUI() {
   // Initiale UI-Sichtbarkeit setzen
   toggleAggregationUI();
   
+  // Colormap-Selector initialisieren
+  initColormapSelector();
+  
   // Export-Button Handler
   const exportBtn = Utils.getElement('#export-btn');
   if (exportBtn) {
@@ -173,6 +177,77 @@ function toggleAggregationUI() {
   if (hideStartPointsGroup) {
     hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
+  
+  // Legende-Gradient aktualisieren wenn sichtbar
+  if (CONFIG.AGGREGATED && legend && legend.style.display === 'block') {
+    Visualization.updateLegendGradient();
+  }
+}
+
+function initColormapSelector() {
+  const colormapButton = Utils.getElement('#colormap-button');
+  const colormapMenu = Utils.getElement('#colormap-menu');
+  const colormapLabel = Utils.getElement('#colormap-label');
+  const colormapOptions = Utils.getElements('.colormap-option');
+  
+  if (!colormapButton || !colormapMenu) return;
+  
+  // Initiale Colormap setzen
+  if (colormapLabel) {
+    colormapLabel.textContent = CONFIG.COLORMAP || 'viridis_r';
+  }
+  
+  // Aktive Option markieren
+  colormapOptions.forEach(option => {
+    if (option.dataset.colormap === CONFIG.COLORMAP) {
+      option.classList.add('active');
+    }
+  });
+  
+  // Button-Klick: Menü öffnen/schließen
+  colormapButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isVisible = colormapMenu.style.display === 'block';
+    colormapMenu.style.display = isVisible ? 'none' : 'block';
+  });
+  
+  // Option-Klick: Colormap ändern
+  colormapOptions.forEach(option => {
+    option.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const colormap = option.dataset.colormap;
+      
+      // CONFIG aktualisieren
+      CONFIG.COLORMAP = colormap;
+      
+      // Label aktualisieren
+      if (colormapLabel) {
+        colormapLabel.textContent = colormap;
+      }
+      
+      // Aktive Option aktualisieren
+      colormapOptions.forEach(opt => opt.classList.remove('active'));
+      option.classList.add('active');
+      
+      // Menü schließen
+      colormapMenu.style.display = 'none';
+      
+      // Legende aktualisieren
+      Visualization.updateLegendGradient();
+      
+      // Routen neu zeichnen wenn vorhanden
+      if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
+        await App.redrawRoutes();
+      }
+    });
+  });
+  
+  // Klick außerhalb: Menü schließen
+  document.addEventListener('click', (e) => {
+    if (!colormapButton.contains(e.target) && !colormapMenu.contains(e.target)) {
+      colormapMenu.style.display = 'none';
+    }
+  });
 }
 
 function initDistributionButtons() {
