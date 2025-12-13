@@ -18,12 +18,28 @@ const Visualization = {
   
   drawTargetPoint(latlng) {
     const layerGroup = State.getLayerGroup();
-    L.circleMarker(latlng, { 
-      radius: 6,
-      color: '#ff0000',
-      fillColor: '#ff0000',
-      fillOpacity: 0.8
-    }).addTo(layerGroup);
+    
+    // SVG-Icon für Zielpunkt
+    const targetIcon = L.divIcon({
+      className: 'target-point-icon',
+      html: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <g transform="translate(12, 10) scale(0.4) translate(-16, -16)">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="white" stroke-miterlimit="10">
+              <line x1="6" y1="28" x2="6" y2="5" stroke="white" stroke-width="3" stroke-linecap="round"></line>
+              <polyline points="6,5 26,5 26,19 6,19" stroke="white" stroke-width="1.5"></polyline>
+              <rect x="6" y="5" width="10" height="7" fill="white"></rect>
+              <rect x="16" y="12" width="10" height="7" fill="white"></rect>
+            </svg>
+          </g>
+        </svg>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+    
+    L.marker(latlng, { icon: targetIcon }).addTo(layerGroup);
   },
   
   drawStartPoints(starts, colors) {
