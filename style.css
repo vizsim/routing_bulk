@@ -61,6 +61,12 @@ html, body {
   margin-bottom: 0;
 }
 
+.config-group-with-border {
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  margin-top: 12px;
+}
+
 .config-group label {
   display: block;
   margin-bottom: 4px;
@@ -122,23 +128,73 @@ html, body {
   display: block;
 }
 
-.switch-label {
+.switch-toggle {
+  position: relative;
   display: flex;
-  align-items: center;
-  cursor: pointer;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 0;
 }
 
-.switch-label input[type="checkbox"] {
-  width: auto;
-  margin-right: 8px;
+.switch-toggle label {
   cursor: pointer;
+  margin: 0;
+  padding: 0;
+  display: inline-block;
+}
+
+.switch-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: background-color 0.3s;
+  flex-shrink: 0;
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.switch-toggle input[type="checkbox"]:checked + .switch-slider {
+  background-color: #0066ff;
+}
+
+.switch-toggle input[type="checkbox"]:checked + .switch-slider::before {
+  transform: translateX(20px);
+}
+
+.switch-toggle input[type="checkbox"]:focus + .switch-slider {
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
 }
 
 .switch-text {
   font-size: 14px;
   color: #333;
   user-select: none;
+  line-height: 1.4;
+  margin-top: 3px;
+  align-self: flex-start;
 }
 
 .aggregated-route-tooltip {

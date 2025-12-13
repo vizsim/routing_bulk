@@ -44,11 +44,14 @@
         <label for="config-radius">Radius (km):</label>
         <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
       </div>
-      <div class="config-group">
-        <label class="switch-label">
-          <input type="checkbox" id="config-aggregated" />
+      <div class="config-group config-group-with-border">
+        <div class="switch-toggle">
+          <label for="config-aggregated">
+            <input type="checkbox" id="config-aggregated" />
+            <span class="switch-slider"></span>
+          </label>
           <span class="switch-text">Aggregierte Darstellung</span>
-        </label>
+        </div>
       </div>
       <div class="config-group" id="aggregation-method-group" style="display: none;">
         <label for="config-aggregation-method">Aggregierungs-Methode:</label>
