@@ -5,7 +5,8 @@ const CONFIG = {
   N: 10, // Anzahl der Routen
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
   MAP_CENTER: [52.52, 13.405], // [lat, lon]
-  MAP_ZOOM: 13
+  MAP_ZOOM: 13,
+  AGGREGATED: false // Aggregierte Darstellung
 };
 
 // ==== Globale Variablen ====
@@ -16,6 +17,8 @@ let lastStarts = null; // Speichert die letzten Startpunkte für Neuberechnung
 let lastColors = null; // Speichert die letzten Farben für Neuberechnung
 let startMarkers = []; // Referenzen zu den Startpunkt-Markern
 let routePolylines = []; // Referenzen zu den Route-Polylines
+let allRouteData = []; // Speichert alle Route-Daten für Aggregation
+let allRouteResponses = []; // Speichert alle Route-Responses für Modus-Wechsel
 
 // ==== Config-Management ====
 function updateConfigFromUI() {
@@ -24,6 +27,7 @@ function updateConfigFromUI() {
   // Radius von km zu m konvertieren
   const radiusKm = parseFloat(document.getElementById('config-radius').value);
   CONFIG.RADIUS_M = radiusKm * 1000;
+  CONFIG.AGGREGATED = document.getElementById('config-aggregated').checked;
 }
 
 function initConfigUI() {
@@ -31,6 +35,7 @@ function initConfigUI() {
   document.getElementById('config-profile').value = CONFIG.PROFILE;
   document.getElementById('config-n').value = CONFIG.N;
   document.getElementById('config-radius').value = CONFIG.RADIUS_M / 1000; // m zu km
+  document.getElementById('config-aggregated').checked = CONFIG.AGGREGATED;
 
   // Event Listener für Config-Änderungen
   document.getElementById('config-profile').addEventListener('change', async () => {
@@ -42,6 +47,24 @@ function initConfigUI() {
   });
   document.getElementById('config-n').addEventListener('change', updateConfigFromUI);
   document.getElementById('config-radius').addEventListener('change', updateConfigFromUI);
+  document.getElementById('config-aggregated').addEventListener('change', async () => {
+    updateConfigFromUI();
+    // Legende ein-/ausblenden
+    const legend = document.getElementById('legend');
+    if (legend) {
+      legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+    }
+    // Wenn Routen vorhanden sind, Darstellung aktualisieren
+    if (lastTarget && allRouteData.length > 0) {
+      await redrawRoutes();
+    }
+  });
+  
+  // Initiale Legende-Sichtbarkeit setzen
+  const legend = document.getElementById('legend');
+  if (legend) {
+    legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
 }
 
 // ==== Initialisierung ====
@@ -128,16 +151,10 @@ async function fetchRoute(startLatLng, endLatLng) {
   return data;
 }
 
-// ==== Visualisierung ====
-function drawRoute(ghResponse, color) {
-  // GraphHopper Response-Struktur kann variieren:
-  // - paths[0].points.coordinates (wenn points_encoded: false)
-  // - paths[0].geometry.coordinates (GeoJSON Format)
-  // - paths[0].points (encoded string, braucht Decoding)
-  
+// ==== Route-Daten-Extraktion ====
+function extractRouteCoordinates(ghResponse) {
   const path = ghResponse.paths?.[0];
   if (!path) {
-    console.warn("Kein path in Response:", ghResponse);
     return null;
   }
 
@@ -149,18 +166,24 @@ function drawRoute(ghResponse, color) {
   } else if (path.geometry?.coordinates) {
     coords = path.geometry.coordinates;
   } else if (path.points && typeof path.points === 'string') {
-    // Encoded polyline - würde Decoding benötigen, aber wir haben points_encoded: false gesetzt
-    console.warn("Encoded points gefunden, aber Decoder nicht implementiert");
     return null;
   }
 
   if (!coords || !coords.length) {
-    console.warn("Keine Koordinaten gefunden in:", path);
     return null;
   }
 
-  // GraphHopper gibt [lon, lat] zurück, Leaflet braucht [lat, lon]
-  const latlngs = coords.map(([lon, lat]) => [lat, lon]);
+  // GraphHopper gibt [lon, lat] zurück, konvertiere zu [lat, lon]
+  return coords.map(([lon, lat]) => [lat, lon]);
+}
+
+// ==== Visualisierung ====
+function drawRoute(ghResponse, color) {
+  const latlngs = extractRouteCoordinates(ghResponse);
+  if (!latlngs) {
+    return null;
+  }
+
   const polyline = L.polyline(latlngs, { 
     weight: 4, 
     opacity: 0.8, 
@@ -184,6 +207,11 @@ function drawStartPoints(starts, colors) {
   startMarkers.forEach(marker => layerGroup.removeLayer(marker));
   startMarkers = [];
   
+  // Größe basierend auf Modus
+  const size = CONFIG.AGGREGATED ? 6 : 12;
+  const borderWidth = CONFIG.AGGREGATED ? 1 : 2;
+  const shadowWidth = CONFIG.AGGREGATED ? 1 : 2;
+  
   starts.forEach((s, index) => {
     const color = colors[index] || '#0066ff'; // Fallback falls keine Farbe vorhanden
     
@@ -191,16 +219,16 @@ function drawStartPoints(starts, colors) {
     const icon = L.divIcon({
       className: 'start-point-marker',
       html: `<div style="
-        width: 12px;
-        height: 12px;
+        width: ${size}px;
+        height: ${size}px;
         border-radius: 50%;
         background-color: ${color};
-        border: 2px solid white;
-        box-shadow: 0 0 0 2px ${color};
+        border: ${borderWidth}px solid white;
+        box-shadow: 0 0 0 ${shadowWidth}px ${color};
         cursor: move;
       "></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6]
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2]
     });
     
     // Erstelle einen draggable Marker
@@ -241,6 +269,107 @@ function drawStartPoints(starts, colors) {
   });
 }
 
+// ==== Aggregierung ====
+function aggregateRoutes(routeDataArray) {
+  const TOLERANCE = 0.0001; // ~10m in Grad
+  const segmentCounts = new Map();
+  
+  // Hilfsfunktion: Normalisiere Koordinate
+  const normalize = (coord) => {
+    return [
+      Math.round(coord[0] / TOLERANCE) * TOLERANCE,
+      Math.round(coord[1] / TOLERANCE) * TOLERANCE
+    ];
+  };
+  
+  // Hilfsfunktion: Erstelle Segment-Key (normalisiert, sortiert)
+  const createSegmentKey = (p1, p2) => {
+    const np1 = normalize(p1);
+    const np2 = normalize(p2);
+    // Sortiere, damit Richtung egal ist
+    const key = np1[0] < np2[0] || (np1[0] === np2[0] && np1[1] < np2[1])
+      ? `${np1[0]},${np1[1]}-${np2[0]},${np2[1]}`
+      : `${np2[0]},${np2[1]}-${np1[0]},${np1[1]}`;
+    return key;
+  };
+  
+  // Alle Routen durchgehen und Segmente zählen
+  routeDataArray.forEach(routeCoords => {
+    if (!routeCoords || routeCoords.length < 2) return;
+    
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const p1 = routeCoords[i];
+      const p2 = routeCoords[i + 1];
+      const key = createSegmentKey(p1, p2);
+      segmentCounts.set(key, (segmentCounts.get(key) || 0) + 1);
+    }
+  });
+  
+  // Aggregierte Segmente zurückgeben
+  const aggregatedSegments = [];
+  segmentCounts.forEach((count, key) => {
+    const [startStr, endStr] = key.split('-');
+    const start = startStr.split(',').map(Number);
+    const end = endStr.split(',').map(Number);
+    aggregatedSegments.push({
+      start: start,
+      end: end,
+      count: count
+    });
+  });
+  
+  return aggregatedSegments;
+}
+
+function getColorForCount(count, maxCount) {
+  // Klassischer Heatmap-Gradient: Blau → Cyan → Grün → Gelb → Rot
+  const ratio = count / maxCount;
+  let hue;
+  
+  if (ratio <= 0.2) {
+    // Blau zu Cyan (0-20%)
+    hue = 240 - (ratio / 0.2) * 40; // 240 -> 200
+  } else if (ratio <= 0.4) {
+    // Cyan zu Grün (20-40%)
+    hue = 200 - ((ratio - 0.2) / 0.2) * 80; // 200 -> 120
+  } else if (ratio <= 0.6) {
+    // Grün zu Gelb (40-60%)
+    hue = 120 - ((ratio - 0.4) / 0.2) * 60; // 120 -> 60
+  } else if (ratio <= 0.8) {
+    // Gelb zu Orange (60-80%)
+    hue = 60 - ((ratio - 0.6) / 0.2) * 30; // 60 -> 30
+  } else {
+    // Orange zu Rot (80-100%)
+    hue = 30 - ((ratio - 0.8) / 0.2) * 30; // 30 -> 0
+  }
+  
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+function drawAggregatedRoutes(aggregatedSegments, maxCount) {
+  aggregatedSegments.forEach(seg => {
+    const ratio = seg.count / maxCount;
+    const weight = 2 + (ratio * 10); // 2-12px
+    const opacity = 0.3 + (ratio * 0.7); // 0.3-1.0
+    const color = getColorForCount(seg.count, maxCount);
+    
+    const polyline = L.polyline([seg.start, seg.end], {
+      weight: weight,
+      opacity: opacity,
+      color: color
+    });
+    
+    // Tooltip mit Anzahl hinzufügen
+    polyline.bindTooltip(`${seg.count} Route${seg.count !== 1 ? 'n' : ''}`, {
+      permanent: false,
+      direction: 'top',
+      className: 'aggregated-route-tooltip'
+    });
+    
+    polyline.addTo(layerGroup);
+  });
+}
+
 // ==== Route-Berechnung ====
 async function calculateRoutes(target, reuseStarts = false) {
   // Config-Werte aktualisieren
@@ -269,8 +398,10 @@ async function calculateRoutes(target, reuseStarts = false) {
     lastColors = colors; // Speichere die neuen Farben
   }
 
-  // Route-Polylines zurücksetzen
+  // Route-Polylines und Daten zurücksetzen
   routePolylines = [];
+  allRouteData = [];
+  allRouteResponses = [];
   
   // Startpunkte mit Farben zeichnen
   drawStartPoints(starts, colors);
@@ -282,19 +413,44 @@ async function calculateRoutes(target, reuseStarts = false) {
     );
 
     let ok = 0, fail = 0;
+    const validRoutes = [];
+    
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.__err) { 
         fail++; 
         console.error("Route-Fehler:", r.__err);
-        routePolylines.push(null); // Platzhalter für fehlgeschlagene Route
+        routePolylines.push(null);
+        allRouteResponses.push(null);
         continue; 
       }
       ok++;
-      // Route mit der entsprechenden Farbe zeichnen und Referenz speichern
-      const polyline = drawRoute(r, colors[i]);
-      routePolylines.push(polyline);
+      
+      // Route-Daten extrahieren und speichern
+      const coords = extractRouteCoordinates(r);
+      if (coords) {
+        allRouteData.push(coords);
+        allRouteResponses.push({ response: r, color: colors[i], index: i });
+        validRoutes.push({ response: r, color: colors[i], index: i });
+      } else {
+        allRouteResponses.push(null);
+      }
     }
+    
+    // Visualisierung basierend auf Modus
+    if (CONFIG.AGGREGATED && allRouteData.length > 0) {
+      // Aggregierte Darstellung
+      const aggregatedSegments = aggregateRoutes(allRouteData);
+      const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+      drawAggregatedRoutes(aggregatedSegments, maxCount);
+    } else {
+      // Einzelne Routen zeichnen
+      validRoutes.forEach(({ response, color, index }) => {
+        const polyline = drawRoute(response, color);
+        routePolylines[index] = polyline;
+      });
+    }
+    
     console.log(`Routen ok=${ok}, fail=${fail}`);
     
     // Info anzeigen
@@ -304,6 +460,48 @@ async function calculateRoutes(target, reuseStarts = false) {
   } catch (err) {
     console.error(err);
     alert(String(err));
+  }
+}
+
+async function redrawRoutes() {
+  if (!lastTarget || allRouteData.length === 0) return;
+  
+  // Alle Routen-Polylines entfernen (Markers sind keine Polylines, bleiben erhalten)
+  routePolylines.forEach(polyline => {
+    if (polyline) layerGroup.removeLayer(polyline);
+  });
+  
+  // Alle Polylines aus layerGroup entfernen (sind die Routen)
+  const polylinesToRemove = [];
+  layerGroup.eachLayer(layer => {
+    if (layer instanceof L.Polyline) {
+      polylinesToRemove.push(layer);
+    }
+  });
+  polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
+  
+  routePolylines = [];
+  
+  // Startpunkte neu zeichnen (mit neuer Größe basierend auf Modus)
+  if (lastStarts && lastColors) {
+    drawStartPoints(lastStarts, lastColors);
+  }
+  
+  // Neu zeichnen basierend auf Modus
+  if (CONFIG.AGGREGATED) {
+    const aggregatedSegments = aggregateRoutes(allRouteData);
+    if (aggregatedSegments.length > 0) {
+      const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+      drawAggregatedRoutes(aggregatedSegments, maxCount);
+    }
+  } else {
+    // Einzelne Routen aus gespeicherten Responses zeichnen
+    allRouteResponses.forEach((routeInfo, index) => {
+      if (routeInfo) {
+        const polyline = drawRoute(routeInfo.response, routeInfo.color);
+        routePolylines[index] = polyline;
+      }
+    });
   }
 }
 
