@@ -84,14 +84,54 @@ const Visualization = {
           State.setRoutePolylines(routePolylines);
         }
         
+        // Alle Polylines entfernen (falls aggregierte Darstellung aktiv)
+        if (CONFIG.AGGREGATED) {
+          const polylinesToRemove = [];
+          layerGroup.eachLayer(layer => {
+            if (layer instanceof L.Polyline) {
+              polylinesToRemove.push(layer);
+            }
+          });
+          polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
+        }
+        
         // Neue Route berechnen
         try {
           const result = await API.fetchRoute(newStart, State.getLastTarget());
           if (result.paths?.[0]) {
-            const newRoute = Visualization.drawRoute(result, colors[index]);
-            if (newRoute) {
-              routePolylines[index] = newRoute;
-              State.setRoutePolylines(routePolylines);
+            // Route-Daten extrahieren und im State aktualisieren
+            const coords = API.extractRouteCoordinates(result);
+            if (coords) {
+              const allRouteData = State.getAllRouteData();
+              const allRouteResponses = State.getAllRouteResponses();
+              
+              // Alte Route-Daten ersetzen
+              if (allRouteData[index]) {
+                allRouteData[index] = coords;
+              }
+              if (allRouteResponses[index]) {
+                allRouteResponses[index] = { response: result, color: colors[index], index: index };
+              }
+              
+              State.setAllRouteData(allRouteData);
+              State.setAllRouteResponses(allRouteResponses);
+              
+              // Visualisierung basierend auf Modus
+              if (CONFIG.AGGREGATED) {
+                // Aggregierte Darstellung neu berechnen
+                const aggregatedSegments = Aggregation.aggregateRoutes(allRouteData);
+                if (aggregatedSegments.length > 0) {
+                  const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+                  Visualization.drawAggregatedRoutes(aggregatedSegments, maxCount);
+                }
+              } else {
+                // Einzelne Route zeichnen
+                const newRoute = Visualization.drawRoute(result, colors[index]);
+                if (newRoute) {
+                  routePolylines[index] = newRoute;
+                  State.setRoutePolylines(routePolylines);
+                }
+              }
             }
           }
         } catch (err) {
