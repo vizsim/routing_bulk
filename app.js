@@ -89,6 +89,11 @@ const App = {
       
       console.log(`Routen ok=${ok}, fail=${fail}`);
       
+      // Histogramm aktualisieren
+      if (starts && target) {
+        Visualization.updateDistanceHistogram(starts, target);
+      }
+      
       // Export-Button aktivieren
       if (typeof updateExportButtonState === 'function') {
         updateExportButtonState();
