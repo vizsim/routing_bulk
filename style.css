@@ -1,3 +1,7 @@
+/* ============================================
+   RESET & BASE STYLES
+   ============================================ */
+
 html, body { 
   height: 100%; 
   margin: 0; 
@@ -6,6 +10,10 @@ html, body {
 #map { 
   height: 100%; 
 }
+
+/* ============================================
+   LAYOUT - PANEL
+   ============================================ */
 
 .panel {
   position: absolute;
@@ -56,6 +64,10 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+/* ============================================
+   CONFIG GROUPS & FORM ELEMENTS
+   ============================================ */
+
 .config-group {
   margin-bottom: 12px;
 }
@@ -78,67 +90,6 @@ html, body {
   color: #555;
 }
 
-/* Inline config group für nebeneinander liegende Felder */
-.config-group-inline {
-  display: flex;
-  gap: 12px;
-}
-
-.config-field-half {
-  flex: 1;
-  min-width: 0; /* Verhindert Overflow */
-}
-
-.config-field-half input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.distribution-buttons {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.dist-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 12px;
-}
-
-.dist-btn:hover {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.dist-btn.active {
-  border-color: #0066ff;
-  background: #0066ff;
-  color: white;
-}
-
-.dist-btn svg {
-  display: block;
-}
-
-#distance-histogram {
-  width: 100%;
-  height: 120px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: #f9f9f9;
-}
-
 .config-group input,
 .config-group select {
   width: 100%;
@@ -155,6 +106,26 @@ html, body {
   border-color: #0066ff;
   box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1);
 }
+
+/* Inline config group für nebeneinander liegende Felder */
+.config-group-inline {
+  display: flex;
+  gap: 12px;
+}
+
+.config-field-half {
+  flex: 1;
+  min-width: 0; /* Verhindert Overflow */
+}
+
+.config-field-half input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================================
+   BUTTONS - PROFILE
+   ============================================ */
 
 .profile-buttons {
   display: flex;
@@ -193,6 +164,63 @@ html, body {
 .profile-btn svg {
   display: block;
 }
+
+/* ============================================
+   BUTTONS - DISTRIBUTION
+   ============================================ */
+
+.distribution-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dist-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+}
+
+.dist-btn:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.dist-btn.active {
+  border-color: #0066ff;
+  background: #0066ff;
+  color: white;
+}
+
+.dist-btn svg {
+  display: block;
+}
+
+/* ============================================
+   HISTOGRAM
+   ============================================ */
+
+#distance-histogram {
+  width: 100%;
+  height: 120px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+/* ============================================
+   SWITCHES / TOGGLES
+   ============================================ */
 
 .switch-toggle {
   position: relative;
@@ -286,16 +314,9 @@ html, body {
   margin-top: 1px;
 }
 
-.aggregated-route-tooltip {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
+/* ============================================
+   LEGEND & COLORMAP
+   ============================================ */
 
 .legend {
   margin-top: 12px;
@@ -348,6 +369,7 @@ html, body {
   margin-bottom: 8px;
 }
 
+/* Colormap Preview */
 .colormap-preview-container {
   display: none;
   grid-template-columns: repeat(4, 1fr);
@@ -384,10 +406,14 @@ html, body {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+/* ============================================
+   EXPORT BUTTON
+   ============================================ */
+
 .export-button {
   width: 100%;
   padding: 10px 16px;
-  background: #0066ff;
+  background: #505254;
   color: white;
   border: none;
   border-radius: 4px;
@@ -398,7 +424,7 @@ html, body {
 }
 
 .export-button:hover:not(:disabled) {
-  background: #0052cc;
+  background: #313233;
 }
 
 .export-button:disabled {
@@ -407,3 +433,17 @@ html, body {
   opacity: 0.6;
 }
 
+/* ============================================
+   TOOLTIPS
+   ============================================ */
+
+.aggregated-route-tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
