@@ -16,9 +16,44 @@ const App = {
       Utils.logError('calculateRoutes', 'LayerGroup nicht initialisiert');
       return;
     }
-    layerGroup.clearLayers();
-
-    Visualization.drawTargetPoint(target);
+    
+    // Nur Layer löschen wenn nicht im "Zielpunkte merken" Modus
+    // Im "Zielpunkte merken" Modus sollen alle Zielpunkte erhalten bleiben
+    if (!CONFIG.REMEMBER_TARGETS) {
+      layerGroup.clearLayers();
+      Visualization.drawTargetPoint(target);
+    } else {
+      // Im "Zielpunkte merken" Modus: Nur Startpunkte des aktuellen Klicks löschen
+      // Alle Zielpunkt-Marker und Routen behalten
+      const startMarkers = State.getStartMarkers();
+      startMarkers.forEach(marker => {
+        if (marker) layerGroup.removeLayer(marker);
+      });
+      
+      // Alle gespeicherten Zielpunkte zeichnen (falls noch nicht gezeichnet)
+      const allTargets = State.getAllTargets();
+      const targetMarkers = State.getTargetMarkers();
+      
+      // Prüfe welche Zielpunkte noch nicht gezeichnet sind
+      allTargets.forEach((t, index) => {
+        if (!targetMarkers[index]) {
+          const marker = Visualization.drawTargetPoint(t);
+          targetMarkers[index] = marker;
+        }
+      });
+      State.setTargetMarkers(targetMarkers);
+      
+      // Aktuellen Zielpunkt zeichnen (falls noch nicht vorhanden)
+      const targetExists = allTargets.some(t => 
+        Math.abs(t[0] - target[0]) < 0.0001 && 
+        Math.abs(t[1] - target[1]) < 0.0001
+      );
+      if (!targetExists) {
+        Visualization.drawTargetPoint(target);
+      }
+      
+      // Alle Routen zu allen Zielpunkten anzeigen (wird nach calculateRoutes aktualisiert)
+    }
 
     // Startpunkte erzeugen oder wiederverwenden
     let starts;
@@ -49,10 +84,13 @@ const App = {
       State.setLastColors(colors); // Speichere die neuen Farben
     }
 
-    // Route-Polylines und Daten zurücksetzen
-    State.resetRouteData();
+    // Route-Polylines und Daten zurücksetzen (nur wenn nicht im "Zielpunkte merken" Modus)
+    // Im "Zielpunkte merken" Modus werden die Routen pro Zielpunkt gespeichert
+    if (!CONFIG.REMEMBER_TARGETS) {
+      State.resetRouteData();
+    }
     
-    // Startpunkte mit Farben zeichnen
+    // Startpunkte mit Farben zeichnen (nur für aktuellen Klick)
     Visualization.drawStartPoints(starts, colors);
 
     // N Requests parallel
@@ -93,19 +131,59 @@ const App = {
       State.setAllRouteData(allRouteData);
       State.setAllRouteResponses(allRouteResponses);
       
+      // Wenn "Zielpunkte merken" aktiviert ist, Routen zu diesem Zielpunkt speichern
+      if (CONFIG.REMEMBER_TARGETS) {
+        const targetRoutes = State.getTargetRoutes();
+        const targetIndex = targetRoutes.findIndex(tr => 
+          Math.abs(tr.target[0] - target[0]) < 0.0001 && 
+          Math.abs(tr.target[1] - target[1]) < 0.0001
+        );
+        
+        const routeInfo = {
+          target: target,
+          routeData: allRouteData,
+          routeResponses: allRouteResponses,
+          routePolylines: routePolylines,
+          starts: starts,
+          colors: colors
+        };
+        
+        if (targetIndex >= 0) {
+          // Bestehende Routen zu diesem Zielpunkt ersetzen
+          // Alte Polylines entfernen
+          const oldRouteInfo = targetRoutes[targetIndex];
+          if (oldRouteInfo && oldRouteInfo.routePolylines) {
+            oldRouteInfo.routePolylines.forEach(polyline => {
+              if (polyline) layerGroup.removeLayer(polyline);
+            });
+          }
+          targetRoutes[targetIndex] = routeInfo;
+        } else {
+          // Neue Routen hinzufügen
+          targetRoutes.push(routeInfo);
+        }
+        State.setTargetRoutes(targetRoutes);
+      }
+      
       // Visualisierung basierend auf Modus
-      if (CONFIG.AGGREGATED && allRouteData.length > 0) {
-        // Aggregierte Darstellung
-        const aggregatedSegments = Aggregation.aggregateRoutes(allRouteData);
-        const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
-        Visualization.drawAggregatedRoutes(aggregatedSegments, maxCount);
+      if (CONFIG.REMEMBER_TARGETS) {
+        // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten anzeigen
+        App.drawAllTargetRoutes();
       } else {
-        // Einzelne Routen zeichnen
-        validRoutes.forEach(({ response, color, index }) => {
-          const polyline = Visualization.drawRoute(response, color);
-          routePolylines[index] = polyline;
-        });
-        State.setRoutePolylines(routePolylines);
+        // Normaler Modus: Nur Routen zum aktuellen Zielpunkt
+        if (CONFIG.AGGREGATED && allRouteData.length > 0) {
+          // Aggregierte Darstellung
+          const aggregatedSegments = Aggregation.aggregateRoutes(allRouteData);
+          const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+          Visualization.drawAggregatedRoutes(aggregatedSegments, maxCount);
+        } else {
+          // Einzelne Routen zeichnen
+          validRoutes.forEach(({ response, color, index }) => {
+            const polyline = Visualization.drawRoute(response, color);
+            routePolylines[index] = polyline;
+          });
+          State.setRoutePolylines(routePolylines);
+        }
       }
       
       console.log(`Routen ok=${ok}, fail=${fail}`);
@@ -188,9 +266,90 @@ const App = {
     }
   },
   
+  drawAllTargetRoutes() {
+    // Zeichne alle Routen zu allen gespeicherten Zielpunkten
+    const targetRoutes = State.getTargetRoutes();
+    const layerGroup = State.getLayerGroup();
+    
+    if (!layerGroup || !targetRoutes || targetRoutes.length === 0) return;
+    
+    // Alle bestehenden Polylines entfernen (nur Routen, nicht Marker)
+    const polylinesToRemove = [];
+    layerGroup.eachLayer(layer => {
+      if (layer instanceof L.Polyline) {
+        polylinesToRemove.push(layer);
+      }
+    });
+    polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
+    
+    if (CONFIG.AGGREGATED) {
+      // Aggregierte Darstellung: Alle Routen aller Zielpunkte zusammen aggregieren
+      const allRouteData = [];
+      targetRoutes.forEach((routeInfo, targetIdx) => {
+        if (routeInfo && routeInfo.routeData && routeInfo.routeData.length > 0) {
+          // Alle Routen-Daten zu einem großen Array zusammenführen
+          routeInfo.routeData.forEach(routeData => {
+            allRouteData.push(routeData);
+          });
+        }
+      });
+      
+      if (allRouteData.length > 0) {
+        // Alle Routen zusammen aggregieren (egal von welchem Zielpunkt)
+        const aggregatedSegments = Aggregation.aggregateRoutes(allRouteData);
+        if (aggregatedSegments.length > 0) {
+          const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+          Visualization.drawAggregatedRoutes(aggregatedSegments, maxCount);
+        }
+      }
+    } else {
+      // Einzelne Routen: Alle Routen zu allen Zielpunkten zeichnen
+      targetRoutes.forEach(routeInfo => {
+        if (!routeInfo || !routeInfo.routeResponses) return;
+        
+        routeInfo.routeResponses.forEach((routeResponse, index) => {
+          if (routeResponse) {
+            const polyline = Visualization.drawRoute(routeResponse.response, routeResponse.color);
+            if (polyline && routeInfo.routePolylines) {
+              routeInfo.routePolylines[index] = polyline;
+            }
+          }
+        });
+      });
+    }
+  },
+  
   async handleMapClick(e) {
     const target = [e.latlng.lat, e.latlng.lng];
     State.setLastTarget(target); // Zielpunkt speichern
+    
+    // Wenn "Zielpunkte merken" aktiviert ist, Zielpunkt zur Liste hinzufügen
+    if (CONFIG.REMEMBER_TARGETS) {
+      const allTargets = State.getAllTargets();
+      // Prüfe ob dieser Zielpunkt bereits existiert (mit Toleranz)
+      const exists = allTargets.some(t => 
+        Math.abs(t[0] - target[0]) < 0.0001 && 
+        Math.abs(t[1] - target[1]) < 0.0001
+      );
+      
+      if (!exists) {
+        // Neuen Zielpunkt hinzufügen
+        allTargets.push(target);
+        State.setAllTargets(allTargets);
+        
+        // Marker für neuen Zielpunkt zeichnen
+        const marker = Visualization.drawTargetPoint(target);
+        const targetMarkers = State.getTargetMarkers();
+        targetMarkers.push(marker);
+        State.setTargetMarkers(targetMarkers);
+        
+        // Liste aktualisieren
+        if (typeof updateTargetsList === 'function') {
+          updateTargetsList();
+        }
+      }
+    }
+    
     await App.calculateRoutes(target);
   },
   

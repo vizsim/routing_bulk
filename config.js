@@ -9,7 +9,8 @@ const CONFIG = {
   AGGREGATED: false, // Aggregierte Darstellung
   AGGREGATION_METHOD: "simple", // "simple" oder "lazyOverlap"
   HIDE_START_POINTS: false, // Startpunkte ausblenden
-  COLORMAP: "viridis_r" // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"
+  COLORMAP: "viridis_r", // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"
+  REMEMBER_TARGETS: false // Zielpunkte merken
 };
 
 // ==== Config-Management ====
@@ -50,6 +51,12 @@ function updateConfigFromUI() {
   if (hideStartPointsInput) {
     CONFIG.HIDE_START_POINTS = hideStartPointsInput.checked;
   }
+  
+  // Zielpunkte merken
+  const rememberTargetsInput = Utils.getElement('#config-remember-targets');
+  if (rememberTargetsInput) {
+    CONFIG.REMEMBER_TARGETS = rememberTargetsInput.checked;
+  }
 }
 
 function initConfigUI() {
@@ -70,6 +77,7 @@ function initConfigUI() {
   const aggregatedInput = Utils.getElement('#config-aggregated');
   const methodInput = Utils.getElement('#config-aggregation-method');
   const hideStartPointsInput = Utils.getElement('#config-hide-start-points');
+  const rememberTargetsInput = Utils.getElement('#config-remember-targets');
   
   // Initiale Werte setzen
   if (nInput) nInput.value = CONFIG.N;
@@ -77,6 +85,7 @@ function initConfigUI() {
   if (aggregatedInput) aggregatedInput.checked = CONFIG.AGGREGATED;
   if (methodInput) methodInput.value = CONFIG.AGGREGATION_METHOD;
   if (hideStartPointsInput) hideStartPointsInput.checked = CONFIG.HIDE_START_POINTS;
+  if (rememberTargetsInput) rememberTargetsInput.checked = CONFIG.REMEMBER_TARGETS;
 
   // Event Listener für Profil-Buttons
   profileBtns.forEach(btn => {
@@ -109,7 +118,10 @@ function initConfigUI() {
       updateConfigFromUI();
       toggleAggregationUI();
       // Wenn Routen vorhanden sind, Darstellung aktualisieren
-      if (State.getLastTarget() && State.getAllRouteData().length > 0) {
+      if (CONFIG.REMEMBER_TARGETS) {
+        // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
+        App.drawAllTargetRoutes();
+      } else if (State.getLastTarget() && State.getAllRouteData().length > 0) {
         await App.redrawRoutes();
       }
     });
@@ -120,7 +132,10 @@ function initConfigUI() {
     methodInput.addEventListener('change', async () => {
       updateConfigFromUI();
       // Wenn Routen vorhanden sind, Darstellung aktualisieren
-      if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
+      if (CONFIG.REMEMBER_TARGETS && CONFIG.AGGREGATED) {
+        // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
+        App.drawAllTargetRoutes();
+      } else if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
         await App.redrawRoutes();
       }
     });
@@ -135,8 +150,123 @@ function initConfigUI() {
     });
   }
   
+  // Zielpunkte merken
+  if (rememberTargetsInput) {
+    rememberTargetsInput.addEventListener('change', () => {
+      updateConfigFromUI();
+      toggleTargetsListUI();
+      
+      // Wenn aktiviert, aktuellen Zielpunkt und Routen zur Liste hinzufügen (falls vorhanden)
+      if (CONFIG.REMEMBER_TARGETS) {
+        const currentTarget = State.getLastTarget();
+        if (currentTarget) {
+          const allTargets = State.getAllTargets();
+          const targetExists = allTargets.some(t => 
+            Math.abs(t[0] - currentTarget[0]) < 0.0001 && 
+            Math.abs(t[1] - currentTarget[1]) < 0.0001
+          );
+          
+          if (!targetExists) {
+            allTargets.push(currentTarget);
+            State.setAllTargets(allTargets);
+            
+            // Marker für aktuellen Zielpunkt zeichnen
+            const marker = Visualization.drawTargetPoint(currentTarget);
+            const targetMarkers = State.getTargetMarkers();
+            targetMarkers.push(marker);
+            State.setTargetMarkers(targetMarkers);
+            
+            // Routen zum aktuellen Zielpunkt speichern (falls vorhanden)
+            const allRouteData = State.getAllRouteData();
+            const allRouteResponses = State.getAllRouteResponses();
+            const routePolylines = State.getRoutePolylines();
+            const lastStarts = State.getLastStarts();
+            const lastColors = State.getLastColors();
+            
+            if (allRouteData.length > 0 || allRouteResponses.length > 0) {
+              const targetRoutes = State.getTargetRoutes();
+              targetRoutes.push({
+                target: currentTarget,
+                routeData: allRouteData,
+                routeResponses: allRouteResponses,
+                routePolylines: routePolylines,
+                starts: lastStarts,
+                colors: lastColors
+              });
+              State.setTargetRoutes(targetRoutes);
+              
+              // Alle Routen neu zeichnen
+              App.drawAllTargetRoutes();
+            }
+            
+            // Liste aktualisieren
+            updateTargetsList();
+          }
+        }
+      }
+      
+      // Wenn deaktiviert, alle gespeicherten Zielpunkte und Routen löschen
+      if (!CONFIG.REMEMBER_TARGETS) {
+        const layerGroup = State.getLayerGroup();
+        const targetMarkers = State.getTargetMarkers();
+        const targetRoutes = State.getTargetRoutes();
+        
+        // Alle Routen-Polylines entfernen
+        if (targetRoutes && layerGroup) {
+          targetRoutes.forEach(routeInfo => {
+            if (routeInfo && routeInfo.routePolylines) {
+              routeInfo.routePolylines.forEach(polyline => {
+                if (polyline) layerGroup.removeLayer(polyline);
+              });
+            }
+          });
+        }
+        
+        // Alle Polylines entfernen (falls welche übrig sind)
+        if (layerGroup) {
+          const polylinesToRemove = [];
+          layerGroup.eachLayer(layer => {
+            if (layer instanceof L.Polyline) {
+              polylinesToRemove.push(layer);
+            }
+          });
+          polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
+        }
+        
+        // Alle Zielpunkt-Marker von der Karte entfernen
+        if (layerGroup && targetMarkers) {
+          targetMarkers.forEach(marker => {
+            if (marker) {
+              layerGroup.removeLayer(marker);
+            }
+          });
+        }
+        
+        // State zurücksetzen
+        State.setAllTargets([]);
+        State.setTargetMarkers([]);
+        State.setTargetRoutes([]);
+        
+        // Aktuellen Zielpunkt beibehalten und neu zeichnen
+        const currentTarget = State.getLastTarget();
+        if (currentTarget && layerGroup) {
+          // Alle verbleibenden Zielpunkt-Marker entfernen (falls welche übrig sind)
+          layerGroup.eachLayer(layer => {
+            if (layer instanceof L.Marker && layer.options && layer.options.icon && 
+                layer.options.icon.options && layer.options.icon.options.className === 'target-point-icon') {
+              layerGroup.removeLayer(layer);
+            }
+          });
+          // Aktuellen Zielpunkt neu zeichnen
+          Visualization.drawTargetPoint(currentTarget);
+        }
+      }
+    });
+  }
+  
   // Initiale UI-Sichtbarkeit setzen
   toggleAggregationUI();
+  toggleTargetsListUI();
   
   // Colormap-Selector initialisieren
   initColormapSelector();
@@ -183,6 +313,117 @@ function toggleAggregationUI() {
     Visualization.updateLegendGradient();
     Visualization.updateColormapPreviews();
   }
+}
+
+function toggleTargetsListUI() {
+  const targetsListGroup = Utils.getElement('#targets-list-group');
+  if (targetsListGroup) {
+    targetsListGroup.style.display = CONFIG.REMEMBER_TARGETS ? 'block' : 'none';
+  }
+  // Liste aktualisieren wenn sichtbar
+  if (CONFIG.REMEMBER_TARGETS) {
+    updateTargetsList();
+  }
+}
+
+function updateTargetsList() {
+  const targetsList = Utils.getElement('#targets-list');
+  if (!targetsList) return;
+  
+  const allTargets = State.getAllTargets();
+  
+  // Liste leeren
+  targetsList.innerHTML = '';
+  
+  if (allTargets.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'target-item';
+    emptyMsg.style.fontSize = '12px';
+    emptyMsg.style.color = '#999';
+    emptyMsg.style.textAlign = 'center';
+    emptyMsg.textContent = 'Keine Zielpunkte gespeichert';
+    targetsList.appendChild(emptyMsg);
+    return;
+  }
+  
+  // Zielpunkte anzeigen
+  allTargets.forEach((target, index) => {
+    const item = document.createElement('div');
+    item.className = 'target-item';
+    
+    const label = document.createElement('span');
+    label.className = 'target-item-label';
+    label.textContent = `z${index + 1}:`;
+    
+    const coords = document.createElement('span');
+    coords.className = 'target-item-coords';
+    coords.textContent = `${target[0].toFixed(5)}, ${target[1].toFixed(5)}`;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'target-item-remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Zielpunkt entfernen';
+    removeBtn.addEventListener('click', async () => {
+      const layerGroup = State.getLayerGroup();
+      const targetRoutes = State.getTargetRoutes();
+      
+      // Routen zu diesem Zielpunkt entfernen
+      const routeInfoIndex = targetRoutes.findIndex(tr => 
+        Math.abs(tr.target[0] - target[0]) < 0.0001 && 
+        Math.abs(tr.target[1] - target[1]) < 0.0001
+      );
+      
+      if (routeInfoIndex >= 0) {
+        const routeInfo = targetRoutes[routeInfoIndex];
+        // Polylines von der Karte entfernen
+        if (routeInfo.routePolylines && layerGroup) {
+          routeInfo.routePolylines.forEach(polyline => {
+            if (polyline) layerGroup.removeLayer(polyline);
+          });
+        }
+        // Route-Info aus State entfernen
+        targetRoutes.splice(routeInfoIndex, 1);
+        State.setTargetRoutes(targetRoutes);
+      }
+      
+      // Zielpunkt aus State entfernen
+      const updatedTargets = allTargets.filter((_, i) => i !== index);
+      State.setAllTargets(updatedTargets);
+      
+      // Marker von der Karte entfernen
+      if (layerGroup) {
+        const targetMarkers = State.getTargetMarkers();
+        if (targetMarkers[index]) {
+          layerGroup.removeLayer(targetMarkers[index]);
+          targetMarkers[index] = null;
+          State.setTargetMarkers(targetMarkers.filter(m => m !== null));
+        }
+      }
+      
+      // Liste aktualisieren
+      updateTargetsList();
+      
+      // Wenn es der aktuelle Zielpunkt war, State zurücksetzen
+      if (State.getLastTarget() && 
+          Math.abs(State.getLastTarget()[0] - target[0]) < 0.0001 &&
+          Math.abs(State.getLastTarget()[1] - target[1]) < 0.0001) {
+        State.setLastTarget(null);
+        State.resetRouteData();
+      }
+      
+      // Alle verbleibenden Routen neu zeichnen
+      if (CONFIG.REMEMBER_TARGETS) {
+        App.drawAllTargetRoutes();
+      }
+      
+      updateExportButtonState();
+    });
+    
+    item.appendChild(label);
+    item.appendChild(coords);
+    item.appendChild(removeBtn);
+    targetsList.appendChild(item);
+  });
 }
 
 function initColormapSelector() {
@@ -239,7 +480,10 @@ function initColormapSelector() {
       colormapContainer.classList.remove('show');
       
       // Routen neu zeichnen wenn vorhanden
-      if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
+      if (CONFIG.REMEMBER_TARGETS && CONFIG.AGGREGATED) {
+        // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
+        App.drawAllTargetRoutes();
+      } else if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
         await App.redrawRoutes();
       }
     });

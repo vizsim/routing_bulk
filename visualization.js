@@ -39,7 +39,8 @@ const Visualization = {
       iconAnchor: [12, 12]
     });
     
-    L.marker(latlng, { icon: targetIcon }).addTo(layerGroup);
+    const marker = L.marker(latlng, { icon: targetIcon }).addTo(layerGroup);
+    return marker; // Marker zurückgeben für State-Verwaltung
   },
   
   updateDistanceHistogram(starts, target) {
@@ -364,9 +365,34 @@ const Visualization = {
               State.setAllRouteData(allRouteData);
               State.setAllRouteResponses(allRouteResponses);
               
+              // Im "Zielpunkte merken" Modus: Route auch in targetRoutes aktualisieren
+              if (CONFIG.REMEMBER_TARGETS) {
+                const targetRoutes = State.getTargetRoutes();
+                const lastTarget = State.getLastTarget();
+                const targetIndex = targetRoutes.findIndex(tr => 
+                  lastTarget && 
+                  Math.abs(tr.target[0] - lastTarget[0]) < 0.0001 && 
+                  Math.abs(tr.target[1] - lastTarget[1]) < 0.0001
+                );
+                
+                if (targetIndex >= 0) {
+                  const routeInfo = targetRoutes[targetIndex];
+                  if (routeInfo.routeData && routeInfo.routeData[index] !== undefined) {
+                    routeInfo.routeData[index] = coords;
+                  }
+                  if (routeInfo.routeResponses && routeInfo.routeResponses[index] !== undefined) {
+                    routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index };
+                  }
+                  State.setTargetRoutes(targetRoutes);
+                }
+              }
+              
               // Visualisierung basierend auf Modus
-              if (CONFIG.AGGREGATED) {
-                // Aggregierte Darstellung neu berechnen
+              if (CONFIG.REMEMBER_TARGETS) {
+                // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
+                App.drawAllTargetRoutes();
+              } else if (CONFIG.AGGREGATED) {
+                // Aggregierte Darstellung neu berechnen (nur aktueller Zielpunkt)
                 const aggregatedSegments = Aggregation.aggregateRoutes(allRouteData);
                 if (aggregatedSegments.length > 0) {
                   const maxCount = Math.max(...aggregatedSegments.map(s => s.count));

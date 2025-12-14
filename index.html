@@ -17,6 +17,19 @@
     <div class="panel-section">
       <h4>Konfiguration</h4>
       <div class="config-group">
+        <div class="switch-toggle">
+          <label for="config-remember-targets">
+            <input type="checkbox" id="config-remember-targets" />
+            <span class="switch-slider"></span>
+          </label>
+          <span class="switch-text">Zielpunkte merken</span>
+        </div>
+      </div>
+      <div class="config-group" id="targets-list-group" style="display: none;">
+        <label>Zielpunkte:</label>
+        <div id="targets-list" class="targets-list"></div>
+      </div>
+      <div class="config-group">
         <label>Profil:</label>
         <div class="profile-buttons">
           <button id="profile-bike" class="profile-btn active" data-profile="bike" title="Fahrrad">
