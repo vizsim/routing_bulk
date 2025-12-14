@@ -270,6 +270,19 @@ const MapRenderer = {
       }
     });
     polylinesToRemove.forEach(layer => this._layerGroup.removeLayer(layer));
+  },
+  
+  /**
+   * Entfernt eine Liste von Polylines aus dem LayerGroup
+   * @param {Array} polylines - Array von Polyline-Objekten
+   */
+  removePolylines(polylines) {
+    if (!this._layerGroup || !polylines) return;
+    polylines.forEach(polyline => {
+      if (polyline) {
+        this._layerGroup.removeLayer(polyline);
+      }
+    });
   }
 };
 

@@ -625,12 +625,7 @@ const App = {
         if (targetIndex >= 0) {
           const oldRouteInfo = targetRoutes[targetIndex];
           if (oldRouteInfo && oldRouteInfo.routePolylines) {
-            const layerGroup = State.getLayerGroup();
-            if (layerGroup) {
-              oldRouteInfo.routePolylines.forEach(polyline => {
-                if (polyline) layerGroup.removeLayer(polyline);
-              });
-            }
+            MapRenderer.removePolylines(oldRouteInfo.routePolylines);
           }
         }
         // Alle Polylines entfernen (werden neu gezeichnet mit allen Zielpunkten)
@@ -638,12 +633,7 @@ const App = {
       } else {
         // Im normalen Modus: Alle Routen entfernen
         const routePolylines = State.getRoutePolylines();
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup) {
-          routePolylines.forEach(polyline => {
-            if (polyline) layerGroup.removeLayer(polyline);
-          });
-        }
+        MapRenderer.removePolylines(routePolylines);
         State.setRoutePolylines([]);
         MapRenderer.clearRoutes();
       }

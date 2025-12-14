@@ -162,12 +162,7 @@ const TargetService = {
       const oldRouteInfo = targetRoutes[targetIndex];
       // Alte Polylines entfernen
       if (oldRouteInfo && oldRouteInfo.routePolylines) {
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup) {
-          oldRouteInfo.routePolylines.forEach(polyline => {
-            if (polyline) layerGroup.removeLayer(polyline);
-          });
-        }
+        MapRenderer.removePolylines(oldRouteInfo.routePolylines);
       }
       targetRoutes[targetIndex] = { ...routeInfo, target };
     } else {

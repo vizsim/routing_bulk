@@ -28,12 +28,7 @@ const RouteHandler = {
       // Normaler Modus: Nur Routen zum aktuellen Zielpunkt
       // Alte Routen entfernen (falls noch vorhanden)
       const routePolylines = State.getRoutePolylines();
-      const layerGroup = State.getLayerGroup();
-      if (layerGroup) {
-        routePolylines.forEach(polyline => {
-          if (polyline) layerGroup.removeLayer(polyline);
-        });
-      }
+      MapRenderer.removePolylines(routePolylines);
       // Alle Polylines entfernen
       MapRenderer.clearRoutes();
       

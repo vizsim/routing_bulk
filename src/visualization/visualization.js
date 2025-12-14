@@ -1,6 +1,56 @@
 // ==== Visualisierung ====
 const Visualization = {
   /**
+   * Stellt Config-Werte eines Zielpunkts wieder her
+   * @param {Object} routeInfo - Route-Info mit config und distributionType
+   */
+  _restoreTargetConfig(routeInfo) {
+    if (!routeInfo) return;
+    
+    // Verteilung wiederherstellen (UI-Button aktivieren)
+    if (routeInfo.distributionType) {
+      const distBtns = document.querySelectorAll('.dist-btn');
+      distBtns.forEach(btn => {
+        if (btn.dataset.dist === routeInfo.distributionType) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+    
+    // Config-Werte wiederherstellen (N, RADIUS_M, PROFILE)
+    if (routeInfo.config) {
+      // Anzahl Routen (N)
+      const nInput = document.querySelector('#config-n');
+      if (nInput && routeInfo.config.n) {
+        CONFIG.N = routeInfo.config.n;
+        nInput.value = routeInfo.config.n;
+      }
+      
+      // Radius (RADIUS_M)
+      const radiusInput = document.querySelector('#config-radius');
+      if (radiusInput && routeInfo.config.radiusKm) {
+        CONFIG.RADIUS_M = routeInfo.config.radiusKm * 1000;
+        radiusInput.value = routeInfo.config.radiusKm;
+      }
+      
+      // Profil (PROFILE)
+      if (routeInfo.config.profile) {
+        CONFIG.PROFILE = routeInfo.config.profile;
+        const profileBtns = document.querySelectorAll('.profile-btn');
+        profileBtns.forEach(btn => {
+          if (btn.dataset.profile === routeInfo.config.profile) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+      }
+    }
+  },
+  
+  /**
    * Hilfsfunktion: Findet den Index eines Zielpunkts für einen Marker
    * @param {L.Marker} marker - Der Marker
    * @returns {number} - Index oder -1
@@ -109,9 +159,7 @@ const Visualization = {
             // Alte Routen entfernen
             const oldRouteInfo = targetRoutes[targetRouteIndex];
             if (oldRouteInfo && oldRouteInfo.routePolylines) {
-              oldRouteInfo.routePolylines.forEach(polyline => {
-                if (polyline) layerGroup.removeLayer(polyline);
-              });
+              MapRenderer.removePolylines(oldRouteInfo.routePolylines);
             }
             
             // RouteInfo im targetRoutes aktualisieren (target bereits auf newTarget setzen)
@@ -134,48 +182,9 @@ const Visualization = {
             }
             
             // Config-Werte des Zielpunkts wiederherstellen (BEVOR Routen berechnet werden)
-            // Verteilung wiederherstellen (UI-Button aktivieren)
+            // Config-Werte wiederherstellen (BEVOR Routen berechnet werden)
             const savedDistributionType = oldRouteInfo?.distributionType;
-            if (savedDistributionType) {
-              const distBtns = document.querySelectorAll('.dist-btn');
-              distBtns.forEach(btn => {
-                if (btn.dataset.dist === savedDistributionType) {
-                  btn.classList.add('active');
-                } else {
-                  btn.classList.remove('active');
-                }
-              });
-            }
-            
-            // Config-Werte wiederherstellen (N, RADIUS_M, PROFILE)
-            if (oldRouteInfo?.config) {
-              // Anzahl Routen (N)
-              const nInput = document.querySelector('#config-n');
-              if (nInput && oldRouteInfo.config.n) {
-                CONFIG.N = oldRouteInfo.config.n;
-                nInput.value = oldRouteInfo.config.n;
-              }
-              
-              // Radius (RADIUS_M)
-              const radiusInput = document.querySelector('#config-radius');
-              if (radiusInput && oldRouteInfo.config.radiusKm) {
-                CONFIG.RADIUS_M = oldRouteInfo.config.radiusKm * 1000;
-                radiusInput.value = oldRouteInfo.config.radiusKm;
-              }
-              
-              // Profil (PROFILE)
-              if (oldRouteInfo.config.profile) {
-                CONFIG.PROFILE = oldRouteInfo.config.profile;
-                const profileBtns = document.querySelectorAll('.profile-btn');
-                profileBtns.forEach(btn => {
-                  if (btn.dataset.profile === oldRouteInfo.config.profile) {
-                    btn.classList.add('active');
-                  } else {
-                    btn.classList.remove('active');
-                  }
-                });
-              }
-            }
+            this._restoreTargetConfig(oldRouteInfo);
             
             // Neue Routen berechnen (silent=true, da wir die Routen direkt zeichnen)
             // Jetzt werden die wiederhergestellten Config-Werte verwendet
@@ -742,7 +751,7 @@ const Visualization = {
                 const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData);
                 if (aggregatedSegments.length > 0) {
                   const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
-                  Visualization.drawAggregatedRoutes(aggregatedSegments, maxCount);
+                  RouteRenderer.drawAggregatedRoutes(aggregatedSegments, maxCount);
                 }
               } else {
                 // Einzelne Route zeichnen
@@ -912,48 +921,6 @@ const Visualization = {
   getColorForCount(count, weightedLevel) {
     // Verwende ausgewählte Colormap
     return this.getColormapColor(weightedLevel, CONFIG.COLORMAP || 'viridis_r');
-  },
-  
-  drawAggregatedRoutes(aggregatedSegments, maxCount) {
-    const layerGroup = State.getLayerGroup();
-    
-    // Berechne Min/Max und alle Counts für gewichtete Verteilung
-    const counts = aggregatedSegments.map(seg => seg.count);
-    const minCount = Math.min(...counts);
-    const maxCountValue = Math.max(...counts);
-    
-    aggregatedSegments.forEach(seg => {
-      // Gewichtete Verteilung: 15% Quantil, 85% linear (Zwischenlösung)
-      const weightedLevel = this.calculateWeightedLevel(
-        seg.count, 
-        minCount, 
-        maxCountValue, 
-        counts, 
-        0.15 // 15% Quantil-Gewichtung
-      );
-      
-      // Gewicht und Opacity basierend auf gewichtetem Level
-      const weight = 2 + (weightedLevel * 10); // 2-12px
-      const opacity = 0.7 + (weightedLevel * 0.7); // 0.3-1.0
-      
-      // Farbe basierend auf gewichtetem Level mit viridis_r
-      const color = this.getColorForCount(seg.count, weightedLevel);
-      
-      const polyline = L.polyline([seg.start, seg.end], {
-        weight: weight,
-        opacity: opacity,
-        color: color
-      });
-      
-      // Tooltip mit Anzahl hinzufügen
-      polyline.bindTooltip(`${seg.count} Route${seg.count !== 1 ? 'n' : ''}`, {
-        permanent: false,
-        direction: 'top',
-        className: 'aggregated-route-tooltip'
-      });
-      
-      polyline.addTo(layerGroup);
-    });
   },
   
   /**
@@ -1257,47 +1224,8 @@ const Visualization = {
       // Panel aktualisieren, um Stift-Icon anzuzeigen
       TargetsList.update();
       
-      // Verteilung wiederherstellen (UI-Button aktivieren)
-      if (routeInfo.distributionType) {
-        const distBtns = document.querySelectorAll('.dist-btn');
-        distBtns.forEach(btn => {
-          if (btn.dataset.dist === routeInfo.distributionType) {
-            btn.classList.add('active');
-          } else {
-            btn.classList.remove('active');
-          }
-        });
-      }
-      
-      // Config-Werte wiederherstellen (N, RADIUS_M, PROFILE)
-      if (routeInfo.config) {
-        // Anzahl Routen (N)
-        const nInput = document.querySelector('#config-n');
-        if (nInput && routeInfo.config.n) {
-          CONFIG.N = routeInfo.config.n;
-          nInput.value = routeInfo.config.n;
-        }
-        
-        // Radius (RADIUS_M)
-        const radiusInput = document.querySelector('#config-radius');
-        if (radiusInput && routeInfo.config.radiusKm) {
-          CONFIG.RADIUS_M = routeInfo.config.radiusKm * 1000;
-          radiusInput.value = routeInfo.config.radiusKm;
-        }
-        
-        // Profil (PROFILE)
-        if (routeInfo.config.profile) {
-          CONFIG.PROFILE = routeInfo.config.profile;
-          const profileBtns = document.querySelectorAll('.profile-btn');
-          profileBtns.forEach(btn => {
-            if (btn.dataset.profile === routeInfo.config.profile) {
-              btn.classList.add('active');
-            } else {
-              btn.classList.remove('active');
-            }
-          });
-        }
-      }
+      // Config-Werte wiederherstellen
+      this._restoreTargetConfig(routeInfo);
       
       // Startpunkte anzeigen
       this.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
