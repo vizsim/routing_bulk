@@ -418,7 +418,8 @@ const App = {
         // Aktuellen Zielpunkt beibehalten und neu zeichnen
         const currentTarget = State.getLastTarget();
         if (currentTarget) {
-          MapRenderer.clearLayers();
+          // Schulen behalten
+          MapRenderer.clearLayersExceptSchools();
           Visualization.drawTargetPoint(currentTarget);
         }
       }
@@ -451,7 +452,8 @@ const App = {
       }
     } else {
       // Im normalen Modus: Karte leeren und Zielpunkt zeichnen
-      MapRenderer.clearLayers();
+      // Schulen behalten
+      MapRenderer.clearLayersExceptSchools();
       Visualization.drawTargetPoint(target);
     }
     

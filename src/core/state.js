@@ -16,6 +16,8 @@ const State = {
   allRouteData: [],
   allRouteResponses: [],
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
+  schoolMarkers: [], // Marker für gefundene Schulen
+  schoolSearchRadiusCircle: null, // Kreis für Suchradius-Visualisierung
   
   // Getter
   getMap() { return this.map; },
@@ -31,6 +33,8 @@ const State = {
   getAllRouteData() { return this.allRouteData; },
   getAllRouteResponses() { return this.allRouteResponses; },
   getExpectedDistribution() { return this.expectedDistribution; },
+  getSchoolMarkers() { return this.schoolMarkers; },
+  getSchoolSearchRadiusCircle() { return this.schoolSearchRadiusCircle; },
   
   // Setter
   setMap(map) { this.map = map; },
@@ -46,6 +50,8 @@ const State = {
   setAllRouteData(data) { this.allRouteData = data; },
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
+  setSchoolMarkers(markers) { this.schoolMarkers = markers; },
+  setSchoolSearchRadiusCircle(circle) { this.schoolSearchRadiusCircle = circle; },
   
   // Reset
   resetRouteData() {

@@ -72,6 +72,19 @@ const Utils = {
     } else {
       console.error(message);
     }
+  },
+  
+  /**
+   * Zeigt eine Info-Nachricht für den Benutzer
+   * @param {string} message - Info-Nachricht
+   * @param {boolean} useAlert - true für alert(), false für console
+   */
+  showInfo(message, useAlert = false) {
+    if (useAlert) {
+      alert(message);
+    } else {
+      console.log(message);
+    }
   }
 };
 
