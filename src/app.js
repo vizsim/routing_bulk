@@ -40,7 +40,7 @@ const App = {
     }
     
     // Initiale Button-Status setzen
-    this._updateExportButtonState();
+    RouteHandler._updateExportButtonState();
   },
   
   /**
@@ -54,12 +54,12 @@ const App = {
     
     // Routes berechnet
     EventBus.on(Events.ROUTES_CALCULATED, (data) => {
-      this._handleRoutesCalculated(data);
+      RouteHandler.handleRoutesCalculated(data);
     });
     
     // Route aktualisiert
     EventBus.on(Events.ROUTE_UPDATED, (data) => {
-      this._handleRouteUpdated(data);
+      RouteHandler.handleRouteUpdated(data);
     });
     
     // Target hinzugefügt
@@ -82,7 +82,7 @@ const App = {
       if (CONFIG.REMEMBER_TARGETS) {
         EventBus.emit(Events.VISUALIZATION_UPDATE);
       }
-      this._updateExportButtonState();
+      RouteHandler._updateExportButtonState();
     });
     
     // Visualization Update
@@ -128,10 +128,10 @@ const App = {
     this._setupRadiusInput();
     
     // Längenverteilungs-Buttons
-    this._setupDistributionButtons();
+    DistributionSelector.init();
     
     // Colormap-Selector
-    this._setupColormapSelector();
+    ColormapSelector.init();
     
     // Startpunkte ausblenden
     this._setupHideStartPoints();
@@ -334,165 +334,6 @@ const App = {
     });
   },
   
-  /**
-   * Richtet die Längenverteilungs-Buttons ein
-   */
-  _setupDistributionButtons() {
-    const distBtns = Utils.getElements('.dist-btn');
-    if (!distBtns || distBtns.length === 0) return;
-    
-    // Initiale Aktivierung
-    distBtns.forEach(btn => {
-      if (btn.dataset.dist === 'lognormal') {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-    
-    // Event-Listener
-    distBtns.forEach(btn => {
-      btn.addEventListener('click', async () => {
-        // Alle Buttons deaktivieren
-        distBtns.forEach(b => b.classList.remove('active'));
-        // Aktiven Button aktivieren
-        btn.classList.add('active');
-        
-        const distType = btn.dataset.dist;
-        if (!distType) {
-          Utils.logError('Distribution', 'Button hat kein data-dist Attribut');
-          return;
-        }
-        
-        // Wenn Routen vorhanden sind, Verteilung aktualisieren
-        const lastTarget = State.getLastTarget();
-        const lastStarts = State.getLastStarts();
-        
-        if (lastTarget && lastStarts && lastStarts.length > 0) {
-          try {
-            // Berechne Verteilung basierend auf aktuellen Parametern
-            const numBins = Math.min(15, CONFIG.N);
-            Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
-            
-            // Neue Startpunkte generieren basierend auf der Verteilung
-            const newStarts = Geo.generatePointsFromDistribution(
-              lastTarget[0],
-              lastTarget[1],
-              CONFIG.RADIUS_M,
-              CONFIG.N
-            );
-            
-            // Startpunkte aktualisieren
-            State.setLastStarts(newStarts);
-            
-            // Routen neu berechnen (mit neuen Startpunkten)
-            // Alte Routen entfernen
-            if (!CONFIG.REMEMBER_TARGETS) {
-              MapRenderer.clearRoutes();
-              const routePolylines = State.getRoutePolylines();
-              const layerGroup = State.getLayerGroup();
-              if (layerGroup) {
-                routePolylines.forEach(polyline => {
-                  if (polyline) layerGroup.removeLayer(polyline);
-                });
-              }
-              State.setRoutePolylines([]);
-            }
-            
-            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
-            if (routeInfo) {
-              // Histogramm aktualisieren
-              Visualization.updateDistanceHistogram(newStarts, lastTarget);
-              
-              // Visualisierung aktualisieren
-              this._handleRoutesCalculated({ target: lastTarget, routeInfo });
-            }
-          } catch (error) {
-            Utils.logError('Distribution', error);
-            Utils.showError('Fehler beim Ändern der Verteilung', true);
-          }
-        }
-      });
-    });
-  },
-  
-  /**
-   * Richtet den Colormap-Selector ein
-   */
-  _setupColormapSelector() {
-    const colormapPreviews = Utils.getElements('.colormap-preview');
-    const colormapContainer = Utils.getElement('.colormap-preview-container');
-    const legendGradientBar = Utils.getElement('#legend-gradient-bar');
-    
-    if (!colormapContainer) return;
-    
-    // Vorschau-Bars initialisieren
-    Visualization.updateColormapPreviews();
-    
-    // Aktive Colormap markieren
-    colormapPreviews.forEach(preview => {
-      if (preview.dataset.colormap === CONFIG.COLORMAP) {
-        preview.classList.add('active');
-      }
-    });
-    
-    // Funktion zum Ein-/Ausblenden der Vorschau-Bars
-    const togglePreviews = (e) => {
-      if (e) e.stopPropagation();
-      const isVisible = colormapContainer.classList.contains('show');
-      if (isVisible) {
-        colormapContainer.classList.remove('show');
-      } else {
-        colormapContainer.classList.add('show');
-      }
-    };
-    
-    // Gradient-Bar-Klick: Vorschau-Bars ein-/ausblenden
-    if (legendGradientBar) {
-      legendGradientBar.style.cursor = 'pointer';
-      legendGradientBar.addEventListener('click', togglePreviews);
-    }
-    
-    // Klick auf Vorschau-Bar: Colormap ändern
-    colormapPreviews.forEach(preview => {
-      preview.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const colormap = preview.dataset.colormap;
-        
-        // CONFIG aktualisieren
-        CONFIG.COLORMAP = colormap;
-        
-        // Aktive Vorschau aktualisieren
-        colormapPreviews.forEach(p => p.classList.remove('active'));
-        preview.classList.add('active');
-        
-        // Legende aktualisieren
-        Visualization.updateLegendGradient();
-        
-        // Vorschau-Bars ausblenden nach Auswahl
-        colormapContainer.classList.remove('show');
-        
-        // Routen neu zeichnen wenn vorhanden (nur bei aggregierter Darstellung)
-        if (CONFIG.AGGREGATED) {
-          if (CONFIG.REMEMBER_TARGETS) {
-            // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
-            RouteRenderer.drawAllTargetRoutes();
-          } else {
-            // Normaler Modus: Routen neu zeichnen
-            this._redrawCurrentRoutes();
-          }
-        }
-      });
-    });
-    
-    // Klick außerhalb: Vorschau-Bars schließen
-    document.addEventListener('click', (e) => {
-      if (!colormapContainer.contains(e.target) && 
-          !(legendGradientBar && legendGradientBar.contains(e.target))) {
-        colormapContainer.classList.remove('show');
-      }
-    });
-  },
   
   /**
    * Richtet den Event-Handler für "Startpunkte ausblenden" ein
@@ -807,16 +648,6 @@ const App = {
     }
   },
   
-  /**
-   * Aktualisiert Export-Button Status
-   */
-  _updateExportButtonState() {
-    const exportBtn = Utils.getElement('#export-btn');
-    if (!exportBtn) return;
-    
-    const hasRoutes = State.getAllRouteData() && State.getAllRouteData().length > 0;
-    exportBtn.disabled = !hasRoutes;
-  }
 };
 
 // ==== Start ====

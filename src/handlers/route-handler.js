@@ -1,0 +1,118 @@
+// ==== Route-Handler: Behandelt Route-Events ====
+const RouteHandler = {
+  /**
+   * Behandelt berechnete Routen
+   * @param {Object} data - { target, routeInfo }
+   */
+  handleRoutesCalculated(data) {
+    const { target, routeInfo } = data;
+    
+    // Startpunkte zeichnen (nur im normalen Modus oder beim ersten Klick im "Zielpunkte merken" Modus)
+    if (routeInfo.starts && routeInfo.colors) {
+      if (!CONFIG.REMEMBER_TARGETS) {
+        // Im normalen Modus: Startpunkte normal zeichnen
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+      } else {
+        // Im "Zielpunkte merken" Modus: Alte Startpunkte entfernen, neue zeichnen
+        const startMarkers = State.getStartMarkers();
+        const layerGroup = State.getLayerGroup();
+        if (layerGroup) {
+          startMarkers.forEach(marker => {
+            if (marker) layerGroup.removeLayer(marker);
+          });
+        }
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+      }
+    }
+    
+    // Routen visualisieren
+    if (CONFIG.REMEMBER_TARGETS) {
+      // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten anzeigen
+      // (inklusive der gerade berechneten)
+      RouteRenderer.drawAllTargetRoutes();
+    } else {
+      // Normaler Modus: Nur Routen zum aktuellen Zielpunkt
+      // Alte Routen entfernen (falls noch vorhanden)
+      const routePolylines = State.getRoutePolylines();
+      const layerGroup = State.getLayerGroup();
+      if (layerGroup) {
+        routePolylines.forEach(polyline => {
+          if (polyline) layerGroup.removeLayer(polyline);
+        });
+      }
+      // Alle Polylines entfernen
+      MapRenderer.clearRoutes();
+      
+      // Neue Routen zeichnen
+      RouteRenderer.drawRoutesForTarget(
+        routeInfo.routeData,
+        routeInfo.routeResponses,
+        routeInfo.colors
+      );
+    }
+    
+    // Histogramm aktualisieren
+    if (routeInfo.starts && target && routeInfo.starts.length > 0) {
+      Visualization.updateDistanceHistogram(routeInfo.starts, target);
+    }
+    
+    // Export-Button aktualisieren
+    this._updateExportButtonState();
+    
+    // Info anzeigen
+    if (routeInfo.stats && routeInfo.stats.ok === 0 && routeInfo.stats.fail > 0) {
+      Utils.showError(`Alle ${routeInfo.stats.fail} Routen fehlgeschlagen. Bitte Browser-Konsole prüfen.`, true);
+    }
+  },
+  
+  /**
+   * Behandelt aktualisierte Route
+   * @param {Object} data - { index }
+   */
+  handleRouteUpdated(data) {
+    const { index } = data;
+    
+    // Visualisierung aktualisieren
+    if (CONFIG.REMEMBER_TARGETS) {
+      RouteRenderer.drawAllTargetRoutes();
+    } else {
+      // Normaler Modus: Nur aktualisierte Route neu zeichnen
+      const allRouteData = State.getAllRouteData();
+      const allRouteResponses = State.getAllRouteResponses();
+      const colors = State.getLastColors();
+      
+      if (allRouteData.length > 0 && allRouteResponses.length > 0) {
+        // Alte Route entfernen
+        const routePolylines = State.getRoutePolylines();
+        const layerGroup = State.getLayerGroup();
+        if (layerGroup && routePolylines[index]) {
+          layerGroup.removeLayer(routePolylines[index]);
+        }
+        
+        // Neue Route zeichnen
+        if (allRouteResponses[index]) {
+          const polyline = RouteRenderer.drawRoute(
+            allRouteResponses[index].response,
+            allRouteResponses[index].color || colors[index]
+          );
+          routePolylines[index] = polyline;
+          State.setRoutePolylines(routePolylines);
+        }
+      }
+    }
+  },
+  
+  /**
+   * Aktualisiert den Export-Button Status
+   */
+  _updateExportButtonState() {
+    const exportBtn = Utils.getElement('#export-btn');
+    if (!exportBtn) return;
+    
+    const hasRoutes = CONFIG.REMEMBER_TARGETS 
+      ? State.getTargetRoutes().length > 0
+      : State.getAllRouteData().length > 0;
+    exportBtn.disabled = !hasRoutes;
+  }
+};
+
