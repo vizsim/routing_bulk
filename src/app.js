@@ -20,13 +20,6 @@ const App = {
    * Initialisiert UI-Komponenten
    */
   async _initUI() {
-    // Config UI initialisieren (alte Funktion, wird später ersetzt)
-    // HINWEIS: initConfigUI() richtet auch Event-Listener ein, aber unsere neuen
-    // _setup* Funktionen überschreiben/ergänzen diese korrekt
-    if (typeof initConfigUI === 'function') {
-      initConfigUI();
-    }
-    
     // Targets-List initialisieren
     TargetsList.init();
     

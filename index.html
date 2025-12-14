@@ -147,15 +147,35 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="utils.js"></script>
-  <script src="state.js"></script>
-  <script src="geo.js"></script>
-  <script src="api.js"></script>
-  <script src="distribution.js"></script>
-  <script src="visualization.js"></script>
-  <script src="aggregation.js"></script>
-  <script src="map.js"></script>
-  <script src="app.js"></script>
-  <script src="config.js"></script>
+  
+  <!-- Core -->
+  <script src="src/core/utils.js"></script>
+  <script src="src/core/state.js"></script>
+  <script src="src/core/config.js"></script>
+  <script src="src/core/events.js"></script>
+  
+  <!-- Domain -->
+  <script src="src/domain/geo.js"></script>
+  <script src="src/domain/api.js"></script>
+  <script src="src/domain/distribution.js"></script>
+  
+  <!-- Services -->
+  <script src="src/services/aggregation-service.js"></script>
+  <script src="src/services/target-service.js"></script>
+  <script src="src/services/route-service.js"></script>
+  <script src="src/services/export-service.js"></script>
+  
+  <!-- Visualization -->
+  <script src="src/visualization/visualization.js"></script>
+  <script src="src/visualization/map-renderer.js"></script>
+  <script src="src/visualization/route-renderer.js"></script>
+  
+  <!-- UI -->
+  <script src="src/ui/targets-list.js"></script>
+  <script src="src/ui/config-helpers.js"></script>
+  
+  <!-- App -->
+  <script src="src/app.js"></script>
 </body>
 </html>
+
