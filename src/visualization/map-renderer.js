@@ -191,12 +191,23 @@ const MapRenderer = {
       if (contextMenu && !contextMenu.contains(e.target)) {
         contextMenu.style.display = 'none';
       }
+      // Auch Zielpunkt-Kontextmenü schließen
+      const targetContextMenu = Utils.getElement('#target-context-menu');
+      if (targetContextMenu && !targetContextMenu.contains(e.target)) {
+        targetContextMenu.style.display = 'none';
+      }
     });
     
     // Menü schließen bei ESC
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && contextMenu) {
-        contextMenu.style.display = 'none';
+      if (e.key === 'Escape') {
+        if (contextMenu) {
+          contextMenu.style.display = 'none';
+        }
+        const targetContextMenu = Utils.getElement('#target-context-menu');
+        if (targetContextMenu) {
+          targetContextMenu.style.display = 'none';
+        }
       }
     });
   },

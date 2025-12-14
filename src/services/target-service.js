@@ -62,16 +62,47 @@ const TargetService = {
     const updatedTargets = allTargets.filter((_, i) => i !== index);
     State.setAllTargets(updatedTargets);
     
-    // Marker entfernen
+    // Marker entfernen und neu indizieren
     const targetMarkers = State.getTargetMarkers();
-    if (targetMarkers[index]) {
-      const layerGroup = State.getLayerGroup();
-      if (layerGroup) {
-        layerGroup.removeLayer(targetMarkers[index]);
-      }
-      targetMarkers[index] = null;
-      State.setTargetMarkers(targetMarkers.filter(m => m !== null));
+    const layerGroup = State.getLayerGroup();
+    
+    // Marker von der Karte entfernen (falls vorhanden)
+    // Prüfe sowohl über Index als auch über Koordinaten-Vergleich
+    let markerToRemove = null;
+    if (index < targetMarkers.length && targetMarkers[index]) {
+      markerToRemove = targetMarkers[index];
+    } else {
+      // Fallback: Marker über Koordinaten finden
+      markerToRemove = targetMarkers.find(m => 
+        m && m._targetLatLng && this.isEqual(m._targetLatLng, target)
+      );
     }
+    
+    if (markerToRemove && layerGroup) {
+      try {
+        layerGroup.removeLayer(markerToRemove);
+      } catch (error) {
+        console.warn('Fehler beim Entfernen des Markers:', error);
+      }
+    }
+    
+    // Marker-Array neu aufbauen (ohne den entfernten Marker)
+    const updatedMarkers = [];
+    targetMarkers.forEach((marker, i) => {
+      // Entferne Marker über Index ODER über Koordinaten-Vergleich
+      const isMarkerToRemove = (i === index) || 
+        (marker && marker._targetLatLng && this.isEqual(marker._targetLatLng, target));
+      
+      if (!isMarkerToRemove && marker) {
+        updatedMarkers.push(marker);
+        // Index im Marker aktualisieren (für Tooltip und Kontextmenü)
+        if (marker._targetIndex !== undefined) {
+          // Neuer Index ist die Position im neuen Array
+          marker._targetIndex = updatedMarkers.length - 1;
+        }
+      }
+    });
+    State.setTargetMarkers(updatedMarkers);
     
     EventBus.emit(Events.TARGET_REMOVED, { target, index });
     return target;

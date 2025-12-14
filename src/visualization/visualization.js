@@ -16,7 +16,7 @@ const Visualization = {
     return polyline; // Referenz zurückgeben
   },
   
-  drawTargetPoint(latlng) {
+  drawTargetPoint(latlng, index = null) {
     const layerGroup = State.getLayerGroup();
     
     // SVG-Icon für Zielpunkt
@@ -40,7 +40,117 @@ const Visualization = {
     });
     
     const marker = L.marker(latlng, { icon: targetIcon }).addTo(layerGroup);
+    
+    // Koordinaten im Marker speichern für Vergleich
+    marker._targetLatLng = latlng;
+    
+    // Index speichern für Kontextmenü
+    if (index !== null) {
+      marker._targetIndex = index;
+      
+      // Tooltip mit ID beim Hover (dynamisch berechnet)
+      marker.on('mouseover', () => {
+        const allTargets = State.getAllTargets();
+        const currentIndex = allTargets.findIndex(t => 
+          TargetService.isEqual(t, latlng)
+        );
+        if (currentIndex >= 0) {
+          const targetId = `z${currentIndex + 1}`;
+          marker.setTooltipContent(targetId);
+          // Event für Panel-Highlighting emittieren
+          EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: latlng });
+        }
+      });
+      
+      // Unhover-Event
+      marker.on('mouseout', () => {
+        EventBus.emit(Events.TARGET_UNHOVER);
+      });
+      
+      marker.bindTooltip('', {
+        permanent: false,
+        direction: 'top',
+        className: 'target-tooltip',
+        offset: [0, -10]
+      });
+      
+      // Rechtsklick-Event für Kontextmenü
+      marker.on('contextmenu', (e) => {
+        e.originalEvent.preventDefault();
+        // Aktuellen Index dynamisch finden (mit Toleranz für Koordinaten-Vergleich)
+        const allTargets = State.getAllTargets();
+        const currentIndex = allTargets.findIndex(t => 
+          TargetService.isEqual(t, latlng)
+        );
+        if (currentIndex >= 0) {
+          this._showTargetContextMenu(e, currentIndex);
+        }
+      });
+    }
+    
     return marker; // Marker zurückgeben für State-Verwaltung
+  },
+  
+  /**
+   * Zeigt das Kontextmenü für einen Zielpunkt
+   * @param {Object} e - Leaflet Event
+   * @param {number} index - Index des Zielpunkts
+   */
+  _showTargetContextMenu(e, index) {
+    const contextMenu = Utils.getElement('#target-context-menu');
+    if (!contextMenu) return;
+    
+    // Menü-Position setzen
+    const map = State.getMap();
+    const point = map.mouseEventToContainerPoint(e.originalEvent);
+    contextMenu.style.left = `${point.x}px`;
+    contextMenu.style.top = `${point.y}px`;
+    contextMenu.style.display = 'block';
+    contextMenu._targetIndex = index;
+    
+    // Lösch-Button Event-Listener
+    const deleteBtn = Utils.getElement('#target-context-menu-delete');
+    if (deleteBtn) {
+      // Alten Listener entfernen (falls vorhanden)
+      const newDeleteBtn = deleteBtn.cloneNode(true);
+      deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+      
+      newDeleteBtn.addEventListener('click', () => {
+        contextMenu.style.display = 'none';
+        
+        // Gleiche Logik wie im Panel
+        const target = TargetService.removeTarget(index);
+        if (target) {
+          // Routen zu diesem Zielpunkt entfernen
+          TargetService.removeTargetRoutes(target);
+          
+          // Wenn es der aktuelle Zielpunkt war, State zurücksetzen
+          const lastTarget = State.getLastTarget();
+          if (lastTarget && TargetService.isEqual(lastTarget, target)) {
+            State.setLastTarget(null);
+            State.resetRouteData();
+            
+            // Startpunkte entfernen
+            const startMarkers = State.getStartMarkers();
+            const layerGroup = State.getLayerGroup();
+            if (layerGroup && startMarkers) {
+              startMarkers.forEach(marker => {
+                if (marker) layerGroup.removeLayer(marker);
+              });
+            }
+            State.setStartMarkers([]);
+          }
+          
+          // Alle verbleibenden Routen neu zeichnen
+          if (CONFIG.REMEMBER_TARGETS) {
+            EventBus.emit(Events.VISUALIZATION_UPDATE);
+          }
+          
+          // Export-Button aktualisieren
+          EventBus.emit(Events.EXPORT_REQUESTED);
+        }
+      });
+    }
   },
   
   updateDistanceHistogram(starts, target) {
@@ -847,6 +957,33 @@ const Visualization = {
       }
       State.setSchoolSearchRadiusCircle(null);
     }
+  },
+  
+  /**
+   * Highlightet einen Target-Marker auf der Karte
+   * @param {number} index - Index des Zielpunkts
+   */
+  highlightTargetMarker(index) {
+    const targetMarkers = State.getTargetMarkers();
+    if (index >= 0 && index < targetMarkers.length && targetMarkers[index]) {
+      const marker = targetMarkers[index];
+      const iconElement = marker._icon;
+      if (iconElement) {
+        iconElement.classList.add('target-marker-highlighted');
+      }
+    }
+  },
+  
+  /**
+   * Entfernt Highlighting von allen Target-Markern
+   */
+  unhighlightAllTargetMarkers() {
+    const targetMarkers = State.getTargetMarkers();
+    targetMarkers.forEach(marker => {
+      if (marker && marker._icon) {
+        marker._icon.classList.remove('target-marker-highlighted');
+      }
+    });
   }
 };
 

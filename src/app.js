@@ -67,7 +67,7 @@ const App = {
       // Marker zeichnen (falls noch nicht vorhanden)
       const targetMarkers = State.getTargetMarkers();
       if (!targetMarkers[data.index]) {
-        const marker = Visualization.drawTargetPoint(data.target);
+        const marker = Visualization.drawTargetPoint(data.target, data.index);
         targetMarkers[data.index] = marker;
         State.setTargetMarkers(targetMarkers);
       }
@@ -117,6 +117,15 @@ const App = {
     
     // Config: Remember Targets geändert
     this._setupRememberTargetsHandler();
+    
+    // Target Hover (für Marker-Highlighting)
+    EventBus.on(Events.TARGET_HOVER, (data) => {
+      Visualization.highlightTargetMarker(data.index);
+    });
+    
+    EventBus.on(Events.TARGET_UNHOVER, () => {
+      Visualization.unhighlightAllTargetMarkers();
+    });
     
     // Profil-Buttons und Aggregation-Toggle
     this._setupProfileButtons();
@@ -384,9 +393,9 @@ const App = {
           const added = TargetService.addTarget(currentTarget);
           if (added) {
             // Marker zeichnen
-            const marker = Visualization.drawTargetPoint(currentTarget);
-            const targetMarkers = State.getTargetMarkers();
             const index = State.getAllTargets().length - 1;
+            const marker = Visualization.drawTargetPoint(currentTarget, index);
+            const targetMarkers = State.getTargetMarkers();
             targetMarkers[index] = marker;
             State.setTargetMarkers(targetMarkers);
             
@@ -445,7 +454,7 @@ const App = {
         const targetMarkers = State.getTargetMarkers();
         const index = allTargets.length - 1;
         if (!targetMarkers[index]) {
-          const marker = Visualization.drawTargetPoint(target);
+          const marker = Visualization.drawTargetPoint(target, index);
           targetMarkers[index] = marker;
           State.setTargetMarkers(targetMarkers);
         }

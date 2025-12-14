@@ -64,6 +64,8 @@ const Events = {
   TARGET_ADDED: 'target:added',
   TARGET_REMOVED: 'target:removed',
   TARGET_SELECTED: 'target:selected',
+  TARGET_HOVER: 'target:hover',
+  TARGET_UNHOVER: 'target:unhover',
   
   // Route Events
   ROUTES_CALCULATED: 'routes:calculated',

@@ -12,6 +12,10 @@ const TargetsList = {
     // Event-Listener für Target-Änderungen
     EventBus.on(Events.TARGET_ADDED, () => this.update());
     EventBus.on(Events.TARGET_REMOVED, () => this.update());
+    
+    // Event-Listener für Marker-Hover (um Panel-Item zu highlighten)
+    EventBus.on(Events.TARGET_HOVER, (data) => this._highlightItem(data.index));
+    EventBus.on(Events.TARGET_UNHOVER, () => this._unhighlightAll());
   },
   
   /**
@@ -40,6 +44,7 @@ const TargetsList = {
     allTargets.forEach((target, index) => {
       const item = document.createElement('div');
       item.className = 'target-item';
+      item.dataset.targetIndex = index;
       
       const label = document.createElement('span');
       label.className = 'target-item-label';
@@ -55,6 +60,14 @@ const TargetsList = {
       removeBtn.title = 'Zielpunkt entfernen';
       removeBtn.addEventListener('click', () => {
         this._handleRemove(index);
+      });
+      
+      // Hover-Events für Highlighting
+      item.addEventListener('mouseenter', () => {
+        EventBus.emit(Events.TARGET_HOVER, { index, target });
+      });
+      item.addEventListener('mouseleave', () => {
+        EventBus.emit(Events.TARGET_UNHOVER);
       });
       
       item.appendChild(label);
@@ -78,6 +91,16 @@ const TargetsList = {
       if (lastTarget && TargetService.isEqual(lastTarget, target)) {
         State.setLastTarget(null);
         State.resetRouteData();
+        
+        // Startpunkte entfernen
+        const startMarkers = State.getStartMarkers();
+        const layerGroup = State.getLayerGroup();
+        if (layerGroup && startMarkers) {
+          startMarkers.forEach(marker => {
+            if (marker) layerGroup.removeLayer(marker);
+          });
+        }
+        State.setStartMarkers([]);
       }
       
       // Alle verbleibenden Routen neu zeichnen
@@ -87,6 +110,32 @@ const TargetsList = {
       
       EventBus.emit(Events.EXPORT_REQUESTED); // Trigger Export-Button Update
     }
+  },
+  
+  /**
+   * Highlightet ein Panel-Item
+   */
+  _highlightItem(index) {
+    if (!this._container) return;
+    const items = this._container.querySelectorAll('.target-item');
+    items.forEach((item, i) => {
+      if (i === index) {
+        item.classList.add('target-item-highlighted');
+      } else {
+        item.classList.remove('target-item-highlighted');
+      }
+    });
+  },
+  
+  /**
+   * Entfernt Highlighting von allen Panel-Items
+   */
+  _unhighlightAll() {
+    if (!this._container) return;
+    const items = this._container.querySelectorAll('.target-item');
+    items.forEach(item => {
+      item.classList.remove('target-item-highlighted');
+    });
   },
   
   /**
