@@ -1,7 +1,8 @@
 // ==== Konfiguration ====
 const CONFIG = {
   GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
-  PROFILE: "bike", // anpassen (z.B. "bike", "bike2", "mtb"...)
+  //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
+  PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
   MAP_CENTER: [52.52, 13.405], // [lat, lon]
