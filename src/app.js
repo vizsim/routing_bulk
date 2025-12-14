@@ -64,6 +64,8 @@ const App = {
     
     // Target hinzugefügt
     EventBus.on(Events.TARGET_ADDED, (data) => {
+      // Verwaiste Marker entfernen (bevor neuer Marker hinzugefügt wird)
+      Visualization.cleanupOrphanedTargetMarkers();
       // Marker zeichnen (falls noch nicht vorhanden)
       const targetMarkers = State.getTargetMarkers();
       if (!targetMarkers[data.index]) {
@@ -77,6 +79,8 @@ const App = {
     
     // Target entfernt
     EventBus.on(Events.TARGET_REMOVED, (data) => {
+      // Verwaiste Marker entfernen
+      Visualization.cleanupOrphanedTargetMarkers();
       // Liste aktualisieren
       TargetsList.update();
       if (CONFIG.REMEMBER_TARGETS) {
@@ -392,9 +396,25 @@ const App = {
         if (currentTarget) {
           const added = TargetService.addTarget(currentTarget);
           if (added) {
-            // Marker zeichnen
+            // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
+            // Wenn ja, entferne ihn und erstelle einen neuen mit Index
+            const layerGroup = State.getLayerGroup();
+            if (layerGroup) {
+              layerGroup.eachLayer(layer => {
+                if (layer instanceof L.Marker && 
+                    layer._targetLatLng && 
+                    TargetService.isEqual(layer._targetLatLng, currentTarget) &&
+                    layer._targetIndex === undefined) {
+                  // Alten Marker ohne Index entfernen
+                  layerGroup.removeLayer(layer);
+                }
+              });
+            }
+            
+            // Neuen Marker mit Index zeichnen
             const index = State.getAllTargets().length - 1;
             const marker = Visualization.drawTargetPoint(currentTarget, index);
+            
             const targetMarkers = State.getTargetMarkers();
             targetMarkers[index] = marker;
             State.setTargetMarkers(targetMarkers);
@@ -480,7 +500,7 @@ const App = {
     if (routeInfo.starts && routeInfo.colors) {
       if (!CONFIG.REMEMBER_TARGETS) {
         // Im normalen Modus: Startpunkte normal zeichnen
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       } else {
         // Im "Zielpunkte merken" Modus: Alte Startpunkte entfernen, neue zeichnen
         const startMarkers = State.getStartMarkers();
@@ -490,7 +510,7 @@ const App = {
             if (marker) layerGroup.removeLayer(marker);
           });
         }
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       }
     }
     
@@ -596,7 +616,7 @@ const App = {
       
       // Startpunkte neu zeichnen (mit neuer Größe basierend auf Modus)
       if (lastStarts && colors) {
-        Visualization.drawStartPoints(lastStarts, colors);
+        Visualization.drawStartPoints(lastStarts, colors, lastTarget);
         Visualization.toggleStartPointsVisibility();
       }
       

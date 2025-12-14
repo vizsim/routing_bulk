@@ -7,7 +7,7 @@ const RouteService = {
    * @returns {Promise<Object>} - Route-Informationen
    */
   async calculateRoutes(target, options = {}) {
-    const { reuseStarts = false } = options;
+    const { reuseStarts = false, silent = false } = options;
     
     // Validierung
     if (!Utils.assertExists(target, 'Target')) return null;
@@ -98,7 +98,10 @@ const RouteService = {
         TargetService.updateTargetRoutes(target, routeInfo);
       }
       
-      EventBus.emit(Events.ROUTES_CALCULATED, { target, routeInfo });
+      // Event nur emittieren, wenn nicht silent
+      if (!silent) {
+        EventBus.emit(Events.ROUTES_CALCULATED, { target, routeInfo });
+      }
       return routeInfo;
       
     } catch (err) {

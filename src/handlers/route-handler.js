@@ -11,7 +11,7 @@ const RouteHandler = {
     if (routeInfo.starts && routeInfo.colors) {
       if (!CONFIG.REMEMBER_TARGETS) {
         // Im normalen Modus: Startpunkte normal zeichnen
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       } else {
         // Im "Zielpunkte merken" Modus: Alte Startpunkte entfernen, neue zeichnen
         const startMarkers = State.getStartMarkers();
@@ -21,7 +21,7 @@ const RouteHandler = {
             if (marker) layerGroup.removeLayer(marker);
           });
         }
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors);
+        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       }
     }
     
