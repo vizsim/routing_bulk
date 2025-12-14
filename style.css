@@ -19,7 +19,7 @@ html, body {
   font: 14px/1.3 system-ui;
   min-width: 250px;
   max-width: 300px;
-  max-height: calc(100vh - 20px);
+  max-height: calc(100vh - 35px);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -333,6 +333,11 @@ html, body {
     rgb(68, 1, 84) 100%
   );
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s;
+}
+
+.legend-gradient-bar:hover {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(0, 102, 255, 0.3);
 }
 
 .legend-labels {
@@ -343,76 +348,40 @@ html, body {
   margin-bottom: 8px;
 }
 
-.colormap-selector {
-  position: relative;
+.colormap-preview-container {
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   margin-top: 8px;
 }
 
-.colormap-button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #666;
+.colormap-preview-container.show {
+  display: grid;
+}
+
+.colormap-preview {
   cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 2px;
   transition: all 0.2s;
 }
 
-.colormap-button:hover {
+.colormap-preview:hover {
   border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
+  transform: translateY(-1px);
 }
 
-.colormap-button svg {
-  flex-shrink: 0;
-  margin-left: 8px;
+.colormap-preview.active {
+  border-color: #0066ff;
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
 }
 
-.colormap-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  overflow: hidden;
-}
-
-.colormap-option {
+.colormap-preview-bar {
+  height: 16px;
   width: 100%;
-  padding: 8px 10px;
-  background: white;
-  border: none;
-  border-bottom: 1px solid #f0f0f0;
-  text-align: left;
-  font-size: 11px;
-  color: #666;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.colormap-option:last-child {
-  border-bottom: none;
-}
-
-.colormap-option:hover {
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.colormap-option.active {
-  background: #0066ff;
-  color: white;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .export-button {

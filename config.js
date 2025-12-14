@@ -178,62 +178,65 @@ function toggleAggregationUI() {
     hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
   
-  // Legende-Gradient aktualisieren wenn sichtbar
+  // Legende-Gradient und Vorschau-Bars aktualisieren wenn sichtbar
   if (CONFIG.AGGREGATED && legend && legend.style.display === 'block') {
     Visualization.updateLegendGradient();
+    Visualization.updateColormapPreviews();
   }
 }
 
 function initColormapSelector() {
-  const colormapButton = Utils.getElement('#colormap-button');
-  const colormapMenu = Utils.getElement('#colormap-menu');
-  const colormapLabel = Utils.getElement('#colormap-label');
-  const colormapOptions = Utils.getElements('.colormap-option');
+  const colormapPreviews = Utils.getElements('.colormap-preview');
+  const colormapContainer = Utils.getElement('.colormap-preview-container');
+  const legendGradientBar = Utils.getElement('#legend-gradient-bar');
   
-  if (!colormapButton || !colormapMenu) return;
+  if (!colormapContainer) return;
   
-  // Initiale Colormap setzen
-  if (colormapLabel) {
-    colormapLabel.textContent = CONFIG.COLORMAP || 'viridis_r';
-  }
+  // Vorschau-Bars initialisieren
+  Visualization.updateColormapPreviews();
   
-  // Aktive Option markieren
-  colormapOptions.forEach(option => {
-    if (option.dataset.colormap === CONFIG.COLORMAP) {
-      option.classList.add('active');
+  // Aktive Colormap markieren
+  colormapPreviews.forEach(preview => {
+    if (preview.dataset.colormap === CONFIG.COLORMAP) {
+      preview.classList.add('active');
     }
   });
   
-  // Button-Klick: Menü öffnen/schließen
-  colormapButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isVisible = colormapMenu.style.display === 'block';
-    colormapMenu.style.display = isVisible ? 'none' : 'block';
-  });
+  // Funktion zum Ein-/Ausblenden der Vorschau-Bars
+  const togglePreviews = (e) => {
+    if (e) e.stopPropagation();
+    const isVisible = colormapContainer.classList.contains('show');
+    if (isVisible) {
+      colormapContainer.classList.remove('show');
+    } else {
+      colormapContainer.classList.add('show');
+    }
+  };
   
-  // Option-Klick: Colormap ändern
-  colormapOptions.forEach(option => {
-    option.addEventListener('click', async (e) => {
+  // Gradient-Bar-Klick: Vorschau-Bars ein-/ausblenden
+  if (legendGradientBar) {
+    legendGradientBar.style.cursor = 'pointer';
+    legendGradientBar.addEventListener('click', togglePreviews);
+  }
+  
+  // Klick auf Vorschau-Bar: Colormap ändern
+  colormapPreviews.forEach(preview => {
+    preview.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const colormap = option.dataset.colormap;
+      const colormap = preview.dataset.colormap;
       
       // CONFIG aktualisieren
       CONFIG.COLORMAP = colormap;
       
-      // Label aktualisieren
-      if (colormapLabel) {
-        colormapLabel.textContent = colormap;
-      }
-      
-      // Aktive Option aktualisieren
-      colormapOptions.forEach(opt => opt.classList.remove('active'));
-      option.classList.add('active');
-      
-      // Menü schließen
-      colormapMenu.style.display = 'none';
+      // Aktive Vorschau aktualisieren
+      colormapPreviews.forEach(p => p.classList.remove('active'));
+      preview.classList.add('active');
       
       // Legende aktualisieren
       Visualization.updateLegendGradient();
+      
+      // Vorschau-Bars ausblenden nach Auswahl
+      colormapContainer.classList.remove('show');
       
       // Routen neu zeichnen wenn vorhanden
       if (State.getLastTarget() && State.getAllRouteData().length > 0 && CONFIG.AGGREGATED) {
@@ -242,10 +245,11 @@ function initColormapSelector() {
     });
   });
   
-  // Klick außerhalb: Menü schließen
+  // Klick außerhalb: Vorschau-Bars schließen
   document.addEventListener('click', (e) => {
-    if (!colormapButton.contains(e.target) && !colormapMenu.contains(e.target)) {
-      colormapMenu.style.display = 'none';
+    if (!colormapContainer.contains(e.target) && 
+        !(legendGradientBar && legendGradientBar.contains(e.target))) {
+      colormapContainer.classList.remove('show');
     }
   });
 }

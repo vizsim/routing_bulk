@@ -490,23 +490,36 @@ const Visualization = {
     return `rgb(${r}, ${g}, ${b})`;
   },
   
+  // Generiert einen Gradient-String für eine Colormap
+  generateGradientForColormap(colormapName, numSteps = 10) {
+    let gradientStops = [];
+    for (let i = 0; i <= numSteps; i++) {
+      const t = i / numSteps;
+      const color = this.getColormapColor(t, colormapName);
+      const percent = (i / numSteps) * 100;
+      gradientStops.push(`${color} ${percent}%`);
+    }
+    return `linear-gradient(to right, ${gradientStops.join(', ')})`;
+  },
+  
   // Aktualisiert die Legende mit der aktuellen Colormap
   updateLegendGradient() {
     const gradientBar = Utils.getElement('#legend-gradient-bar');
     if (!gradientBar) return;
     
     const colormap = CONFIG.COLORMAP || 'viridis_r';
-    const numSteps = 10;
-    let gradientStops = [];
-    
-    for (let i = 0; i <= numSteps; i++) {
-      const t = i / numSteps;
-      const color = this.getColormapColor(t, colormap);
-      const percent = (i / numSteps) * 100;
-      gradientStops.push(`${color} ${percent}%`);
-    }
-    
-    gradientBar.style.background = `linear-gradient(to right, ${gradientStops.join(', ')})`;
+    gradientBar.style.background = this.generateGradientForColormap(colormap);
+  },
+  
+  // Aktualisiert alle Colormap-Vorschau-Bars
+  updateColormapPreviews() {
+    const colormaps = ['viridis_r', 'plasma_r', 'inferno_r', 'magma_r'];
+    colormaps.forEach(colormap => {
+      const previewBar = Utils.getElement(`#colormap-preview-${colormap}`);
+      if (previewBar) {
+        previewBar.style.background = this.generateGradientForColormap(colormap, 20);
+      }
+    });
   },
   
   getColorForCount(count, weightedLevel) {
