@@ -41,6 +41,8 @@ const TargetsList = {
     }
     
     // Zielpunkte anzeigen
+    const targetRoutes = State.getTargetRoutes();
+    
     allTargets.forEach((target, index) => {
       const item = document.createElement('div');
       item.className = 'target-item';
@@ -50,16 +52,58 @@ const TargetsList = {
       label.className = 'target-item-label';
       label.textContent = `z${index + 1}:`;
       
-      const coords = document.createElement('span');
-      coords.className = 'target-item-coords';
-      coords.textContent = `${target[0].toFixed(5)}, ${target[1].toFixed(5)}`;
+      // Config-Informationen aus targetRoutes holen
+      const routeInfo = targetRoutes.find(tr => 
+        TargetService.isEqual(tr.target, target)
+      );
+      
+      const configText = document.createElement('span');
+      configText.className = 'target-item-coords';
+      
+      if (routeInfo && routeInfo.config && routeInfo.distributionType) {
+        // Format: "bike | 10 | 2 | lognormal"
+        configText.textContent = `${routeInfo.config.profile} | ${routeInfo.config.n} | ${routeInfo.config.radiusKm} | ${routeInfo.distributionType}`;
+      } else {
+        // Fallback: Koordinaten anzeigen, wenn keine Config vorhanden
+        configText.textContent = `${target[0].toFixed(5)}, ${target[1].toFixed(5)}`;
+      }
       
       const removeBtn = document.createElement('button');
       removeBtn.className = 'target-item-remove';
       removeBtn.textContent = '×';
       removeBtn.title = 'Zielpunkt entfernen';
-      removeBtn.addEventListener('click', () => {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this._handleRemove(index);
+      });
+      
+      // Bearbeiten-Button (Stift-Icon) - immer anzeigen wenn Zielpunkt ausgewählt ist
+      const selectedIndex = State.getSelectedTargetIndex();
+      let editBtn = null;
+      
+      if (selectedIndex === index) {
+        editBtn = document.createElement('button');
+        editBtn.className = 'target-item-edit';
+        editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+        editBtn.title = 'Config-Änderungen übernehmen';
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._handleApplyChanges(index);
+        });
+      }
+      
+      // Ausgewählter Zielpunkt-Indikator
+      if (selectedIndex === index) {
+        item.classList.add('target-item-selected');
+      }
+      
+      // Klick-Event: Startpunkte dieses Zielpunkts anzeigen
+      item.addEventListener('click', (e) => {
+        // Verhindere, dass Buttons auch das Item-Event auslösen
+        if (e.target.closest('.target-item-remove') || e.target.closest('.target-item-edit')) return;
+        
+        // Zielpunkt auswählen und Config-Werte wiederherstellen
+        Visualization._showStartPointsForTarget(index);
       });
       
       // Hover-Events für Highlighting
@@ -70,11 +114,34 @@ const TargetsList = {
         EventBus.emit(Events.TARGET_UNHOVER);
       });
       
+      const buttonGroup = document.createElement('div');
+      buttonGroup.className = 'target-item-buttons';
+      if (editBtn) {
+        buttonGroup.appendChild(editBtn);
+      }
+      buttonGroup.appendChild(removeBtn);
+      
       item.appendChild(label);
-      item.appendChild(coords);
-      item.appendChild(removeBtn);
+      item.appendChild(configText);
+      item.appendChild(buttonGroup);
       this._container.appendChild(item);
     });
+  },
+  
+  /**
+   * Behandelt das Übernehmen von Änderungen für einen Zielpunkt
+   */
+  async _handleApplyChanges(index) {
+    const allTargets = State.getAllTargets();
+    if (index < 0 || index >= allTargets.length) return;
+    
+    const target = allTargets[index];
+    
+    // Routen neu berechnen und übernehmen
+    await App._recalculateTargetRoutes(target, index);
+    
+    // Panel aktualisieren
+    this.update();
   },
   
   /**

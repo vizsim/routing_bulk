@@ -477,9 +477,40 @@ html, body {
   text-align: right;
 }
 
-.target-item-remove {
+.target-item-buttons {
+  display: flex;
+  gap: 4px;
   flex: 0 0 auto;
   margin-left: 8px;
+}
+
+.target-item-edit {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.target-item-edit:hover {
+  background: #2563eb;
+}
+
+.target-item-edit svg {
+  width: 12px;
+  height: 12px;
+}
+
+.target-item-remove {
+  flex: 0 0 auto;
   padding: 2px 6px;
   background: #ef4444;
   color: white;
@@ -498,6 +529,11 @@ html, body {
   border: 2px solid #ef4444 !important;
   background: #fff5f5 !important;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.target-item-selected {
+  border: 2px solid #3b82f6 !important;
+  background: #eff6ff !important;
 }
 
 /* ============================================

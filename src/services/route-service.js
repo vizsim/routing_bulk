@@ -7,7 +7,7 @@ const RouteService = {
    * @returns {Promise<Object>} - Route-Informationen
    */
   async calculateRoutes(target, options = {}) {
-    const { reuseStarts = false, silent = false } = options;
+    const { reuseStarts = false, silent = false, distributionType = null } = options;
     
     // Validierung
     if (!Utils.assertExists(target, 'Target')) return null;
@@ -28,8 +28,10 @@ const RouteService = {
       starts = State.getLastStarts();
       colors = State.getLastColors();
     } else {
-      const activeDistBtn = document.querySelector('.dist-btn.active');
-      const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+      // Verteilung: Option hat Priorität, sonst aktiver UI-Button, sonst Default
+      const distType = distributionType || 
+        (document.querySelector('.dist-btn.active')?.dataset.dist) || 
+        'lognormal';
       const numBins = Math.min(15, CONFIG.N);
       Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
       
@@ -84,12 +86,22 @@ const RouteService = {
       State.setAllRouteData(allRouteData);
       State.setAllRouteResponses(allRouteResponses);
       
+      // Verteilungstyp ermitteln (für spätere Wiederherstellung)
+      const activeDistBtn = document.querySelector('.dist-btn.active');
+      const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+      
       const routeInfo = {
         routeData: allRouteData,
         routeResponses: allRouteResponses,
         routePolylines: routePolylines,
         starts: starts,
         colors: colors,
+        distributionType: distType, // Verteilung speichern
+        config: { // Config-Informationen speichern
+          profile: CONFIG.PROFILE,
+          n: CONFIG.N,
+          radiusKm: CONFIG.RADIUS_M / 1000
+        },
         stats: { ok, fail }
       };
       

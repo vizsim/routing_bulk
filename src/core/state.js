@@ -18,6 +18,7 @@ const State = {
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
   schoolMarkers: [], // Marker für gefundene Schulen
   schoolSearchRadiusCircle: null, // Kreis für Suchradius-Visualisierung
+  selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   
   // Getter
   getMap() { return this.map; },
@@ -35,6 +36,7 @@ const State = {
   getExpectedDistribution() { return this.expectedDistribution; },
   getSchoolMarkers() { return this.schoolMarkers; },
   getSchoolSearchRadiusCircle() { return this.schoolSearchRadiusCircle; },
+  getSelectedTargetIndex() { return this.selectedTargetIndex; },
   
   // Setter
   setMap(map) { this.map = map; },
@@ -52,6 +54,7 @@ const State = {
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
   setSchoolMarkers(markers) { this.schoolMarkers = markers; },
   setSchoolSearchRadiusCircle(circle) { this.schoolSearchRadiusCircle = circle; },
+  setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   
   // Reset
   resetRouteData() {

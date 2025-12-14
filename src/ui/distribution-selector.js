@@ -41,6 +41,12 @@ const DistributionSelector = {
       return;
     }
     
+    // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
+    const selectedIndex = State.getSelectedTargetIndex();
+    if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+      return; // Früh beenden, nicht automatisch berechnen
+    }
+    
     // Wenn Routen vorhanden sind, Verteilung aktualisieren
     const lastTarget = State.getLastTarget();
     const lastStarts = State.getLastStarts();

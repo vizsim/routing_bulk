@@ -1,19 +1,36 @@
 // ==== Visualisierung ====
 const Visualization = {
-  drawRoute(ghResponse, color) {
-    const latlngs = API.extractRouteCoordinates(ghResponse);
-    if (!latlngs) {
-      return null;
+  /**
+   * Hilfsfunktion: Findet den Index eines Zielpunkts für einen Marker
+   * @param {L.Marker} marker - Der Marker
+   * @returns {number} - Index oder -1
+   */
+  _getTargetIndexForMarker(marker) {
+    if (!marker) return -1;
+    if (marker._targetIndex !== undefined) {
+      return marker._targetIndex;
     }
-
+    if (marker._targetLatLng) {
+      const allTargets = State.getAllTargets();
+      return allTargets.findIndex(t => 
+        TargetService.isEqual(t, marker._targetLatLng)
+      );
+    }
+    return -1;
+  },
+  
+  /**
+   * Hilfsfunktion: Entfernt alle Startpunkt-Marker
+   */
+  _clearStartMarkers() {
+    const startMarkers = State.getStartMarkers();
     const layerGroup = State.getLayerGroup();
-    const polyline = L.polyline(latlngs, { 
-      weight: 4, 
-      opacity: 0.8, 
-      color: color
-    }).addTo(layerGroup);
-    
-    return polyline; // Referenz zurückgeben
+    if (layerGroup && startMarkers) {
+      startMarkers.forEach(marker => {
+        if (marker) layerGroup.removeLayer(marker);
+      });
+    }
+    State.setStartMarkers([]);
   },
   
   drawTargetPoint(latlng, index = null) {
@@ -41,7 +58,8 @@ const Visualization = {
     
     const marker = L.marker(latlng, { 
       icon: targetIcon,
-      draggable: true
+      draggable: true,
+      zIndexOffset: 200 // Höher als Startpunkte, damit Zielpunkte immer vorne sind
     }).addTo(layerGroup);
     
     // Koordinaten im Marker speichern für Vergleich
@@ -53,15 +71,20 @@ const Visualization = {
       
       // Event Listener für Drag-Ende
       marker.on('dragend', async (e) => {
-        const newPosition = e.target.getLatLng();
-        const newTarget = [newPosition.lat, newPosition.lng];
-        
-        // Zielpunkt im State aktualisieren (Index verwenden statt Koordinaten-Vergleich)
-        const allTargets = State.getAllTargets();
-        const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex : 
-          allTargets.findIndex(t => TargetService.isEqual(t, marker._targetLatLng));
-        
-        if (currentIndex >= 0 && currentIndex < allTargets.length) {
+        try {
+          const newPosition = e.target.getLatLng();
+          if (!newPosition) return;
+          
+          const newTarget = [newPosition.lat, newPosition.lng];
+          
+          // Zielpunkt im State aktualisieren (Index verwenden statt Koordinaten-Vergleich)
+          const allTargets = State.getAllTargets();
+          if (!allTargets || allTargets.length === 0) return;
+          
+          const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex : 
+            allTargets.findIndex(t => TargetService.isEqual(t, marker._targetLatLng));
+          
+          if (currentIndex < 0 || currentIndex >= allTargets.length) return;
           // Alten Zielpunkt durch neuen ersetzen
           const oldTarget = allTargets[currentIndex];
           allTargets[currentIndex] = newTarget;
@@ -99,7 +122,9 @@ const Visualization = {
               routeResponses: oldRouteInfo?.routeResponses || [],
               routePolylines: [], // Alte Polylines bereits entfernt
               starts: oldRouteInfo?.starts || [],
-              colors: oldRouteInfo?.colors || []
+              colors: oldRouteInfo?.colors || [],
+              distributionType: oldRouteInfo?.distributionType, // Verteilung beibehalten
+              config: oldRouteInfo?.config // Config beibehalten
             };
             State.setTargetRoutes(targetRoutes);
             
@@ -108,8 +133,56 @@ const Visualization = {
               MapRenderer.clearRoutes();
             }
             
+            // Config-Werte des Zielpunkts wiederherstellen (BEVOR Routen berechnet werden)
+            // Verteilung wiederherstellen (UI-Button aktivieren)
+            const savedDistributionType = oldRouteInfo?.distributionType;
+            if (savedDistributionType) {
+              const distBtns = document.querySelectorAll('.dist-btn');
+              distBtns.forEach(btn => {
+                if (btn.dataset.dist === savedDistributionType) {
+                  btn.classList.add('active');
+                } else {
+                  btn.classList.remove('active');
+                }
+              });
+            }
+            
+            // Config-Werte wiederherstellen (N, RADIUS_M, PROFILE)
+            if (oldRouteInfo?.config) {
+              // Anzahl Routen (N)
+              const nInput = document.querySelector('#config-n');
+              if (nInput && oldRouteInfo.config.n) {
+                CONFIG.N = oldRouteInfo.config.n;
+                nInput.value = oldRouteInfo.config.n;
+              }
+              
+              // Radius (RADIUS_M)
+              const radiusInput = document.querySelector('#config-radius');
+              if (radiusInput && oldRouteInfo.config.radiusKm) {
+                CONFIG.RADIUS_M = oldRouteInfo.config.radiusKm * 1000;
+                radiusInput.value = oldRouteInfo.config.radiusKm;
+              }
+              
+              // Profil (PROFILE)
+              if (oldRouteInfo.config.profile) {
+                CONFIG.PROFILE = oldRouteInfo.config.profile;
+                const profileBtns = document.querySelectorAll('.profile-btn');
+                profileBtns.forEach(btn => {
+                  if (btn.dataset.profile === oldRouteInfo.config.profile) {
+                    btn.classList.add('active');
+                  } else {
+                    btn.classList.remove('active');
+                  }
+                });
+              }
+            }
+            
             // Neue Routen berechnen (silent=true, da wir die Routen direkt zeichnen)
-            const routeInfo = await RouteService.calculateRoutes(newTarget, { silent: true });
+            // Jetzt werden die wiederhergestellten Config-Werte verwendet
+            const routeInfo = await RouteService.calculateRoutes(newTarget, { 
+              silent: true,
+              distributionType: savedDistributionType 
+            });
             if (routeInfo) {
               // RouteInfo im targetRoutes aktualisieren
               targetRoutes[targetRouteIndex] = {
@@ -118,14 +191,20 @@ const Visualization = {
                 routeResponses: routeInfo.routeResponses,
                 routePolylines: [],
                 starts: routeInfo.starts,
-                colors: routeInfo.colors
+                colors: routeInfo.colors,
+                distributionType: routeInfo.distributionType, // Verteilung beibehalten
+                config: routeInfo.config // Config beibehalten
               };
               State.setTargetRoutes(targetRoutes);
               
-              // Startpunkte aktualisieren, wenn es der aktuelle Zielpunkt ist
-              const isCurrentTarget = lastTarget && TargetService.isEqual(lastTarget, oldTarget);
-              if (isCurrentTarget && routeInfo.starts && routeInfo.colors) {
+              // Startpunkte für diesen Zielpunkt anzeigen (nach dem Draggen)
+              if (routeInfo.starts && routeInfo.colors) {
                 Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, newTarget);
+                // lastTarget aktualisieren, damit dieser Zielpunkt als "aktiv" gilt
+                State.setLastTarget(newTarget);
+                
+                // Zielpunkt als ausgewählt markieren (Stift-Icon weitergeben)
+                State.setSelectedTargetIndex(currentIndex);
               }
               
               // Alle Routen neu zeichnen
@@ -150,21 +229,20 @@ const Visualization = {
           // Verwaiste Marker entfernen
           this.cleanupOrphanedTargetMarkers();
           
-          // Panel-Liste aktualisieren
+          // Panel-Liste aktualisieren (damit Config-Informationen angezeigt werden)
           TargetsList.update();
           
           // Export-Button aktualisieren
           EventBus.emit(Events.EXPORT_REQUESTED);
+        } catch (err) {
+          console.error('Fehler beim Draggen des Zielpunkts:', err);
+          Utils.showError('Fehler beim Verschieben des Zielpunkts', false);
         }
       });
       
       // Tooltip mit ID beim Hover (dynamisch berechnet)
       marker.on('mouseover', () => {
-        // Index aus Marker verwenden (wird beim Draggen aktualisiert)
-        const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex :
-          State.getAllTargets().findIndex(t => 
-            TargetService.isEqual(t, marker._targetLatLng)
-          );
+        const currentIndex = this._getTargetIndexForMarker(marker);
         if (currentIndex >= 0) {
           const targetId = `z${currentIndex + 1}`;
           marker.setTooltipContent(targetId);
@@ -185,14 +263,18 @@ const Visualization = {
         offset: [0, -10]
       });
       
+      // Klick-Event: Startpunkte dieses Zielpunkts anzeigen
+      marker.on('click', () => {
+        const currentIndex = this._getTargetIndexForMarker(marker);
+        if (currentIndex >= 0) {
+          this._showStartPointsForTarget(currentIndex);
+        }
+      });
+      
       // Rechtsklick-Event für Kontextmenü
       marker.on('contextmenu', (e) => {
         e.originalEvent.preventDefault();
-        // Index aus Marker verwenden (wird beim Draggen aktualisiert)
-        const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex :
-          State.getAllTargets().findIndex(t => 
-            TargetService.isEqual(t, marker._targetLatLng)
-          );
+        const currentIndex = this._getTargetIndexForMarker(marker);
         if (currentIndex >= 0) {
           this._showTargetContextMenu(e, currentIndex);
         }
@@ -497,20 +579,18 @@ const Visualization = {
   },
   
   drawStartPoints(starts, colors, target = null) {
-    const layerGroup = State.getLayerGroup();
-    const startMarkers = State.getStartMarkers();
-    
     // Alte Marker entfernen
-    startMarkers.forEach(marker => layerGroup.removeLayer(marker));
-    State.setStartMarkers([]);
+    this._clearStartMarkers();
+    
+    const layerGroup = State.getLayerGroup();
     
     // Zielpunkt bestimmen: Wenn nicht übergeben, lastTarget verwenden
     const targetForStarts = target || State.getLastTarget();
     
-    // Größe basierend auf Modus
-    const size = CONFIG.AGGREGATED ? 6 : 12;
-    const borderWidth = CONFIG.AGGREGATED ? 1 : 2;
-    const shadowWidth = CONFIG.AGGREGATED ? 1 : 2;
+    // Größe basierend auf Modus (kleiner gemacht)
+    const size = CONFIG.AGGREGATED ? 4 : 8;
+    const borderWidth = CONFIG.AGGREGATED ? 1 : 1.5;
+    const shadowWidth = CONFIG.AGGREGATED ? 1 : 1.5;
     
     const newMarkers = [];
     
@@ -534,9 +614,11 @@ const Visualization = {
       });
       
       // Erstelle einen draggable Marker
+      // zIndexOffset niedriger als Zielpunkte, damit Startpunkte dahinter sind
       const marker = L.marker(s, {
         icon: icon,
-        draggable: true
+        draggable: true,
+        zIndexOffset: 100 // Niedriger als Zielpunkte (die haben default 200)
       }).addTo(layerGroup);
       
       // Zielpunkt im Marker speichern (für Drag-Event)
@@ -552,65 +634,68 @@ const Visualization = {
       
       // Event Listener für Drag-Ende
       marker.on('dragend', async (e) => {
-        const newPosition = e.target.getLatLng();
-        const newStart = [newPosition.lat, newPosition.lng];
-        
-        // Zielpunkt aus Marker verwenden (falls vorhanden), sonst lastTarget
-        const targetForRoute = marker._targetLatLng || State.getLastTarget();
-        
-        if (!targetForRoute) {
-          console.warn('Kein Zielpunkt für Startpunkt gefunden');
-          return;
-        }
-        
-        // Im "Zielpunkte merken" Modus: Startpunkt im targetRoutes aktualisieren
-        if (CONFIG.REMEMBER_TARGETS) {
-          const targetRoutes = State.getTargetRoutes();
-          const targetIndex = targetRoutes.findIndex(tr => 
-            TargetService.isEqual(tr.target, targetForRoute)
-          );
-          
-          if (targetIndex >= 0) {
-            const routeInfo = targetRoutes[targetIndex];
-            // Startpunkt in den Starts des Zielpunkts aktualisieren
-            if (routeInfo.starts && routeInfo.starts[index] !== undefined) {
-              routeInfo.starts[index] = newStart;
-            }
-            State.setTargetRoutes(targetRoutes);
-          }
-        }
-        
-        // Startpunkt in lastStarts aktualisieren (für Kompatibilität)
-        const lastStarts = State.getLastStarts();
-        if (lastStarts && lastStarts[index] !== undefined) {
-          lastStarts[index] = newStart;
-          State.setLastStarts(lastStarts);
-        }
-        
-        // Alte Route entfernen
-        const routePolylines = State.getRoutePolylines();
-        if (routePolylines[index]) {
-          layerGroup.removeLayer(routePolylines[index]);
-          routePolylines[index] = null;
-          State.setRoutePolylines(routePolylines);
-        }
-        
-        // Alle Polylines entfernen (falls aggregierte Darstellung aktiv)
-        if (CONFIG.AGGREGATED) {
-          const polylinesToRemove = [];
-          layerGroup.eachLayer(layer => {
-            // Nur Polylines entfernen, die keine Schul-Layer sind
-            if (layer instanceof L.Polyline && !layer._isSchoolLayer) {
-              polylinesToRemove.push(layer);
-            }
-          });
-          polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
-        }
-        
-        // Neue Route berechnen
         try {
-          const result = await API.fetchRoute(newStart, targetForRoute);
-          if (result.paths?.[0]) {
+          const newPosition = e.target.getLatLng();
+          if (!newPosition) return;
+          
+          const newStart = [newPosition.lat, newPosition.lng];
+          
+          // Zielpunkt aus Marker verwenden (falls vorhanden), sonst lastTarget
+          const targetForRoute = marker._targetLatLng || State.getLastTarget();
+          
+          if (!targetForRoute || !Array.isArray(targetForRoute) || targetForRoute.length !== 2) {
+            console.warn('Kein gültiger Zielpunkt für Startpunkt gefunden');
+            return;
+          }
+          
+            // Im "Zielpunkte merken" Modus: Startpunkt im targetRoutes aktualisieren
+          if (CONFIG.REMEMBER_TARGETS) {
+            const targetRoutes = State.getTargetRoutes();
+            const targetIndex = targetRoutes.findIndex(tr => 
+              TargetService.isEqual(tr.target, targetForRoute)
+            );
+            
+            if (targetIndex >= 0) {
+              const routeInfo = targetRoutes[targetIndex];
+              // Startpunkt in den Starts des Zielpunkts aktualisieren
+              if (routeInfo.starts && routeInfo.starts[index] !== undefined) {
+                routeInfo.starts[index] = newStart;
+              }
+              State.setTargetRoutes(targetRoutes);
+            }
+          }
+          
+          // Startpunkt in lastStarts aktualisieren (für Kompatibilität)
+          const lastStarts = State.getLastStarts();
+          if (lastStarts && lastStarts[index] !== undefined) {
+            lastStarts[index] = newStart;
+            State.setLastStarts(lastStarts);
+          }
+          
+          // Alte Route entfernen
+          const routePolylines = State.getRoutePolylines();
+          if (routePolylines[index]) {
+            layerGroup.removeLayer(routePolylines[index]);
+            routePolylines[index] = null;
+            State.setRoutePolylines(routePolylines);
+          }
+          
+          // Alle Polylines entfernen (falls aggregierte Darstellung aktiv)
+          if (CONFIG.AGGREGATED) {
+            const polylinesToRemove = [];
+            layerGroup.eachLayer(layer => {
+              // Nur Polylines entfernen, die keine Schul-Layer sind
+              if (layer instanceof L.Polyline && !layer._isSchoolLayer) {
+                polylinesToRemove.push(layer);
+              }
+            });
+            polylinesToRemove.forEach(layer => layerGroup.removeLayer(layer));
+          }
+          
+          // Neue Route berechnen
+          try {
+            const result = await API.fetchRoute(newStart, targetForRoute);
+            if (result.paths?.[0]) {
             // Route-Daten extrahieren und im State aktualisieren
             const coords = API.extractRouteCoordinates(result);
             if (coords) {
@@ -661,7 +746,7 @@ const Visualization = {
                 }
               } else {
                 // Einzelne Route zeichnen
-                const newRoute = Visualization.drawRoute(result, colors[index]);
+                const newRoute = RouteRenderer.drawRoute(result, colors[index]);
                 if (newRoute) {
                   routePolylines[index] = newRoute;
                   State.setRoutePolylines(routePolylines);
@@ -686,8 +771,13 @@ const Visualization = {
               Visualization.updateDistanceHistogram(updatedStarts, targetForRoute);
             }
           }
+          } catch (routeErr) {
+            console.error(`Route-Fehler für Startpunkt ${index}:`, routeErr);
+            Utils.showError(`Fehler beim Verschieben des Startpunkts ${index + 1}`, false);
+          }
         } catch (err) {
-          console.error(`Route-Fehler für Startpunkt ${index}:`, err);
+          console.error(`Allgemeiner Fehler beim Draggen des Startpunkts ${index}:`, err);
+          Utils.showError(`Fehler beim Verschieben des Startpunkts ${index + 1}`, false);
         }
       });
       
@@ -1142,24 +1232,101 @@ const Visualization = {
   },
   
   /**
+   * Zeigt die Startpunkte für einen bestimmten Zielpunkt an
+   * @param {number} targetIndex - Index des Zielpunkts
+   */
+  _showStartPointsForTarget(targetIndex) {
+    if (!CONFIG.REMEMBER_TARGETS) return;
+    
+    const allTargets = State.getAllTargets();
+    if (targetIndex < 0 || targetIndex >= allTargets.length) return;
+    
+    const target = allTargets[targetIndex];
+    const targetRoutes = State.getTargetRoutes();
+    const routeInfo = targetRoutes.find(tr => 
+      TargetService.isEqual(tr.target, target)
+    );
+    
+    if (routeInfo && routeInfo.starts && routeInfo.colors) {
+      // lastTarget aktualisieren, damit dieser Zielpunkt als "aktiv" gilt
+      State.setLastTarget(target);
+      
+      // Zielpunkt als ausgewählt markieren
+      State.setSelectedTargetIndex(targetIndex);
+      
+      // Panel aktualisieren, um Stift-Icon anzuzeigen
+      TargetsList.update();
+      
+      // Verteilung wiederherstellen (UI-Button aktivieren)
+      if (routeInfo.distributionType) {
+        const distBtns = document.querySelectorAll('.dist-btn');
+        distBtns.forEach(btn => {
+          if (btn.dataset.dist === routeInfo.distributionType) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+      }
+      
+      // Config-Werte wiederherstellen (N, RADIUS_M, PROFILE)
+      if (routeInfo.config) {
+        // Anzahl Routen (N)
+        const nInput = document.querySelector('#config-n');
+        if (nInput && routeInfo.config.n) {
+          CONFIG.N = routeInfo.config.n;
+          nInput.value = routeInfo.config.n;
+        }
+        
+        // Radius (RADIUS_M)
+        const radiusInput = document.querySelector('#config-radius');
+        if (radiusInput && routeInfo.config.radiusKm) {
+          CONFIG.RADIUS_M = routeInfo.config.radiusKm * 1000;
+          radiusInput.value = routeInfo.config.radiusKm;
+        }
+        
+        // Profil (PROFILE)
+        if (routeInfo.config.profile) {
+          CONFIG.PROFILE = routeInfo.config.profile;
+          const profileBtns = document.querySelectorAll('.profile-btn');
+          profileBtns.forEach(btn => {
+            if (btn.dataset.profile === routeInfo.config.profile) {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+        }
+      }
+      
+      // Startpunkte anzeigen
+      this.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
+      // Histogramm aktualisieren
+      if (routeInfo.starts.length > 0) {
+        this.updateDistanceHistogram(routeInfo.starts, target);
+      }
+    }
+  },
+  
+  /**
    * Entfernt verwaiste Target-Marker (Marker ohne zugehörigen Zielpunkt im State)
+   * Optimiert: Nur eine Iteration über Layer, Set für schnelle Lookups
    */
   cleanupOrphanedTargetMarkers() {
     const layerGroup = State.getLayerGroup();
     const allTargets = State.getAllTargets();
     const targetMarkers = State.getTargetMarkers();
     
-    if (!layerGroup) return;
+    if (!layerGroup || !allTargets) return;
     
+    // Set für schnelle Lookups: Welche Marker sind gültig?
+    const validMarkerSet = new Set();
     const validMarkers = [];
     const markersToRemove = [];
     
     // Prüfe alle Marker im State
     targetMarkers.forEach((marker, index) => {
-      if (!marker) {
-        // Marker existiert nicht mehr
-        return;
-      }
+      if (!marker) return; // Marker existiert nicht mehr
       
       // Prüfe ob Marker noch gültig ist
       const isValid = index < allTargets.length && 
@@ -1169,57 +1336,47 @@ const Visualization = {
       
       if (isValid) {
         validMarkers[index] = marker;
+        validMarkerSet.add(marker);
       } else {
-        // Marker ist verwaist - entfernen
         markersToRemove.push(marker);
       }
     });
     
-    // Entferne verwaiste Marker von der Karte
-    markersToRemove.forEach(marker => {
-      try {
-        layerGroup.removeLayer(marker);
-      } catch (err) {
-        console.warn('Fehler beim Entfernen verwaister Marker:', err);
-      }
-    });
-    
-    // Aktualisiere State mit nur noch gültigen Markern
-    State.setTargetMarkers(validMarkers);
-    
     // Prüfe auch alle Marker auf der Karte, die nicht im State sind
-    const orphanedMarkers = [];
+    // (in einem Durchgang, Performance-Optimierung)
     layerGroup.eachLayer(layer => {
       if (layer instanceof L.Marker && 
           layer._targetLatLng && 
           layer._targetIndex !== undefined) {
-        // Prüfe ob dieser Marker noch im State ist
-        const isInState = targetMarkers.some((m, idx) => 
-          m === layer && idx < allTargets.length
-        );
         
-        if (!isInState) {
-          // Marker ist auf der Karte, aber nicht im State
+        // Wenn Marker nicht im validMarkerSet ist, prüfe ob er verwaist ist
+        if (!validMarkerSet.has(layer)) {
           const targetIndex = allTargets.findIndex(t => 
             TargetService.isEqual(t, layer._targetLatLng)
           );
           
           if (targetIndex < 0) {
             // Zielpunkt existiert nicht mehr - Marker entfernen
-            orphanedMarkers.push(layer);
+            markersToRemove.push(layer);
           }
         }
       }
     });
     
-    // Entferne verwaiste Marker von der Karte
-    orphanedMarkers.forEach(marker => {
+    // Entferne alle verwaisten Marker von der Karte (batch operation)
+    markersToRemove.forEach(marker => {
       try {
-        layerGroup.removeLayer(marker);
+        if (layerGroup.hasLayer(marker)) {
+          layerGroup.removeLayer(marker);
+        }
       } catch (err) {
+        // Marker wurde bereits entfernt oder existiert nicht mehr
         console.warn('Fehler beim Entfernen verwaister Marker:', err);
       }
     });
+    
+    // Aktualisiere State mit nur noch gültigen Markern
+    State.setTargetMarkers(validMarkers);
   }
 };
 

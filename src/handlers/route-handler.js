@@ -14,13 +14,7 @@ const RouteHandler = {
         Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       } else {
         // Im "Zielpunkte merken" Modus: Alte Startpunkte entfernen, neue zeichnen
-        const startMarkers = State.getStartMarkers();
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup) {
-          startMarkers.forEach(marker => {
-            if (marker) layerGroup.removeLayer(marker);
-          });
-        }
+        Visualization._clearStartMarkers();
         Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       }
     }
@@ -58,6 +52,11 @@ const RouteHandler = {
     
     // Export-Button aktualisieren
     this._updateExportButtonState();
+    
+    // Panel aktualisieren (damit Config-Informationen angezeigt werden)
+    if (CONFIG.REMEMBER_TARGETS) {
+      TargetsList.update();
+    }
     
     // Info anzeigen
     if (routeInfo.stats && routeInfo.stats.ok === 0 && routeInfo.stats.fail > 0) {

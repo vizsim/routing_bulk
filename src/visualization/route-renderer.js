@@ -14,7 +14,7 @@ const RouteRenderer = {
 
     const layerGroup = State.getLayerGroup();
     const polyline = L.polyline(latlngs, { 
-      weight: 4, 
+      weight: 3, 
       opacity: 0.8, 
       color: color
     }).addTo(layerGroup);
@@ -98,15 +98,23 @@ const RouteRenderer = {
       targetRoutes.forEach(routeInfo => {
         if (!routeInfo || !routeInfo.routeResponses) return;
         
+        // routePolylines Array initialisieren falls nicht vorhanden
+        if (!routeInfo.routePolylines) {
+          routeInfo.routePolylines = [];
+        }
+        
         routeInfo.routeResponses.forEach((routeResponse, index) => {
-          if (routeResponse) {
+          if (routeResponse && routeResponse.response) {
             const polyline = this.drawRoute(routeResponse.response, routeResponse.color);
-            if (polyline && routeInfo.routePolylines) {
+            if (polyline) {
               routeInfo.routePolylines[index] = polyline;
             }
           }
         });
       });
+      
+      // State aktualisieren
+      State.setTargetRoutes(targetRoutes);
     }
   },
   
@@ -128,7 +136,7 @@ const RouteRenderer = {
       // Einzelne Routen zeichnen
       const routePolylines = [];
       routeResponses.forEach((routeInfo, index) => {
-        if (routeInfo) {
+        if (routeInfo && routeInfo.response) {
           const polyline = this.drawRoute(routeInfo.response, routeInfo.color || colors[index]);
           routePolylines[index] = polyline;
         }

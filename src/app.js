@@ -181,13 +181,15 @@ const App = {
           CONFIG.PROFILE = btn.dataset.profile || CONFIG.PROFILE;
         }
         
-        EventBus.emit(Events.CONFIG_PROFILE_CHANGED, { profile: CONFIG.PROFILE });
-        
-        // Wenn ein Zielpunkt vorhanden ist, Routen neu abfragen
-        const lastTarget = State.getLastTarget();
-        if (lastTarget) {
-          await this.recalculateRoutes();
+        // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun (wie bei anderen Config-Werten)
+        const selectedIndex = State.getSelectedTargetIndex();
+        if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+          // Nichts tun - Benutzer muss auf Stift-Icon klicken, um Änderungen zu übernehmen
+          return;
         }
+        
+        // Nur wenn kein Zielpunkt ausgewählt ist, sofort umsetzen
+        EventBus.emit(Events.CONFIG_PROFILE_CHANGED, { profile: CONFIG.PROFILE });
       });
     });
   },
@@ -264,6 +266,58 @@ const App = {
     });
   },
   
+  
+  /**
+   * Berechnet Routen für einen Zielpunkt neu und aktualisiert die Anzeige
+   */
+  async _recalculateTargetRoutes(target, targetIndex) {
+    if (!CONFIG.REMEMBER_TARGETS) return;
+    
+    // Routen neu berechnen
+    const routeInfo = await RouteService.calculateRoutes(target, { silent: true });
+    if (!routeInfo) return;
+    
+    // RouteInfo im targetRoutes aktualisieren
+    const targetRoutes = State.getTargetRoutes();
+    const targetRouteIndex = targetRoutes.findIndex(tr => 
+      TargetService.isEqual(tr.target, target)
+    );
+    
+    if (targetRouteIndex >= 0) {
+      targetRoutes[targetRouteIndex] = {
+        target: target,
+        routeData: routeInfo.routeData,
+        routeResponses: routeInfo.routeResponses,
+        routePolylines: [],
+        starts: routeInfo.starts,
+        colors: routeInfo.colors,
+        distributionType: routeInfo.distributionType,
+        config: routeInfo.config
+      };
+      State.setTargetRoutes(targetRoutes);
+    }
+    
+    // Alle Routen neu zeichnen
+    RouteRenderer.drawAllTargetRoutes();
+    
+    // Startpunkte anzeigen
+    if (routeInfo.starts && routeInfo.colors) {
+      Visualization._clearStartMarkers();
+      Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
+    }
+    
+    // Histogramm aktualisieren
+    if (routeInfo.starts && routeInfo.starts.length > 0) {
+      Visualization.updateDistanceHistogram(routeInfo.starts, target);
+    }
+    
+    // Panel aktualisieren (damit Config-Informationen angezeigt werden)
+    TargetsList.update();
+    
+    // lastTarget aktualisieren
+    State.setLastTarget(target);
+  },
+  
   /**
    * Richtet den Event-Handler für Anzahl Routen ein
    */
@@ -324,6 +378,13 @@ const App = {
         const radiusKm = Utils.validateNumber(radiusInput.value, 0.1, 100, CONFIG.RADIUS_M / 1000);
         CONFIG.RADIUS_M = radiusKm * 1000;
         radiusInput.value = radiusKm; // Korrigierter Wert zurücksetzen
+      }
+      
+      // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
+      // Benutzer muss explizit auf Stift-Icon klicken, um Änderungen zu übernehmen
+      const selectedIndex = State.getSelectedTargetIndex();
+      if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+        return; // Nicht automatisch berechnen
       }
       
       // Wenn Routen vorhanden sind, neu berechnen
@@ -427,12 +488,22 @@ const App = {
             const lastColors = State.getLastColors();
             
             if (allRouteData.length > 0 || allRouteResponses.length > 0) {
+              // Verteilungstyp ermitteln
+              const activeDistBtn = document.querySelector('.dist-btn.active');
+              const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+              
               TargetService.updateTargetRoutes(currentTarget, {
                 routeData: allRouteData,
                 routeResponses: allRouteResponses,
                 routePolylines: routePolylines,
                 starts: lastStarts,
-                colors: lastColors
+                colors: lastColors,
+                distributionType: distType,
+                config: {
+                  profile: CONFIG.PROFILE,
+                  n: CONFIG.N,
+                  radiusKm: CONFIG.RADIUS_M / 1000
+                }
               });
               
               // Alle Routen neu zeichnen
@@ -491,102 +562,14 @@ const App = {
   },
   
   /**
-   * Behandelt berechnete Routen
+   * Behandelt aktualisierte Route (delegiert an RouteHandler)
    */
-  _handleRoutesCalculated(data) {
-    const { target, routeInfo } = data;
-    
-    // Startpunkte zeichnen (nur im normalen Modus oder beim ersten Klick im "Zielpunkte merken" Modus)
-    if (routeInfo.starts && routeInfo.colors) {
-      if (!CONFIG.REMEMBER_TARGETS) {
-        // Im normalen Modus: Startpunkte normal zeichnen
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
-      } else {
-        // Im "Zielpunkte merken" Modus: Alte Startpunkte entfernen, neue zeichnen
-        const startMarkers = State.getStartMarkers();
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup) {
-          startMarkers.forEach(marker => {
-            if (marker) layerGroup.removeLayer(marker);
-          });
-        }
-        Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
-      }
-    }
-    
-    // Routen visualisieren
-    if (CONFIG.REMEMBER_TARGETS) {
-      // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten anzeigen
-      // (inklusive der gerade berechneten)
-      RouteRenderer.drawAllTargetRoutes();
-    } else {
-      // Normaler Modus: Nur Routen zum aktuellen Zielpunkt
-      // Alte Routen entfernen (falls noch vorhanden)
-      const routePolylines = State.getRoutePolylines();
-      const layerGroup = State.getLayerGroup();
-      if (layerGroup) {
-        routePolylines.forEach(polyline => {
-          if (polyline) layerGroup.removeLayer(polyline);
-        });
-      }
-      // Alle Polylines entfernen
-      MapRenderer.clearRoutes();
-      
-      // Neue Routen zeichnen
-      RouteRenderer.drawRoutesForTarget(
-        routeInfo.routeData,
-        routeInfo.routeResponses,
-        routeInfo.colors
-      );
-    }
-    
-    // Histogramm aktualisieren
-    if (routeInfo.starts && target && routeInfo.starts.length > 0) {
-      Visualization.updateDistanceHistogram(routeInfo.starts, target);
-    }
-    
-    // Export-Button aktualisieren
-    this._updateExportButtonState();
-    
-    // Info anzeigen
-    if (routeInfo.stats && routeInfo.stats.ok === 0 && routeInfo.stats.fail > 0) {
-      Utils.showError(`Alle ${routeInfo.stats.fail} Routen fehlgeschlagen. Bitte Browser-Konsole prüfen.`, true);
-    }
+  _handleRouteUpdated(data) {
+    RouteHandler.handleRouteUpdated(data);
   },
   
   /**
-   * Behandelt aktualisierte Route
-   */
-  _handleRouteUpdated(data) {
-    const { index } = data;
-    
-    // Visualisierung aktualisieren
-    if (CONFIG.REMEMBER_TARGETS) {
-      RouteRenderer.drawAllTargetRoutes();
-    } else if (CONFIG.AGGREGATED) {
-      // Aggregierte Darstellung neu berechnen
-      const allRouteData = State.getAllRouteData();
-      const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData);
-      if (aggregatedSegments.length > 0) {
-        const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
-        RouteRenderer.drawAggregatedRoutes(aggregatedSegments, maxCount);
-      }
-    } else {
-      // Einzelne Route neu zeichnen
-      const allRouteResponses = State.getAllRouteResponses();
-      const colors = State.getLastColors();
-      if (allRouteResponses[index]) {
-        const polyline = RouteRenderer.drawRoute(
-          allRouteResponses[index].response,
-          allRouteResponses[index].color || colors[index]
-        );
-        const routePolylines = State.getRoutePolylines();
-        routePolylines[index] = polyline;
-        State.setRoutePolylines(routePolylines);
-      }
-    }
-    
-    // Histogramm aktualisieren
+   * Histogramm aktualisieren
     const lastTarget = State.getLastTarget();
     if (lastTarget) {
       const updatedStarts = State.getLastStarts();
@@ -610,12 +593,14 @@ const App = {
     const allRouteResponses = State.getAllRouteResponses();
     const colors = State.getLastColors();
     const lastStarts = State.getLastStarts();
+    const lastTarget = State.getLastTarget();
     
-    if (allRouteData.length > 0) {
+    // Routen neu zeichnen, wenn Route-Daten vorhanden sind
+    if (allRouteData.length > 0 || (allRouteResponses && allRouteResponses.length > 0)) {
       MapRenderer.clearRoutes();
       
       // Startpunkte neu zeichnen (mit neuer Größe basierend auf Modus)
-      if (lastStarts && colors) {
+      if (lastStarts && colors && lastTarget) {
         Visualization.drawStartPoints(lastStarts, colors, lastTarget);
         Visualization.toggleStartPointsVisibility();
       }
@@ -673,7 +658,7 @@ const App = {
           RouteRenderer.drawAllTargetRoutes();
         } else {
           // Visualisierung aktualisieren
-          this._handleRoutesCalculated({ target: lastTarget, routeInfo });
+          RouteHandler.handleRoutesCalculated({ target: lastTarget, routeInfo });
         }
       }
     }
