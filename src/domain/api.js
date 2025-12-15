@@ -24,7 +24,6 @@ const API = {
     }
 
     const data = await res.json();
-    console.log("GraphHopper Response:", data); // Debug
     return data;
   },
   

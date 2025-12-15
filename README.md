@@ -39,19 +39,28 @@ routing_bulk/
 ├── index.html              # Haupt-HTML-Datei
 ├── style.css              # Stylesheet
 ├── README.md              # Diese Datei
+├── LICENSE                # MIT-Lizenz
+├── bulk_router_logo.svg   # Logo
+│
+├── docs/                  # Dokumentation
+│   ├── AGGREGATION_PROBLEM.md # Dokumentation zum Aggregierungs-Problem
+│   ├── AGGREGATION_PARAMETERS.md # Dokumentation zu Aggregierungs-Parametern
+│   └── REFACTORING_APP_JS.md  # Refactoring-Dokumentation
 │
 └── src/
     ├── core/              # Kern-Module
     │   ├── config.js      # Konfiguration
     │   ├── state.js       # State-Management
     │   ├── utils.js       # Utility-Funktionen
-    │   └── events.js      # Event-Bus
+    │   ├── events.js      # Event-Bus
+    │   └── compat.js      # Kompatibilitäts-Helper
     │
     ├── services/          # Business-Logik
     │   ├── route-service.js        # Route-Berechnung
     │   ├── target-service.js      # Zielpunkt-Verwaltung
     │   ├── export-service.js      # Export-Funktionalität
-    │   └── aggregation-service.js  # Routen-Aggregierung
+    │   ├── aggregation-service.js  # Routen-Aggregierung
+    │   └── overpass-service.js    # Overpass API (OSM-Daten)
     │
     ├── domain/            # Domain-Modelle & Utilities
     │   ├── geo.js         # Geo-Funktionen
@@ -65,7 +74,12 @@ routing_bulk/
     │
     ├── ui/                # UI-Komponenten
     │   ├── targets-list.js      # Zielpunkte-Liste
-    │   └── config-helpers.js    # Config-UI-Helper
+    │   ├── config-helpers.js    # Config-UI-Helper
+    │   ├── distribution-selector.js # Verteilungs-Auswahl
+    │   └── colormap-selector.js # Colormap-Auswahl
+    │
+    ├── handlers/          # Event-Handler
+    │   └── route-handler.js     # Route-Event-Handler
     │
     └── app.js             # Haupt-Orchestrierung
 ```
@@ -98,7 +112,7 @@ Die Anwendung unterstützt zwei Aggregierungsmethoden:
 1. **Simple**: Schnelle Aggregierung basierend auf normalisierten Koordinaten
 2. **Lazy Overlap Splitting**: Präzisere Aggregierung mit Overlap-Erkennung
 
-Weitere Details zur Aggregierung finden sich in `AGGREGATION_PARAMETERS.md` und `AGGREGATION_PROBLEM.md`.
+Weitere Details zur Aggregierung finden sich in [`docs/AGGREGATION_PARAMETERS.md`](docs/AGGREGATION_PARAMETERS.md) und [`docs/AGGREGATION_PROBLEM.md`](docs/AGGREGATION_PROBLEM.md).
 
 ## Entwicklung
 
@@ -145,26 +159,6 @@ Die Integration dieser Datenquellen würde es ermöglichen:
 
 ## Lizenz
 
-MIT License
-
-Copyright (c) 2025 vizsim
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Dieses Projekt steht unter der MIT-Lizenz. Siehe [LICENSE](LICENSE) für Details.
 
 
