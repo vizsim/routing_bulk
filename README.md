@@ -16,10 +16,15 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 
 ## Verwendung
 
-1. Öffne `index.html` in einem modernen Webbrowser
-2. Klicke auf die Karte, um einen Zielpunkt zu setzen
-3. Die Anwendung generiert automatisch zufällige Startpunkte und berechnet Routen zum Zielpunkt
-4. Nutze die Konfigurationsoptionen, um die Darstellung anzupassen:
+### Online (GitHub Pages)
+
+Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](https://vizsim.github.io/routing_bulk/)
+
+### Nutzung
+
+1. Klicke auf die Karte, um einen Zielpunkt zu setzen
+2. Die Anwendung generiert automatisch zufällige Startpunkte und berechnet Routen zum Zielpunkt
+3. Nutze die Konfigurationsoptionen, um die Darstellung anzupassen:
    - **Profil**: Wähle zwischen verschiedenen Routing-Profilen
    - **Anzahl Routen**: Anzahl der zu berechnenden Routen
    - **Radius**: Radius für die Generierung von Startpunkten
@@ -107,25 +112,59 @@ Die Anwendung folgt einer modularen Architektur mit klarer Trennung von Concerns
 - **Visualization**: Visualisierungs-Logik
 - **UI**: UI-Komponenten
 
-### Event-Bus
 
-Die Anwendung nutzt einen Event-Bus für lose Kopplung zwischen Modulen:
 
-```javascript
-// Event-Listener registrieren
-EventBus.on(Events.TARGET_ADDED, (data) => {
-  console.log('Neuer Zielpunkt:', data.target);
-});
+## Ausblick
 
-// Event emittieren
-EventBus.emit(Events.ROUTES_CALCULATED, { target, routeInfo });
-```
+### Modellierung von Schulwegen
+
+Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. Hierfür werden zusätzlich zu den Routenberechnungen zwei weitere Datenquellen benötigt:
+
+1. **Nachfrage (Schülerinnen und Schüler)**: 
+   - **Zensus 2022 Daten**: 100x100m Raster mit Einwohnerzahlen und "Anteil unter 18 Jähriger"
+   - Diese Daten ermöglichen die Abschätzung der Anzahl von Schülerinnen und Schülern pro Rasterzelle
+   - siehe https://atlas.zensus2022.de/
+
+2. **Einzugsbereiche der Schulen**:
+   - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind
+   - Die Datenlage ist für verschiedene Bezirke in Berlin sehr unterschiedlich
+   - Stand jetzt wurden nur Daten für Grundschulen gefunden
+
+#### Verfügbare Datenquellen für Einzugsbereiche (von Grundschulen)
+
+| Bezirk | Format | Beschreibung | Link |
+|--------|--------|--------------|------|
+| Treptow-Köpenick | PDF Karte | Einschulungsbereiche als PDF-Karte verfügbar | [Link](https://www.berlin.de/ba-treptow-koepenick/politik-und-verwaltung/aemter/schul-und-sportamt/schule/artikel.841674.php) |
+| Neukölln | Digital(?) | Einschulungsbereiche in digitaler Form verfügbar, aber nicht öffentlich nutzbar (kein echtes WMS) | [Link](https://www.berlin.de/ba-neukoelln/politik-und-verwaltung/aemter/schul-und-sportamt/schulamt/artikel.1131196.php) |
+| Steglitz-Zehlendorf | PDF mit Karte und Adressen | Einschulungsbereiche als PDF mit Karte und Adressliste | [Link](https://www.berlin.de/ba-steglitz-zehlendorf/politik-und-verwaltung/aemter/schul-und-sportamt/schulen/artikel.86435.php) |
+| Mitte | PDF mit Karte und Adressliste | Einschulungsbereiche als PDF mit Karte und Adressliste | [Link](https://www.berlin.de/ba-mitte/politik-und-verwaltung/aemter/schul-und-sportamt/schule/artikel.1419606.php) |
+
+Die Integration dieser Datenquellen würde es ermöglichen:
+- synthetische Startpunkte basierend auf tatsächlichen Wohnorten von Schülerinnen und Schülern zu generieren
+- wahrscheinliche  Schulwegen zu visualisieren und zu analysieren
 
 ## Lizenz
 
-[Lizenz hier angeben]
+MIT License
 
-## Autor
+Copyright (c) 2025 vizsim
 
-[Autor hier angeben]
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 
