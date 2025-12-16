@@ -272,13 +272,15 @@ const Visualization = {
         // Startpunkte für diesen Zielpunkt anzeigen (nach dem Draggen)
         if (routeInfo.starts && routeInfo.colors) {
           Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, newTarget);
-          State.setLastTarget(newTarget);
-                  State.setSelectedTargetIndex(currentIndex);
-                  // Marker visuell hervorheben
-                  this.updateSelectedTargetMarker();
-                }
-                
-                // Alle Routen neu zeichnen
+        }
+        
+        // lastTarget und Auswahl aktualisieren (immer, nicht nur wenn starts/colors vorhanden)
+        State.setLastTarget(newTarget);
+        State.setSelectedTargetIndex(currentIndex);
+        // Marker visuell hervorheben
+        this.updateSelectedTargetMarker();
+        
+        // Alle Routen neu zeichnen
         RouteRenderer.drawAllTargetRoutes();
         
         // Histogramm aktualisieren
