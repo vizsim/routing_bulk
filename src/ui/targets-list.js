@@ -48,14 +48,32 @@ const TargetsList = {
       item.className = 'target-item';
       item.dataset.targetIndex = index;
       
-      const label = document.createElement('span');
-      label.className = 'target-item-label';
-      label.textContent = `z${index + 1}:`;
-      
       // Config-Informationen aus targetRoutes holen
       const routeInfo = targetRoutes.find(tr => 
         TargetService.isEqual(tr.target, target)
       );
+      
+      // Stabile ID verwenden (aus routeInfo oder Marker)
+      let targetId = null;
+      if (routeInfo && routeInfo.targetId) {
+        targetId = routeInfo.targetId;
+      } else {
+        // Fallback: ID aus Marker holen
+        const targetMarkers = State.getTargetMarkers();
+        const marker = targetMarkers.find(m => 
+          m && m._targetLatLng && TargetService.isEqual(m._targetLatLng, target)
+        );
+        if (marker && marker._targetId) {
+          targetId = marker._targetId;
+        } else {
+          // Letzter Fallback: Index verwenden (sollte nicht passieren)
+          targetId = index + 1;
+        }
+      }
+      
+      const label = document.createElement('span');
+      label.className = 'target-item-label';
+      label.textContent = `z${targetId}:`;
       
       const configText = document.createElement('span');
       configText.className = 'target-item-coords';

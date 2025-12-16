@@ -83,7 +83,7 @@ const Visualization = {
     State.setStartMarkers([]);
   },
   
-  drawTargetPoint(latlng, index = null) {
+  drawTargetPoint(latlng, index = null, targetId = null) {
     const layerGroup = State.getLayerGroup();
     
     // SVG-Icon für Zielpunkt
@@ -316,16 +316,32 @@ const Visualization = {
    * Richtet Tooltip für Zielpunkt-Marker ein
    */
   _setupTargetTooltip(marker) {
-    // Tooltip mit ID beim Hover (dynamisch berechnet)
-    marker.on('mouseover', () => {
-      const currentIndex = this._getTargetIndexForMarker(marker);
-      if (currentIndex >= 0) {
-        const targetId = `z${currentIndex + 1}`;
-        marker.setTooltipContent(targetId);
-        // Event für Panel-Highlighting emittieren
-        EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
-      }
-    });
+      // Tooltip mit ID beim Hover (verwendet stabile ID)
+      marker.on('mouseover', () => {
+        const currentIndex = this._getTargetIndexForMarker(marker);
+        if (currentIndex >= 0) {
+          // Verwende stabile ID aus Marker oder aus targetRoutes
+          let targetIdStr = null;
+          if (marker._targetId) {
+            targetIdStr = `z${marker._targetId}`;
+          } else {
+            // Fallback: ID aus targetRoutes holen
+            const targetRoutes = State.getTargetRoutes();
+            const routeInfo = targetRoutes.find(tr => 
+              TargetService.isEqual(tr.target, marker._targetLatLng)
+            );
+            if (routeInfo && routeInfo.targetId) {
+              targetIdStr = `z${routeInfo.targetId}`;
+            } else {
+              // Letzter Fallback: Index verwenden
+              targetIdStr = `z${currentIndex + 1}`;
+            }
+          }
+          marker.setTooltipContent(targetIdStr);
+          // Event für Panel-Highlighting emittieren
+          EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
+        }
+      });
     
     // Unhover-Event
     marker.on('mouseout', () => {

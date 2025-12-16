@@ -39,8 +39,13 @@ const TargetService = {
     if (!exists) {
       allTargets.push(target);
       const index = allTargets.length - 1;
+      // Eindeutige ID vergeben
+      const targetId = State.getNextTargetId();
+      State.incrementNextTargetId();
+      // ID in Map speichern für schnellen Zugriff
+      State.setTargetId(target, targetId);
       State.setAllTargets(allTargets);
-      EventBus.emit(Events.TARGET_ADDED, { target, index });
+      EventBus.emit(Events.TARGET_ADDED, { target, index, targetId });
       return true;
     }
     
@@ -104,6 +109,8 @@ const TargetService = {
     });
     State.setTargetMarkers(updatedMarkers);
     
+    // ID aus Map entfernen
+    State.removeTargetId(target);
     EventBus.emit(Events.TARGET_REMOVED, { target, index });
     return target;
   },
@@ -126,6 +133,7 @@ const TargetService = {
     State.setAllTargets([]);
     State.setTargetMarkers([]);
     State.setTargetRoutes([]);
+    State.targetIdMap.clear(); // Alle IDs aus Map entfernen
     
     EventBus.emit(Events.TARGET_REMOVED, { all: true });
   },
@@ -157,6 +165,28 @@ const TargetService = {
     const targetRoutes = State.getTargetRoutes();
     const targetIndex = targetRoutes.findIndex(tr => this.isEqual(tr.target, target));
     
+    // targetId aus bestehenden Routen, Map oder Marker holen
+    let targetId = null;
+    if (targetIndex >= 0 && targetRoutes[targetIndex] && targetRoutes[targetIndex].targetId) {
+      // ID aus bestehenden Routen übernehmen (bevorzugt)
+      targetId = targetRoutes[targetIndex].targetId;
+    } else {
+      // ID aus Map holen (schnellster Zugriff)
+      targetId = State.getTargetId(target);
+      if (!targetId) {
+        // Fallback: ID aus Marker holen
+        const targetMarkers = State.getTargetMarkers();
+        const marker = targetMarkers.find(m => 
+          m && m._targetLatLng && this.isEqual(m._targetLatLng, target)
+        );
+        if (marker && marker._targetId) {
+          targetId = marker._targetId;
+        }
+      }
+      // Falls keine ID gefunden wird, sollte das eigentlich nicht passieren,
+      // da die ID beim Hinzufügen des Zielpunkts vergeben wird
+    }
+    
     if (targetIndex >= 0) {
       // Bestehende Routen ersetzen
       const oldRouteInfo = targetRoutes[targetIndex];
@@ -164,10 +194,10 @@ const TargetService = {
       if (oldRouteInfo && oldRouteInfo.routePolylines) {
         MapRenderer.removePolylines(oldRouteInfo.routePolylines);
       }
-      targetRoutes[targetIndex] = { ...routeInfo, target };
+      targetRoutes[targetIndex] = { ...routeInfo, target, targetId };
     } else {
       // Neue Routen hinzufügen
-      targetRoutes.push({ ...routeInfo, target });
+      targetRoutes.push({ ...routeInfo, target, targetId });
     }
     
     State.setTargetRoutes(targetRoutes);

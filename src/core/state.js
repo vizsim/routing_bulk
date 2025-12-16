@@ -20,6 +20,8 @@ const State = {
   schoolMarkers: [], // Marker für gefundene Schulen
   schoolSearchRadiusCircle: null, // Kreis für Suchradius-Visualisierung
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
+  nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
+  targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
   
   // Getter
   getMap() { return this.map; },
@@ -39,6 +41,11 @@ const State = {
   getSchoolMarkers() { return this.schoolMarkers; },
   getSchoolSearchRadiusCircle() { return this.schoolSearchRadiusCircle; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
+  getNextTargetId() { return this.nextTargetId; },
+  getTargetId(target) { 
+    const key = `${target[0]},${target[1]}`;
+    return this.targetIdMap.get(key);
+  },
   
   // Setter
   setMap(map) { this.map = map; },
@@ -58,6 +65,16 @@ const State = {
   setSchoolMarkers(markers) { this.schoolMarkers = markers; },
   setSchoolSearchRadiusCircle(circle) { this.schoolSearchRadiusCircle = circle; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
+  setNextTargetId(id) { this.nextTargetId = id; },
+  incrementNextTargetId() { this.nextTargetId++; },
+  setTargetId(target, id) {
+    const key = `${target[0]},${target[1]}`;
+    this.targetIdMap.set(key, id);
+  },
+  removeTargetId(target) {
+    const key = `${target[0]},${target[1]}`;
+    this.targetIdMap.delete(key);
+  },
   
   // Reset
   resetRouteData() {

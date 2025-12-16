@@ -69,7 +69,7 @@ const App = {
       // Marker zeichnen (falls noch nicht vorhanden)
       const targetMarkers = State.getTargetMarkers();
       if (!targetMarkers[data.index]) {
-        const marker = Visualization.drawTargetPoint(data.target, data.index);
+        const marker = Visualization.drawTargetPoint(data.target, data.index, data.targetId);
         // Stelle sicher, dass das Array groß genug ist
         while (targetMarkers.length <= data.index) {
           targetMarkers.push(null);
@@ -596,22 +596,8 @@ const App = {
       State.setCurrentTargetMarker(null);
       
       const added = TargetService.addTarget(target);
-      if (added) {
-        // Marker wird durch Event-Handler gezeichnet
-        // Aber sicherstellen, dass er sofort sichtbar ist
-        const allTargets = State.getAllTargets();
-        const targetMarkers = State.getTargetMarkers();
-        const index = allTargets.length - 1;
-        if (!targetMarkers[index]) {
-          const marker = Visualization.drawTargetPoint(target, index);
-          // Stelle sicher, dass das Array groß genug ist
-          while (targetMarkers.length <= index) {
-            targetMarkers.push(null);
-          }
-          targetMarkers[index] = marker;
-          State.setTargetMarkers(targetMarkers);
-        }
-      }
+      // Marker wird durch Event-Handler (TARGET_ADDED) gezeichnet
+      // Die ID wird bereits in addTarget() vergeben
     } else {
       // Im normalen Modus: Karte leeren und Zielpunkt zeichnen
       // Schulen behalten

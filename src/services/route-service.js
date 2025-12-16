@@ -107,6 +107,11 @@ const RouteService = {
       
       // Wenn "Zielpunkte merken" aktiviert ist, Routen speichern
       if (CONFIG.REMEMBER_TARGETS) {
+        // ID aus State-Map holen (schnellster Zugriff)
+        const targetId = State.getTargetId(target);
+        if (targetId) {
+          routeInfo.targetId = targetId;
+        }
         TargetService.updateTargetRoutes(target, routeInfo);
       }
       
