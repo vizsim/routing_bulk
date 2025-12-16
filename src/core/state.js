@@ -8,6 +8,7 @@ const State = {
   lastTarget: null,
   allTargets: [], // Array für mehrere Zielpunkte
   targetMarkers: [], // Marker für alle Zielpunkte
+  currentTargetMarker: null, // Marker für aktuellen Zielpunkt im normalen Modus
   targetRoutes: [], // Routen pro Zielpunkt: [{target: [lat, lng], routeData: [...], routeResponses: [...], routePolylines: [...], starts: [...], colors: [...]}, ...]
   lastStarts: null,
   lastColors: null,
@@ -26,6 +27,7 @@ const State = {
   getLastTarget() { return this.lastTarget; },
   getAllTargets() { return this.allTargets; },
   getTargetMarkers() { return this.targetMarkers; },
+  getCurrentTargetMarker() { return this.currentTargetMarker; },
   getTargetRoutes() { return this.targetRoutes; },
   getLastStarts() { return this.lastStarts; },
   getLastColors() { return this.lastColors; },
@@ -44,6 +46,7 @@ const State = {
   setLastTarget(target) { this.lastTarget = target; },
   setAllTargets(targets) { this.allTargets = targets; },
   setTargetMarkers(markers) { this.targetMarkers = markers; },
+  setCurrentTargetMarker(marker) { this.currentTargetMarker = marker; },
   setTargetRoutes(routes) { this.targetRoutes = routes; },
   setLastStarts(starts) { this.lastStarts = starts; },
   setLastColors(colors) { this.lastColors = colors; },

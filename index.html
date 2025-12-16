@@ -128,7 +128,39 @@
             <input type="checkbox" id="config-hide-start-points" />
             <span class="switch-slider"></span>
           </label>
+          <svg width="16" height="16" viewBox="0 0 16 16" style="margin: 0 0px; vertical-align: baseline; transform: translateY(2px); opacity: 0.7;">
+            <!-- Glow-Effekt (äußerer Ring, entspricht box-shadow) -->
+            <circle cx="8" cy="8" r="5.5" fill="#666" opacity="0.5" />
+            <!-- Hauptkreis mit grauer Farbe (entspricht background-color) -->
+            <circle cx="8" cy="8" r="4" fill="#666" />
+            <!-- Weißer Rand (entspricht border) -->
+            <circle cx="8" cy="8" r="3.25" fill="none" stroke="white" stroke-width="1.5" />
+          </svg>
           <span class="switch-text">Startpunkte ausblenden</span>
+        </div>
+      </div>
+      <div class="config-group" id="hide-target-points-group" style="display: none;">
+        <div class="switch-toggle switch-toggle-small">
+          <label for="config-hide-target-points">
+            <input type="checkbox" id="config-hide-target-points" />
+            <span class="switch-slider"></span>
+          </label>
+          <svg width="16" height="16" viewBox="0 0 16 16" style="margin: 0 0px; vertical-align: baseline; transform: translateY(2px); opacity: 0.7;">
+            <!-- Zielpunkt-Icon (Pin-Form, wie auf der Karte - Tropfenform) -->
+            <path d="M8 1.33c-2.76 0-5 2.24-5 5 0 4 5 5.67 5 5.67s5-1.67 5-5.67c0-2.76-2.24-5-5-5z" fill="#666" stroke="white" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Inneres Symbol (Ziel-Symbol wie auf der Karte - Gebäude) -->
+            <g transform="translate(8, 5.5) scale(0.25)">
+              <!-- Vertikale Linie -->
+              <line x1="0" y1="24" x2="0" y2="0" stroke="white" stroke-width="3" stroke-linecap="round"/>
+              <!-- Äußeres Rechteck -->
+              <polyline points="-2,0 18,0 18,16 -2,16" stroke="white" stroke-width="1.5" fill="none"/>
+              <!-- Linkes gefülltes Rechteck -->
+              <rect x="-2" y="0" width="8" height="6" fill="white"/>
+              <!-- Rechtes gefülltes Rechteck -->
+              <rect x="12" y="8" width="6" height="6" fill="white"/>
+            </g>
+          </svg>
+          <span class="switch-text">Zielpunkte ausblenden</span>
         </div>
       </div>
       <div id="legend" class="legend" style="display: none;">

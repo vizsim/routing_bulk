@@ -42,6 +42,12 @@ function updateConfigFromUI() {
     CONFIG.HIDE_START_POINTS = hideStartPointsInput.checked;
   }
   
+  // Zielpunkte ausblenden
+  const hideTargetPointsInput = Utils.getElement('#config-hide-target-points');
+  if (hideTargetPointsInput) {
+    CONFIG.HIDE_TARGET_POINTS = hideTargetPointsInput.checked;
+  }
+  
   // Zielpunkte merken
   const rememberTargetsInput = Utils.getElement('#config-remember-targets');
   if (rememberTargetsInput) {
@@ -56,6 +62,7 @@ function toggleAggregationUI() {
   const legend = Utils.getElement('#legend');
   const methodGroup = Utils.getElement('#aggregation-method-group');
   const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
+  const hideTargetPointsGroup = Utils.getElement('#hide-target-points-group');
   
   if (legend) {
     legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
@@ -65,6 +72,9 @@ function toggleAggregationUI() {
   }
   if (hideStartPointsGroup) {
     hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
+  if (hideTargetPointsGroup) {
+    hideTargetPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
   
   // Legende-Gradient und Vorschau-Bars aktualisieren wenn sichtbar

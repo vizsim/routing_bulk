@@ -10,6 +10,7 @@ const CONFIG = {
   AGGREGATED: false, // Aggregierte Darstellung
   AGGREGATION_METHOD: "simple", // "simple" oder "lazyOverlap"
   HIDE_START_POINTS: false, // Startpunkte ausblenden
+  HIDE_TARGET_POINTS: false, // Zielpunkte ausblenden
   COLORMAP: "viridis_r", // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"
   REMEMBER_TARGETS: false // Zielpunkte merken
 };

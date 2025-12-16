@@ -70,8 +70,14 @@ const App = {
       const targetMarkers = State.getTargetMarkers();
       if (!targetMarkers[data.index]) {
         const marker = Visualization.drawTargetPoint(data.target, data.index);
+        // Stelle sicher, dass das Array groß genug ist
+        while (targetMarkers.length <= data.index) {
+          targetMarkers.push(null);
+        }
         targetMarkers[data.index] = marker;
         State.setTargetMarkers(targetMarkers);
+        // currentTargetMarker zurücksetzen, da der Marker jetzt in targetMarkers ist
+        State.setCurrentTargetMarker(null);
       }
       // Liste aktualisieren
       TargetsList.update();
@@ -148,6 +154,9 @@ const App = {
     
     // Startpunkte ausblenden
     this._setupHideStartPoints();
+    
+    // Zielpunkte ausblenden
+    this._setupHideTargetPoints();
   },
   
   /**
@@ -434,6 +443,30 @@ const App = {
   },
   
   /**
+   * Richtet den Event-Handler für "Zielpunkte ausblenden" ein
+   */
+  _setupHideTargetPoints() {
+    const hideTargetPointsInput = Utils.getElement('#config-hide-target-points');
+    if (!hideTargetPointsInput) return;
+    
+    // Initialer Wert
+    hideTargetPointsInput.checked = CONFIG.HIDE_TARGET_POINTS;
+    
+    // Event-Listener
+    hideTargetPointsInput.addEventListener('change', () => {
+      // Config aktualisieren
+      if (typeof updateConfigFromUI === 'function') {
+        updateConfigFromUI();
+      } else {
+        CONFIG.HIDE_TARGET_POINTS = hideTargetPointsInput.checked;
+      }
+      
+      // Zielpunkte sofort ausblenden/einblenden
+      Visualization.toggleTargetPointsVisibility();
+    });
+  },
+  
+  /**
    * Richtet den Event-Handler für "Zielpunkte merken" ein
    */
   _setupRememberTargetsHandler() {
@@ -460,13 +493,15 @@ const App = {
             // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
             // Wenn ja, entferne ihn und erstelle einen neuen mit Index
             const layerGroup = State.getLayerGroup();
+            let oldMarker = null;
             if (layerGroup) {
               layerGroup.eachLayer(layer => {
                 if (layer instanceof L.Marker && 
                     layer._targetLatLng && 
                     TargetService.isEqual(layer._targetLatLng, currentTarget) &&
                     layer._targetIndex === undefined) {
-                  // Alten Marker ohne Index entfernen
+                  // Alten Marker ohne Index merken und entfernen
+                  oldMarker = layer;
                   layerGroup.removeLayer(layer);
                 }
               });
@@ -477,8 +512,18 @@ const App = {
             const marker = Visualization.drawTargetPoint(currentTarget, index);
             
             const targetMarkers = State.getTargetMarkers();
+            // Stelle sicher, dass das Array groß genug ist
+            while (targetMarkers.length <= index) {
+              targetMarkers.push(null);
+            }
             targetMarkers[index] = marker;
             State.setTargetMarkers(targetMarkers);
+            
+            // currentTargetMarker zurücksetzen, da der Marker jetzt in targetMarkers ist
+            // Auch wenn es der alte Marker war, sollte er jetzt null sein
+            if (oldMarker === State.getCurrentTargetMarker()) {
+              State.setCurrentTargetMarker(null);
+            }
             
             // Routen zum aktuellen Zielpunkt speichern (falls vorhanden)
             const allRouteData = State.getAllRouteData();
@@ -520,7 +565,9 @@ const App = {
         if (currentTarget) {
           // Schulen behalten
           MapRenderer.clearLayersExceptSchools();
-          Visualization.drawTargetPoint(currentTarget);
+          const marker = Visualization.drawTargetPoint(currentTarget);
+          // Marker im State speichern, damit er ausgeblendet werden kann
+          State.setCurrentTargetMarker(marker);
         }
       }
       
@@ -537,6 +584,9 @@ const App = {
     
     // Wenn "Zielpunkte merken" aktiviert ist, Zielpunkt hinzufügen
     if (CONFIG.REMEMBER_TARGETS) {
+      // currentTargetMarker zurücksetzen, da wir im "Zielpunkte merken" Modus sind
+      State.setCurrentTargetMarker(null);
+      
       const added = TargetService.addTarget(target);
       if (added) {
         // Marker wird durch Event-Handler gezeichnet
@@ -546,6 +596,10 @@ const App = {
         const index = allTargets.length - 1;
         if (!targetMarkers[index]) {
           const marker = Visualization.drawTargetPoint(target, index);
+          // Stelle sicher, dass das Array groß genug ist
+          while (targetMarkers.length <= index) {
+            targetMarkers.push(null);
+          }
           targetMarkers[index] = marker;
           State.setTargetMarkers(targetMarkers);
         }
@@ -554,7 +608,9 @@ const App = {
       // Im normalen Modus: Karte leeren und Zielpunkt zeichnen
       // Schulen behalten
       MapRenderer.clearLayersExceptSchools();
-      Visualization.drawTargetPoint(target);
+      const marker = Visualization.drawTargetPoint(target);
+      // Marker im State speichern, damit er ausgeblendet werden kann
+      State.setCurrentTargetMarker(marker);
     }
     
     // Routen berechnen

@@ -231,6 +231,8 @@ const MapRenderer = {
    * Verwendet selektive Entfernung statt clearLayers() für bessere Performance
    */
   clearLayersExceptSchools() {
+    // Aktuellen Zielpunkt-Marker zurücksetzen, da er gelöscht wird
+    State.setCurrentTargetMarker(null);
     if (!this._layerGroup) return;
     
     // Schul-Marker und Radius-Kreis behalten
