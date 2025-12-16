@@ -57,6 +57,9 @@ const RouteHandler = {
     if (routeInfo.stats && routeInfo.stats.ok === 0 && routeInfo.stats.fail > 0) {
       Utils.showError(`Alle ${routeInfo.stats.fail} Routen fehlgeschlagen. Bitte Browser-Konsole prüfen.`, true);
     }
+    
+    // Warnung bei vielen Routen anzeigen
+    RouteWarning.checkAndShow();
   },
   
   /**

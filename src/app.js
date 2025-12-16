@@ -160,6 +160,9 @@ const App = {
     // Colormap-Selector
     ColormapSelector.init();
     
+    // Route-Warnung initialisieren
+    RouteWarning.init();
+    
     // Startpunkte ausblenden
     this._setupHideStartPoints();
     

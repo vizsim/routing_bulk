@@ -116,6 +116,9 @@ const RouteRenderer = {
       // State aktualisieren
       State.setTargetRoutes(targetRoutes);
     }
+    
+    // Warnung bei vielen Routen anzeigen
+    RouteWarning.checkAndShow();
   },
   
   /**

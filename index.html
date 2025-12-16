@@ -287,6 +287,27 @@
     </div>
   </div>
 
+  <!-- Warnung bei vielen Routen -->
+  <div id="route-warning-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="modal-icon">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <h3 class="modal-title">Viele Routen erkannt</h3>
+      </div>
+      <div class="modal-body">
+        <p>Es werden aktuell <strong id="route-warning-count">0</strong> Routen dargestellt.</p>
+        <p>Bei einer großen Anzahl von Routen kann die Darstellung langsamer werden, denn die Visualisierung wird von Deinem Browser gerechnet.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="route-warning-continue" class="modal-btn modal-btn-primary">Ja, okee</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <!-- Core -->
@@ -320,6 +341,7 @@
   <script src="src/ui/config-helpers.js"></script>
   <script src="src/ui/distribution-selector.js"></script>
   <script src="src/ui/colormap-selector.js"></script>
+  <script src="src/ui/route-warning.js"></script>
   
   <!-- Handlers -->
   <script src="src/handlers/route-handler.js"></script>
