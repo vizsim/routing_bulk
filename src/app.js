@@ -184,9 +184,8 @@ const App = {
         btn.classList.add('active');
         
         // Config aktualisieren
-        if (typeof updateConfigFromUI === 'function') {
-          updateConfigFromUI();
-        } else {
+        this._updateConfigFromUI();
+        if (typeof updateConfigFromUI !== 'function') {
           CONFIG.PROFILE = btn.dataset.profile || CONFIG.PROFILE;
         }
         
@@ -216,9 +215,8 @@ const App = {
     // Event-Listener
     aggregatedInput.addEventListener('change', () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.AGGREGATED = aggregatedInput.checked;
       }
       
@@ -265,9 +263,8 @@ const App = {
     // Event-Listener
     methodInput.addEventListener('change', () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
       }
       
@@ -328,6 +325,43 @@ const App = {
   },
   
   /**
+   * Helper: Aktualisiert CONFIG aus UI (mit Fallback)
+   */
+  _updateConfigFromUI() {
+    if (typeof updateConfigFromUI === 'function') {
+      updateConfigFromUI();
+    }
+  },
+  
+  /**
+   * Helper: Entfernt alte Routen im normalen Modus
+   */
+  _clearRoutesInNormalMode() {
+    if (!CONFIG.REMEMBER_TARGETS) {
+      MapRenderer.clearRoutes();
+      const routePolylines = State.getRoutePolylines();
+      const layerGroup = State.getLayerGroup();
+      if (layerGroup) {
+        routePolylines.forEach(polyline => {
+          if (polyline) layerGroup.removeLayer(polyline);
+        });
+      }
+      State.setRoutePolylines([]);
+    }
+  },
+  
+  /**
+   * Helper: Berechnet Routen neu, wenn Zielpunkt vorhanden
+   */
+  async _recalculateRoutesIfTargetExists() {
+    const lastTarget = State.getLastTarget();
+    if (lastTarget) {
+      this._clearRoutesInNormalMode();
+      await RouteService.calculateRoutes(lastTarget);
+    }
+  },
+  
+  /**
    * Richtet den Event-Handler für Anzahl Routen ein
    */
   _setupRouteCountInput() {
@@ -340,31 +374,14 @@ const App = {
     // Event-Listener
     nInput.addEventListener('change', async () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.N = Utils.validateNumber(nInput.value, 1, 1000, CONFIG.N);
         nInput.value = CONFIG.N; // Korrigierter Wert zurücksetzen
       }
       
-      // Wenn Routen vorhanden sind, neu berechnen
-      const lastTarget = State.getLastTarget();
-      if (lastTarget) {
-        // Alte Routen entfernen
-        if (!CONFIG.REMEMBER_TARGETS) {
-          MapRenderer.clearRoutes();
-          const routePolylines = State.getRoutePolylines();
-          const layerGroup = State.getLayerGroup();
-          if (layerGroup) {
-            routePolylines.forEach(polyline => {
-              if (polyline) layerGroup.removeLayer(polyline);
-            });
-          }
-          State.setRoutePolylines([]);
-        }
-        
-        await RouteService.calculateRoutes(lastTarget);
-      }
+      // Routen neu berechnen, wenn Zielpunkt vorhanden
+      await this._recalculateRoutesIfTargetExists();
     });
   },
   
@@ -381,9 +398,8 @@ const App = {
     // Event-Listener
     radiusInput.addEventListener('change', async () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         const radiusKm = Utils.validateNumber(radiusInput.value, 0.1, 100, CONFIG.RADIUS_M / 1000);
         CONFIG.RADIUS_M = radiusKm * 1000;
         radiusInput.value = radiusKm; // Korrigierter Wert zurücksetzen
@@ -396,24 +412,8 @@ const App = {
         return; // Nicht automatisch berechnen
       }
       
-      // Wenn Routen vorhanden sind, neu berechnen
-      const lastTarget = State.getLastTarget();
-      if (lastTarget) {
-        // Alte Routen entfernen
-        if (!CONFIG.REMEMBER_TARGETS) {
-          MapRenderer.clearRoutes();
-          const routePolylines = State.getRoutePolylines();
-          const layerGroup = State.getLayerGroup();
-          if (layerGroup) {
-            routePolylines.forEach(polyline => {
-              if (polyline) layerGroup.removeLayer(polyline);
-            });
-          }
-          State.setRoutePolylines([]);
-        }
-        
-        await RouteService.calculateRoutes(lastTarget);
-      }
+      // Routen neu berechnen, wenn Zielpunkt vorhanden
+      await this._recalculateRoutesIfTargetExists();
     });
   },
   
@@ -431,9 +431,8 @@ const App = {
     // Event-Listener
     hideStartPointsInput.addEventListener('change', () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.HIDE_START_POINTS = hideStartPointsInput.checked;
       }
       
@@ -455,15 +454,87 @@ const App = {
     // Event-Listener
     hideTargetPointsInput.addEventListener('change', () => {
       // Config aktualisieren
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.HIDE_TARGET_POINTS = hideTargetPointsInput.checked;
       }
       
       // Zielpunkte sofort ausblenden/einblenden
       Visualization.toggleTargetPointsVisibility();
     });
+  },
+  
+  /**
+   * Migriert aktuellen Zielpunkt zum "Zielpunkte merken" Modus
+   */
+  _migrateCurrentTargetToRememberMode(currentTarget) {
+    const added = TargetService.addTarget(currentTarget);
+    if (!added) return;
+    
+    // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
+    // Wenn ja, entferne ihn und erstelle einen neuen mit Index
+    const layerGroup = State.getLayerGroup();
+    let oldMarker = null;
+    if (layerGroup) {
+      layerGroup.eachLayer(layer => {
+        if (layer instanceof L.Marker && 
+            layer._targetLatLng && 
+            TargetService.isEqual(layer._targetLatLng, currentTarget) &&
+            layer._targetIndex === undefined) {
+          // Alten Marker ohne Index merken und entfernen
+          oldMarker = layer;
+          layerGroup.removeLayer(layer);
+        }
+      });
+    }
+    
+    // Neuen Marker mit Index zeichnen
+    const index = State.getAllTargets().length - 1;
+    const marker = Visualization.drawTargetPoint(currentTarget, index);
+    
+    const targetMarkers = State.getTargetMarkers();
+    // Stelle sicher, dass das Array groß genug ist
+    while (targetMarkers.length <= index) {
+      targetMarkers.push(null);
+    }
+    targetMarkers[index] = marker;
+    State.setTargetMarkers(targetMarkers);
+    
+    // currentTargetMarker zurücksetzen, da der Marker jetzt in targetMarkers ist
+    // Auch wenn es der alte Marker war, sollte er jetzt null sein
+    if (oldMarker === State.getCurrentTargetMarker()) {
+      State.setCurrentTargetMarker(null);
+    }
+    
+    // Routen zum aktuellen Zielpunkt speichern (falls vorhanden)
+    const allRouteData = State.getAllRouteData();
+    const allRouteResponses = State.getAllRouteResponses();
+    const routePolylines = State.getRoutePolylines();
+    const lastStarts = State.getLastStarts();
+    const lastColors = State.getLastColors();
+    
+    if (allRouteData.length > 0 || allRouteResponses.length > 0) {
+      // Verteilungstyp ermitteln
+      const activeDistBtn = document.querySelector('.dist-btn.active');
+      const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
+      
+      TargetService.updateTargetRoutes(currentTarget, {
+        routeData: allRouteData,
+        routeResponses: allRouteResponses,
+        routePolylines: routePolylines,
+        starts: lastStarts,
+        colors: lastColors,
+        distributionType: distType,
+        config: {
+          profile: CONFIG.PROFILE,
+          n: CONFIG.N,
+          radiusKm: CONFIG.RADIUS_M / 1000
+        }
+      });
+      
+      // Alle Routen neu zeichnen
+      RouteRenderer.drawAllTargetRoutes();
+    }
   },
   
   /**
@@ -474,10 +545,9 @@ const App = {
     if (!rememberTargetsInput) return;
     
     rememberTargetsInput.addEventListener('change', () => {
-      // Config aktualisieren (wenn updateConfigFromUI existiert)
-      if (typeof updateConfigFromUI === 'function') {
-        updateConfigFromUI();
-      } else {
+      // Config aktualisieren
+      this._updateConfigFromUI();
+      if (typeof updateConfigFromUI !== 'function') {
         CONFIG.REMEMBER_TARGETS = rememberTargetsInput.checked;
       }
       
@@ -488,77 +558,15 @@ const App = {
       if (CONFIG.REMEMBER_TARGETS) {
         const currentTarget = State.getLastTarget();
         if (currentTarget) {
-          const added = TargetService.addTarget(currentTarget);
-          if (added) {
-            // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
-            // Wenn ja, entferne ihn und erstelle einen neuen mit Index
-            const layerGroup = State.getLayerGroup();
-            let oldMarker = null;
-            if (layerGroup) {
-              layerGroup.eachLayer(layer => {
-                if (layer instanceof L.Marker && 
-                    layer._targetLatLng && 
-                    TargetService.isEqual(layer._targetLatLng, currentTarget) &&
-                    layer._targetIndex === undefined) {
-                  // Alten Marker ohne Index merken und entfernen
-                  oldMarker = layer;
-                  layerGroup.removeLayer(layer);
-                }
-              });
-            }
-            
-            // Neuen Marker mit Index zeichnen
-            const index = State.getAllTargets().length - 1;
-            const marker = Visualization.drawTargetPoint(currentTarget, index);
-            
-            const targetMarkers = State.getTargetMarkers();
-            // Stelle sicher, dass das Array groß genug ist
-            while (targetMarkers.length <= index) {
-              targetMarkers.push(null);
-            }
-            targetMarkers[index] = marker;
-            State.setTargetMarkers(targetMarkers);
-            
-            // currentTargetMarker zurücksetzen, da der Marker jetzt in targetMarkers ist
-            // Auch wenn es der alte Marker war, sollte er jetzt null sein
-            if (oldMarker === State.getCurrentTargetMarker()) {
-              State.setCurrentTargetMarker(null);
-            }
-            
-            // Routen zum aktuellen Zielpunkt speichern (falls vorhanden)
-            const allRouteData = State.getAllRouteData();
-            const allRouteResponses = State.getAllRouteResponses();
-            const routePolylines = State.getRoutePolylines();
-            const lastStarts = State.getLastStarts();
-            const lastColors = State.getLastColors();
-            
-            if (allRouteData.length > 0 || allRouteResponses.length > 0) {
-              // Verteilungstyp ermitteln
-              const activeDistBtn = document.querySelector('.dist-btn.active');
-              const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
-              
-              TargetService.updateTargetRoutes(currentTarget, {
-                routeData: allRouteData,
-                routeResponses: allRouteResponses,
-                routePolylines: routePolylines,
-                starts: lastStarts,
-                colors: lastColors,
-                distributionType: distType,
-                config: {
-                  profile: CONFIG.PROFILE,
-                  n: CONFIG.N,
-                  radiusKm: CONFIG.RADIUS_M / 1000
-                }
-              });
-              
-              // Alle Routen neu zeichnen
-              RouteRenderer.drawAllTargetRoutes();
-            }
-          }
+          this._migrateCurrentTargetToRememberMode(currentTarget);
         }
       } else {
         // Wenn deaktiviert, alle gespeicherten Zielpunkte und Routen löschen
         TargetService.clearAll();
+        
+        // Auswahl zurücksetzen
+        State.setSelectedTargetIndex(null);
+        Visualization.updateSelectedTargetMarker();
         
         // Aktuellen Zielpunkt beibehalten und neu zeichnen
         const currentTarget = State.getLastTarget();

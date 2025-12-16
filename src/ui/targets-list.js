@@ -170,6 +170,17 @@ const TargetsList = {
         State.setStartMarkers([]);
       }
       
+      // Wenn der entfernte Zielpunkt ausgewählt war, Auswahl zurücksetzen
+      const selectedIndex = State.getSelectedTargetIndex();
+      if (selectedIndex === index) {
+        State.setSelectedTargetIndex(null);
+        Visualization.updateSelectedTargetMarker();
+      } else if (selectedIndex !== null && selectedIndex > index) {
+        // Index anpassen, wenn ein Zielpunkt vor dem ausgewählten entfernt wurde
+        State.setSelectedTargetIndex(selectedIndex - 1);
+        Visualization.updateSelectedTargetMarker();
+      }
+      
       // Alle verbleibenden Routen neu zeichnen
       if (CONFIG.REMEMBER_TARGETS) {
         EventBus.emit(Events.VISUALIZATION_UPDATE);

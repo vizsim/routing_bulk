@@ -127,166 +127,12 @@ const Visualization = {
     
     // Event Listener für Drag-Ende (funktioniert sowohl im normalen Modus als auch im "Zielpunkte merken" Modus)
     marker.on('dragend', async (e) => {
-        try {
-          const newPosition = e.target.getLatLng();
-          if (!newPosition) return;
-          
-          const newTarget = [newPosition.lat, newPosition.lng];
-          const oldTarget = marker._targetLatLng;
-          
-          // Marker-Koordinaten aktualisieren
-          marker._targetLatLng = newTarget;
-          
-          // Prüfen ob wir im "Zielpunkte merken" Modus sind
-          if (CONFIG.REMEMBER_TARGETS) {
-            // Zielpunkt im State aktualisieren (Index verwenden statt Koordinaten-Vergleich)
-            const allTargets = State.getAllTargets();
-            if (!allTargets || allTargets.length === 0) return;
-            
-            const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex : 
-              allTargets.findIndex(t => TargetService.isEqual(t, oldTarget));
-            
-            if (currentIndex < 0 || currentIndex >= allTargets.length) return;
-            // Alten Zielpunkt durch neuen ersetzen
-            allTargets[currentIndex] = newTarget;
-            State.setAllTargets(allTargets);
-            
-            // Wenn es der aktuelle Zielpunkt war, auch lastTarget aktualisieren
-            const lastTarget = State.getLastTarget();
-            if (lastTarget && TargetService.isEqual(lastTarget, oldTarget)) {
-              State.setLastTarget(newTarget);
-            }
-            
-            // Routen zu diesem Zielpunkt neu berechnen (alte Koordinaten verwenden)
-            const targetRoutes = State.getTargetRoutes();
-            const targetRouteIndex = targetRoutes.findIndex(tr => 
-              TargetService.isEqual(tr.target, oldTarget)
-            );
-            
-            if (targetRouteIndex >= 0) {
-              // Alte Routen entfernen
-              const oldRouteInfo = targetRoutes[targetRouteIndex];
-              if (oldRouteInfo && oldRouteInfo.routePolylines) {
-                MapRenderer.removePolylines(oldRouteInfo.routePolylines);
-              }
-              
-              // RouteInfo im targetRoutes aktualisieren (target bereits auf newTarget setzen)
-              // Wichtig: Dies muss VOR calculateRoutes passieren, damit die alten Routen nicht mehr gezeichnet werden
-              targetRoutes[targetRouteIndex] = {
-                target: newTarget,
-                routeData: oldRouteInfo?.routeData || [],
-                routeResponses: oldRouteInfo?.routeResponses || [],
-                routePolylines: [], // Alte Polylines bereits entfernt
-                starts: oldRouteInfo?.starts || [],
-                colors: oldRouteInfo?.colors || [],
-                distributionType: oldRouteInfo?.distributionType, // Verteilung beibehalten
-                config: oldRouteInfo?.config // Config beibehalten
-              };
-              State.setTargetRoutes(targetRoutes);
-              
-              // Alle Routen entfernen (auch die, die nicht in routePolylines gespeichert sind)
-              MapRenderer.clearRoutes();
-              
-              // Config-Werte des Zielpunkts wiederherstellen (BEVOR Routen berechnet werden)
-              const savedDistributionType = oldRouteInfo?.distributionType;
-              this._restoreTargetConfig(oldRouteInfo);
-              
-              // Neue Routen berechnen (silent=true, da wir die Routen direkt zeichnen)
-              const routeInfo = await RouteService.calculateRoutes(newTarget, { 
-                silent: true,
-                distributionType: savedDistributionType 
-              });
-              if (routeInfo) {
-                // RouteInfo im targetRoutes aktualisieren
-                targetRoutes[targetRouteIndex] = {
-                  target: newTarget,
-                  routeData: routeInfo.routeData,
-                  routeResponses: routeInfo.routeResponses,
-                  routePolylines: [],
-                  starts: routeInfo.starts,
-                  colors: routeInfo.colors,
-                  distributionType: routeInfo.distributionType,
-                  config: routeInfo.config
-                };
-                State.setTargetRoutes(targetRoutes);
-                
-                // Startpunkte für diesen Zielpunkt anzeigen (nach dem Draggen)
-                if (routeInfo.starts && routeInfo.colors) {
-                  Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, newTarget);
-                  State.setLastTarget(newTarget);
-                  State.setSelectedTargetIndex(currentIndex);
-                }
-                
-                // Alle Routen neu zeichnen
-                RouteRenderer.drawAllTargetRoutes();
-                
-                // Histogramm aktualisieren
-                if (routeInfo.starts && routeInfo.starts.length > 0) {
-                  Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
-                }
-              }
-            }
-          } else {
-            // Normaler Modus (kein "Zielpunkte merken")
-            // Alte Routen entfernen
-            MapRenderer.clearRoutes();
-            const routePolylines = State.getRoutePolylines();
-            MapRenderer.removePolylines(routePolylines);
-            State.setRoutePolylines([]);
-            
-            // lastTarget aktualisieren
-            State.setLastTarget(newTarget);
-            
-            // Neue Routen berechnen
-            const routeInfo = await RouteService.calculateRoutes(newTarget);
-            if (routeInfo) {
-              // Histogramm aktualisieren
-              if (routeInfo.starts && routeInfo.starts.length > 0) {
-                Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
-              }
-            }
-          }
-          
-          // Verwaiste Marker entfernen
-          this.cleanupOrphanedTargetMarkers();
-          
-          // Panel-Liste aktualisieren (damit Config-Informationen angezeigt werden)
-          if (CONFIG.REMEMBER_TARGETS) {
-            TargetsList.update();
-          }
-          
-          // Export-Button aktualisieren
-          EventBus.emit(Events.EXPORT_REQUESTED);
-        } catch (err) {
-          console.error('Fehler beim Draggen des Zielpunkts:', err);
-          Utils.showError('Fehler beim Verschieben des Zielpunkts', false);
-        }
+      await this._handleTargetDrag(marker, e);
     });
     
     // Tooltip nur im "Zielpunkte merken" Modus aktivieren
     if (CONFIG.REMEMBER_TARGETS) {
-      // Tooltip mit ID beim Hover (dynamisch berechnet)
-      marker.on('mouseover', () => {
-        const currentIndex = this._getTargetIndexForMarker(marker);
-        if (currentIndex >= 0) {
-          const targetId = `z${currentIndex + 1}`;
-          marker.setTooltipContent(targetId);
-          // Event für Panel-Highlighting emittieren
-          EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
-        }
-      });
-      
-      // Unhover-Event
-      marker.on('mouseout', () => {
-        EventBus.emit(Events.TARGET_UNHOVER);
-      });
-      
-      marker.bindTooltip('', {
-        permanent: false,
-        direction: 'top',
-        className: 'target-tooltip',
-        offset: [0, -10]
-      });
+      this._setupTargetTooltip(marker);
     }
     
     // Klick-Event: Startpunkte dieses Zielpunkts anzeigen
@@ -307,6 +153,191 @@ const Visualization = {
     });
     
     return marker; // Marker zurückgeben für State-Verwaltung
+  },
+  
+  /**
+   * Behandelt das Draggen eines Zielpunkt-Markers
+   * @param {L.Marker} marker - Der Marker
+   * @param {Object} e - Leaflet Drag-Event
+   */
+  async _handleTargetDrag(marker, e) {
+    try {
+      const newPosition = e.target.getLatLng();
+      if (!newPosition) return;
+      
+      const newTarget = [newPosition.lat, newPosition.lng];
+      const oldTarget = marker._targetLatLng;
+      
+      // Marker-Koordinaten aktualisieren
+      marker._targetLatLng = newTarget;
+      
+      // Prüfen ob wir im "Zielpunkte merken" Modus sind
+      if (CONFIG.REMEMBER_TARGETS) {
+        await this._handleTargetDragInRememberMode(marker, newTarget, oldTarget);
+      } else {
+        await this._handleTargetDragInNormalMode(marker, newTarget);
+      }
+      
+      // Verwaiste Marker entfernen
+      this.cleanupOrphanedTargetMarkers();
+      
+      // Panel-Liste aktualisieren (damit Config-Informationen angezeigt werden)
+      if (CONFIG.REMEMBER_TARGETS) {
+        TargetsList.update();
+      }
+      
+      // Export-Button aktualisieren
+      EventBus.emit(Events.EXPORT_REQUESTED);
+    } catch (err) {
+      console.error('Fehler beim Draggen des Zielpunkts:', err);
+      Utils.showError('Fehler beim Verschieben des Zielpunkts', false);
+    }
+  },
+  
+  /**
+   * Behandelt das Draggen im "Zielpunkte merken" Modus
+   */
+  async _handleTargetDragInRememberMode(marker, newTarget, oldTarget) {
+    // Zielpunkt im State aktualisieren (Index verwenden statt Koordinaten-Vergleich)
+    const allTargets = State.getAllTargets();
+    if (!allTargets || allTargets.length === 0) return;
+    
+    const currentIndex = marker._targetIndex !== undefined ? marker._targetIndex : 
+      allTargets.findIndex(t => TargetService.isEqual(t, oldTarget));
+    
+    if (currentIndex < 0 || currentIndex >= allTargets.length) return;
+    // Alten Zielpunkt durch neuen ersetzen
+    allTargets[currentIndex] = newTarget;
+    State.setAllTargets(allTargets);
+    
+    // Wenn es der aktuelle Zielpunkt war, auch lastTarget aktualisieren
+    const lastTarget = State.getLastTarget();
+    if (lastTarget && TargetService.isEqual(lastTarget, oldTarget)) {
+      State.setLastTarget(newTarget);
+    }
+    
+    // Routen zu diesem Zielpunkt neu berechnen (alte Koordinaten verwenden)
+    const targetRoutes = State.getTargetRoutes();
+    const targetRouteIndex = targetRoutes.findIndex(tr => 
+      TargetService.isEqual(tr.target, oldTarget)
+    );
+    
+    if (targetRouteIndex >= 0) {
+      // Alte Routen entfernen
+      const oldRouteInfo = targetRoutes[targetRouteIndex];
+      if (oldRouteInfo && oldRouteInfo.routePolylines) {
+        MapRenderer.removePolylines(oldRouteInfo.routePolylines);
+      }
+      
+      // RouteInfo im targetRoutes aktualisieren (target bereits auf newTarget setzen)
+      // Wichtig: Dies muss VOR calculateRoutes passieren, damit die alten Routen nicht mehr gezeichnet werden
+      targetRoutes[targetRouteIndex] = {
+        target: newTarget,
+        routeData: oldRouteInfo?.routeData || [],
+        routeResponses: oldRouteInfo?.routeResponses || [],
+        routePolylines: [], // Alte Polylines bereits entfernt
+        starts: oldRouteInfo?.starts || [],
+        colors: oldRouteInfo?.colors || [],
+        distributionType: oldRouteInfo?.distributionType, // Verteilung beibehalten
+        config: oldRouteInfo?.config // Config beibehalten
+      };
+      State.setTargetRoutes(targetRoutes);
+      
+      // Alle Routen entfernen (auch die, die nicht in routePolylines gespeichert sind)
+      MapRenderer.clearRoutes();
+      
+      // Config-Werte des Zielpunkts wiederherstellen (BEVOR Routen berechnet werden)
+      const savedDistributionType = oldRouteInfo?.distributionType;
+      this._restoreTargetConfig(oldRouteInfo);
+      
+      // Neue Routen berechnen (silent=true, da wir die Routen direkt zeichnen)
+      const routeInfo = await RouteService.calculateRoutes(newTarget, { 
+        silent: true,
+        distributionType: savedDistributionType 
+      });
+      if (routeInfo) {
+        // RouteInfo im targetRoutes aktualisieren
+        targetRoutes[targetRouteIndex] = {
+          target: newTarget,
+          routeData: routeInfo.routeData,
+          routeResponses: routeInfo.routeResponses,
+          routePolylines: [],
+          starts: routeInfo.starts,
+          colors: routeInfo.colors,
+          distributionType: routeInfo.distributionType,
+          config: routeInfo.config
+        };
+        State.setTargetRoutes(targetRoutes);
+        
+        // Startpunkte für diesen Zielpunkt anzeigen (nach dem Draggen)
+        if (routeInfo.starts && routeInfo.colors) {
+          Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, newTarget);
+          State.setLastTarget(newTarget);
+                  State.setSelectedTargetIndex(currentIndex);
+                  // Marker visuell hervorheben
+                  this.updateSelectedTargetMarker();
+                }
+                
+                // Alle Routen neu zeichnen
+        RouteRenderer.drawAllTargetRoutes();
+        
+        // Histogramm aktualisieren
+        if (routeInfo.starts && routeInfo.starts.length > 0) {
+          Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
+        }
+      }
+    }
+  },
+  
+  /**
+   * Behandelt das Draggen im normalen Modus
+   */
+  async _handleTargetDragInNormalMode(marker, newTarget) {
+    // Alte Routen entfernen
+    MapRenderer.clearRoutes();
+    const routePolylines = State.getRoutePolylines();
+    MapRenderer.removePolylines(routePolylines);
+    State.setRoutePolylines([]);
+    
+    // lastTarget aktualisieren
+    State.setLastTarget(newTarget);
+    
+    // Neue Routen berechnen
+    const routeInfo = await RouteService.calculateRoutes(newTarget);
+    if (routeInfo) {
+      // Histogramm aktualisieren
+      if (routeInfo.starts && routeInfo.starts.length > 0) {
+        Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
+      }
+    }
+  },
+  
+  /**
+   * Richtet Tooltip für Zielpunkt-Marker ein
+   */
+  _setupTargetTooltip(marker) {
+    // Tooltip mit ID beim Hover (dynamisch berechnet)
+    marker.on('mouseover', () => {
+      const currentIndex = this._getTargetIndexForMarker(marker);
+      if (currentIndex >= 0) {
+        const targetId = `z${currentIndex + 1}`;
+        marker.setTooltipContent(targetId);
+        // Event für Panel-Highlighting emittieren
+        EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
+      }
+    });
+    
+    // Unhover-Event
+    marker.on('mouseout', () => {
+      EventBus.emit(Events.TARGET_UNHOVER);
+    });
+    
+    marker.bindTooltip('', {
+      permanent: false,
+      direction: 'top',
+      className: 'target-tooltip',
+      offset: [0, -10]
+    });
   },
   
   /**
@@ -1239,6 +1270,38 @@ const Visualization = {
         marker._icon.classList.remove('target-marker-highlighted');
       }
     });
+    // Auch currentTargetMarker im normalen Modus
+    const currentTargetMarker = State.getCurrentTargetMarker();
+    if (currentTargetMarker && currentTargetMarker._icon) {
+      currentTargetMarker._icon.classList.remove('target-marker-highlighted');
+    }
+  },
+  
+  /**
+   * Markiert den ausgewählten Zielpunkt-Marker (blauer Rahmen)
+   */
+  updateSelectedTargetMarker() {
+    const selectedIndex = State.getSelectedTargetIndex();
+    const targetMarkers = State.getTargetMarkers();
+    const currentTargetMarker = State.getCurrentTargetMarker();
+    
+    // Alle Marker zurücksetzen
+    targetMarkers.forEach(marker => {
+      if (marker && marker._icon) {
+        marker._icon.classList.remove('target-marker-selected');
+      }
+    });
+    if (currentTargetMarker && currentTargetMarker._icon) {
+      currentTargetMarker._icon.classList.remove('target-marker-selected');
+    }
+    
+    // Ausgewählten Marker markieren
+    if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < targetMarkers.length) {
+      const marker = targetMarkers[selectedIndex];
+      if (marker && marker._icon) {
+        marker._icon.classList.add('target-marker-selected');
+      }
+    }
   },
   
   /**
@@ -1263,6 +1326,9 @@ const Visualization = {
       
       // Zielpunkt als ausgewählt markieren
       State.setSelectedTargetIndex(targetIndex);
+      
+      // Marker auf der Karte visuell hervorheben
+      this.updateSelectedTargetMarker();
       
       // Panel aktualisieren, um Stift-Icon anzuzeigen
       TargetsList.update();

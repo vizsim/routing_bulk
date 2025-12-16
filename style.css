@@ -626,3 +626,8 @@ html, body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+.target-marker-selected {
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
+  transition: filter 0.2s ease;
+}
