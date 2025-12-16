@@ -1,37 +1,47 @@
 # Code Review & Refactoring Checkliste
 
+**Letzte Aktualisierung**: Nach Refactoring-Session (visualization.js aufgeteilt, Helper-Funktionen erstellt)
+
+## ✅ Bereits umgesetzt
+
+### Duplikate entfernt
+- ✅ **CONFIG.REMEMBER_TARGETS Helper**: `isRememberMode()` in `src/core/config.js` erstellt, alle 36+ Vorkommen ersetzt
+- ✅ **Route-Polyline-Entfernung zentralisiert**: Alle direkten `layerGroup.removeLayer()` Aufrufe durch `MapRenderer.removePolylines()` oder `MapRenderer.clearRoutes()` ersetzt (23+ Stellen aktualisiert)
+
+### Null-Checks hinzugefügt
+- ✅ **LayerGroup-Zugriffe abgesichert**: Null-Checks in `RouteRenderer`, `MarkerManager`, `SchoolRenderer` und `Visualization` hinzugefügt
+
+### visualization.js aufgeteilt
+- ✅ **Colormap-Funktionen** → `src/visualization/colormap-utils.js` (133 Zeilen)
+- ✅ **Histogram-Rendering** → `src/visualization/histogram-renderer.js` (220 Zeilen)
+- ✅ **Marker-Management** → `src/visualization/marker-manager.js` (133 Zeilen)
+- ✅ **School-Rendering** → `src/visualization/school-renderer.js` (260 Zeilen)
+- ✅ **visualization.js reduziert**: Von 1448 Zeilen auf **791 Zeilen** (~45% Reduktion)
+
+### UI-Komponenten bereits extrahiert
+- ✅ **Distribution-Selector**: `src/ui/distribution-selector.js` existiert bereits
+- ✅ **Colormap-Selector**: `src/ui/colormap-selector.js` existiert bereits
+- ✅ **Targets-List**: `src/ui/targets-list.js` existiert bereits
+- ✅ **Route-Handler**: `src/handlers/route-handler.js` existiert (teilweise, `handleMapClick()` noch in app.js)
+
+---
+
 ## 🔍 Duplikate
 
 ### Code-Duplikate
-- [ ] **Route-Polyline-Entfernung**: Logik zum Entfernen von Routen-Polylines ist an mehreren Stellen dupliziert
-  - `MapRenderer.clearRoutes()` (map-renderer.js:273)
-  - `MapRenderer.removePolylines()` (map-renderer.js:289)
-  - `RouteHandler.handleRoutesCalculated()` (route-handler.js:31,33)
-  - `Visualization._handleTargetDragInNormalMode()` (visualization.js:299-302)
-  - `Visualization.drawStartPoints()` drag handler (visualization.js:784-794)
-  - **Lösung**: Zentralisierte Funktion in `MapRenderer` verwenden
-
-- [ ] **CONFIG.REMEMBER_TARGETS Checks**: Überall im Code verstreut
-  - `app.js`: Zeile 100, 108, 129, 291, 351, 422, 422, 569, 574, 612, 634, 709, 735, 837
-  - `route-handler.js`: Zeile 12, 23, 73, 109
-  - `route-service.js`: Zeile 50, 109
-  - `route-renderer.js`: Zeile 84, 97, 131, 137
-  - `visualization.js`: Zeile 134, 175, 297, 753, 804, 837, 861
-  - **Lösung**: Helper-Funktion `isRememberMode()` oder State-basierte Abfrage
-
 - [ ] **Target-Marker-Verwaltung**: Ähnliche Logik zum Finden/Entfernen von Markern
   - `TargetService.removeTarget()` (target-service.js:70-110)
-  - `Visualization.cleanupOrphanedTargetMarkers()` (visualization.js:1370-1435)
-  - `App._migrateCurrentTargetToRememberMode()` (app.js:481-549)
-  - **Lösung**: Zentralisierte Marker-Verwaltung in `MarkerManager` Service
+  - `MarkerManager.cleanupOrphanedTargetMarkers()` (marker-manager.js)
+  - `App._migrateCurrentTargetToRememberMode()` (app.js)
+  - **Lösung**: Zentralisierte Marker-Verwaltung in `MarkerManager` Service erweitern
 
 - [ ] **Config-Update-Pattern**: `_updateConfigFromUI()` mit Fallback-Check wiederholt
-  - `app.js`: Zeile 198-201, 229-232, 277-280, 341-344, 388-392, 412-417, 445-448, 468-471, 560-563
+  - `app.js`: Mehrere Stellen mit `typeof updateConfigFromUI === 'function'` Checks
   - **Lösung**: Entweder immer `config-helpers.js` verwenden oder Fallback entfernen
 
 - [ ] **Route-Daten-Aktualisierung**: Ähnliche Logik in mehreren Services
   - `RouteService.updateRoute()` (route-service.js:157-205)
-  - `Visualization.drawStartPoints()` drag handler (visualization.js:752-882)
+  - `Visualization.drawStartPoints()` drag handler (visualization.js:540-679)
   - **Lösung**: Zentralisierte Route-Update-Logik
 
 - [ ] **Target-Index-Findung**: Mehrfach implementiert
@@ -42,7 +52,7 @@
 
 ### Funktions-Duplikate
 - [ ] **toggleAggregationUI()**: Wird geprüft ob existiert, sollte immer verfügbar sein
-  - `app.js`: Zeile 38-40, 235-258
+  - `app.js`: Mehrere Stellen mit `typeof toggleAggregationUI === 'function'` Checks
   - **Lösung**: Sicherstellen dass `config-helpers.js` immer geladen ist oder Fallback entfernen
 
 - [ ] **updateConfigFromUI()**: Gleiche Prüfung wie oben
@@ -51,24 +61,19 @@
 ## ⚠️ Fehleranfällige / Nicht robuste Stellen
 
 ### Fehlende Null-Checks
-- [ ] **LayerGroup-Zugriffe**: Nicht überall abgesichert
-  - `visualization.js`: Zeile 87, 686, 1098, 1230, 1260, 1371
-  - `route-renderer.js`: Zeile 15, 31, 77
-  - **Lösung**: Konsistente Null-Checks oder Assertions
-
 - [ ] **Array-Zugriffe ohne Bounds-Check**
-  - `visualization.js`: `routeInfo.starts[index]` (Zeile 762) ohne Prüfung
-  - `route-service.js`: `allRouteData[index]` (Zeile 168) ohne Prüfung
+  - `visualization.js`: `routeInfo.starts[index]` ohne Prüfung
+  - `route-service.js`: `allRouteData[index]` ohne Prüfung
   - **Lösung**: Helper-Funktion `safeArrayAccess()` oder konsistente Checks
 
 - [ ] **DOM-Element-Zugriffe**: Nicht alle verwenden `Utils.getElement()`
-  - `visualization.js`: `document.querySelector()` direkt (Zeile 12, 25, 32, 41, 478, 529)
-  - `app.js`: `document.querySelector()` direkt (Zeile 529)
+  - `visualization.js`: `document.querySelector()` direkt (mehrere Stellen)
+  - `app.js`: `document.querySelector()` direkt
   - **Lösung**: Konsistent `Utils.getElement()` verwenden
 
 ### State-Management-Probleme
 - [ ] **Direkte State-Mutationen**: State wird manchmal direkt mutiert statt Setter zu verwenden
-  - `target-service.js`: Zeile 136 (`State.targetIdMap.clear()`)
+  - `target-service.js`: `State.targetIdMap.clear()` (direkter Zugriff)
   - **Lösung**: Alle State-Zugriffe über Getter/Setter
 
 - [ ] **Inkonsistente State-Updates**: State wird an mehreren Stellen aktualisiert
@@ -77,17 +82,19 @@
 
 ### Error Handling
 - [ ] **Try-Catch-Blöcke**: Inkonsistent verwendet
-  - `visualization.js`: `_handleTargetDrag()` hat try-catch (Zeile 164-194), aber viele andere Funktionen nicht
+  - `visualization.js`: `_handleTargetDrag()` hat try-catch, aber viele andere Funktionen nicht
   - `route-service.js`: `calculateRoutes()` hat try-catch, aber `updateRoute()` nicht vollständig
   - **Lösung**: Konsistentes Error-Handling-Pattern
 
 - [ ] **Fehlerbehandlung bei API-Calls**: Nicht alle API-Fehler werden behandelt
-  - `route-service.js`: `Promise.all()` mit `.catch()` (Zeile 57), aber Fehler werden nur geloggt
+  - `route-service.js`: `Promise.all()` mit `.catch()`, aber Fehler werden nur geloggt
   - **Lösung**: Retry-Logik oder bessere Fehlerbehandlung
 
 ### Magic Numbers & Strings
 - [ ] **Hardcoded Werte**: Viele Magic Numbers im Code
-  - `visualization.js`: `0.0001` (Zeile 11), `0.3` (Zeile 893), `0.15` (Zeile 45), `500` (route-warning.js:83)
+  - `colormap-utils.js`: `0.3` (weight parameter)
+  - `visualization.js`: `0.0001`, `0.15`, etc.
+  - `route-warning.js`: `500` (route count threshold)
   - **Lösung**: Konstanten in `CONFIG` oder separate Constants-Datei
 
 - [ ] **Hardcoded Strings**: CSS-Klassen, Event-Namen, etc.
@@ -96,93 +103,88 @@
 
 ### Race Conditions & Async-Probleme
 - [ ] **Async ohne Await**: Potenzielle Race Conditions
-  - `app.js`: `_recalculateRoutesIfTargetExists()` (Zeile 367-373) - async aber nicht immer awaited
+  - `app.js`: `_recalculateRoutesIfTargetExists()` - async aber nicht immer awaited
   - **Lösung**: Konsistente async/await-Verwendung
 
 - [ ] **State-Updates während async Operations**: State könnte zwischenzeitlich geändert werden
-  - `visualization.js`: `_handleTargetDragInRememberMode()` (Zeile 200-291) - komplexe async Logik
+  - `visualization.js`: `_handleTargetDragInRememberMode()` - komplexe async Logik
   - **Lösung**: Transaction-Pattern oder State-Locking
 
 ## 📦 Große Dateien aufteilen
 
-### visualization.js (1438 Zeilen)
-- [ ] **Marker-Rendering** in separate Datei auslagern
-  - `drawTargetPoint()` (Zeile 86-156)
-  - `drawStartPoints()` (Zeile 682-889)
-  - `createSchoolIcon()` (Zeile 1023-1069)
-  - `drawSchools()` (Zeile 1097-1205)
-  - → `src/visualization/marker-renderer.js`
-
-- [ ] **Histogram-Rendering** in separate Datei
-  - `updateDistanceHistogram()` (Zeile 423-633)
-  - → `src/visualization/histogram-renderer.js`
-
-- [ ] **Colormap-Funktionen** in separate Datei
-  - `getColormapColor()` (Zeile 907-979)
-  - `generateGradientForColormap()` (Zeile 982-991)
-  - `updateLegendGradient()` (Zeile 994-1000)
-  - `updateColormapPreviews()` (Zeile 1003-1011)
-  - `getColorForCount()` (Zeile 1013-1016)
-  - `calculateWeightedLevel()` (Zeile 893-904)
-  - → `src/visualization/colormap-utils.js`
-
+### visualization.js (791 Zeilen) ✅ **TEILWEISE UMGESETZT**
+- ✅ **Colormap-Funktionen** → `src/visualization/colormap-utils.js` ✅
+- ✅ **Histogram-Rendering** → `src/visualization/histogram-renderer.js` ✅
+- ✅ **Marker-Management** → `src/visualization/marker-manager.js` ✅
+- ✅ **School-Rendering** → `src/visualization/school-renderer.js` ✅
 - [ ] **Target-Drag-Handling** in separate Datei
-  - `_handleTargetDrag()` (Zeile 163-195)
-  - `_handleTargetDragInRememberMode()` (Zeile 200-292)
-  - `_handleTargetDragInNormalMode()` (Zeile 297-315)
+  - `_handleTargetDrag()` (visualization.js:167-199)
+  - `_handleTargetDragInRememberMode()` (visualization.js:204-296)
+  - `_handleTargetDragInNormalMode()` (visualization.js:301-319)
   - → `src/handlers/target-drag-handler.js`
 
-- [ ] **Target-Marker-Management** in separate Datei
-  - `cleanupOrphanedTargetMarkers()` (Zeile 1370-1435)
-  - `highlightTargetMarker()` (Zeile 1270-1279)
-  - `unhighlightAllTargetMarkers()` (Zeile 1284-1296)
-  - `updateSelectedTargetMarker()` (Zeile 1301-1323)
-  - → `src/services/marker-manager.js`
+### app.js (771 Zeilen) ⚠️ **TEILWEISE UMGESETZT**
 
-- [ ] **School-Rendering** in separate Datei
-  - `drawSchools()` (Zeile 1097-1205)
-  - `clearSchools()` (Zeile 1211-1220)
-  - `drawSchoolSearchRadius()` (Zeile 1229-1250)
-  - `clearSchoolSearchRadius()` (Zeile 1255-1264)
-  - `updateSchoolIcons()` (Zeile 1074-1088)
-  - → `src/visualization/school-renderer.js`
+#### Bereits extrahiert:
+- ✅ **Distribution-Selector**: `src/ui/distribution-selector.js` existiert
+- ✅ **Colormap-Selector**: `src/ui/colormap-selector.js` existiert
+- ✅ **Route-Handler**: `src/handlers/route-handler.js` existiert (teilweise)
 
-### app.js (777 Zeilen)
-- [ ] **Event-Handler-Setup** in separate Datei
-  - `_setupProfileButtons()` (Zeile 176-214)
-  - `_setupAggregationToggle()` (Zeile 219-262)
-  - `_setupAggregationMethod()` (Zeile 267-284)
-  - `_setupRouteCountInput()` (Zeile 378-397)
-  - `_setupRadiusInput()` (Zeile 402-429)
-  - `_setupHideStartPoints()` (Zeile 435-453)
-  - `_setupHideTargetPoints()` (Zeile 458-476)
-  - `_setupRememberTargetsHandler()` (Zeile 554-595)
-  - → `src/handlers/config-handlers.js`
+#### Noch zu extrahieren:
 
-- [ ] **UI-Initialisierung** in separate Datei
-  - `_initUI()` (Zeile 25-52)
-  - `_setupPanelCollapse()` (Zeile 750-765)
-  - → `src/ui/app-ui.js`
+- [ ] **Profile-Selector** (`src/ui/profile-selector.js`)
+  - `_setupProfileButtons()` → `ProfileSelector.init()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Mittel
 
-- [ ] **Route-Recalculations** in separate Datei
-  - `_recalculateTargetRoutes()` (Zeile 290-336)
-  - `recalculateRoutes()` (Zeile 705-745)
-  - `_recalculateRoutesIfTargetExists()` (Zeile 367-373)
-  - → `src/handlers/route-recalculation-handler.js`
+- [ ] **Route-Config** (`src/ui/route-config.js`)
+  - `_setupRouteCountInput()` → `RouteConfig.init()`
+  - `_setupRadiusInput()` → `RouteConfig.init()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Mittel
+
+- [ ] **Aggregation-Controls** (`src/ui/aggregation-controls.js`)
+  - `_setupAggregationToggle()` → `AggregationControls.init()`
+  - `_setupAggregationMethod()` → `AggregationControls.init()`
+  - `_setupHideStartPoints()` → `AggregationControls.init()`
+  - `_setupHideTargetPoints()` → `AggregationControls.init()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Mittel-Hoch
+
+- [ ] **Targets-Handler** (`src/ui/targets-handler.js`)
+  - `_setupRememberTargetsHandler()` → `TargetsHandler.init()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Hoch (viel Logik)
+
+- [ ] **Config-Handler** (`src/handlers/config-handler.js`)
+  - `_handleConfigChanged()` → `ConfigHandler.handleConfigChanged()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Niedrig
+
+- [ ] **Route-Handler erweitern**
+  - `handleMapClick()` → `RouteHandler.handleMapClick()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Mittel
+
+- [ ] **Route-Recalculations** (`src/handlers/route-recalculation-handler.js`)
+  - `_recalculateTargetRoutes()` → `RouteRecalculationHandler.recalculateTargetRoutes()`
+  - `recalculateRoutes()` → `RouteRecalculationHandler.recalculateRoutes()`
+  - `_recalculateRoutesIfTargetExists()` → `RouteRecalculationHandler.recalculateIfTargetExists()`
+  - **Status**: Noch in `app.js`
+  - **Komplexität**: Mittel-Hoch
+
+**Ziel-Größe für app.js nach vollständigem Refactoring: ~150-200 Zeilen**
 
 ### geocoder.js (575 Zeilen)
 - [ ] **UI-Logik** in separate Datei
-  - `_createInputField()` (Zeile 168-248)
-  - `_createSuggestionsContainer()` (Zeile 253-266)
-  - `_setupEventListeners()` (Zeile 271-336)
-  - `_showSuggestions()` (Zeile 391-416)
-  - `_createSuggestionHTML()` (Zeile 421-431)
-  - → `src/ui/geocoder-ui.js`
+  - `_createInputField()` → `src/ui/geocoder-ui.js`
+  - `_createSuggestionsContainer()` → `src/ui/geocoder-ui.js`
+  - `_setupEventListeners()` → `src/ui/geocoder-ui.js`
+  - `_showSuggestions()` → `src/ui/geocoder-ui.js`
+  - `_createSuggestionHTML()` → `src/ui/geocoder-ui.js`
 
 - [ ] **API-Logik** bleibt in geocoder.js
-  - `search()` (Zeile 18-47)
-  - `reverse()` (Zeile 118-143)
-  - `_formatResults()` (Zeile 54-110)
+  - `search()`, `reverse()`, `_formatResults()`
 
 ### style.css (982 Zeilen)
 - [ ] **Komponenten-basierte Aufteilung**
@@ -198,9 +200,9 @@
 
 ### Architektur
 - [ ] **Service-Layer konsolidieren**: Services sollten klar getrennt sein
-  - `RouteService` - Route-Berechnung
-  - `TargetService` - Target-Verwaltung
-  - `MarkerManager` (neu) - Marker-Verwaltung
+  - `RouteService` - Route-Berechnung ✅
+  - `TargetService` - Target-Verwaltung ✅
+  - `MarkerManager` - Marker-Verwaltung ✅ (aus visualization.js extrahiert)
   - `StateService` (neu) - State-Management mit Validierung
 
 - [ ] **Event-System erweitern**: Mehr Events für bessere Entkopplung
@@ -231,12 +233,12 @@
 
 ### Performance
 - [ ] **Debouncing konsolidieren**
-  - Geocoder hat Debouncing (Zeile 343-355)
-  - Map Zoom hat Debouncing (map-renderer.js:53-62)
+  - Geocoder hat Debouncing
+  - Map Zoom hat Debouncing (map-renderer.js)
   - **Lösung**: Zentralisierte Debounce-Utility
 
 - [ ] **Memoization für teure Berechnungen**
-  - `calculateWeightedLevel()` könnte gecacht werden
+  - `ColormapUtils.calculateWeightedLevel()` könnte gecacht werden
   - Colormap-Berechnungen
 
 - [ ] **Batch-Updates für DOM**
@@ -260,29 +262,43 @@
 
 ## 🔧 Konkrete Refactoring-Schritte (Priorität)
 
-### Hoch
-1. [ ] **Duplikate entfernen**: Route-Polyline-Entfernung zentralisieren
-2. [ ] **Null-Checks hinzufügen**: Alle LayerGroup-Zugriffe absichern
-3. [ ] **CONFIG.REMEMBER_TARGETS Helper**: Einheitliche Abfrage-Methode
-4. [ ] **visualization.js aufteilen**: Größte Datei zuerst
-
-### Mittel
-5. [ ] **app.js aufteilen**: Event-Handler auslagern
+### Hoch 🔴
+1. ✅ ~~**Duplikate entfernen**: Route-Polyline-Entfernung zentralisieren~~ ✅ **ERLEDIGT**
+2. ✅ ~~**Null-Checks hinzufügen**: Alle LayerGroup-Zugriffe absichern~~ ✅ **ERLEDIGT**
+3. ✅ ~~**CONFIG.REMEMBER_TARGETS Helper**: Einheitliche Abfrage-Methode~~ ✅ **ERLEDIGT**
+4. ✅ ~~**visualization.js aufteilen**: Größte Datei zuerst~~ ✅ **ERLEDIGT** (teilweise, noch Target-Drag-Handling)
+5. [ ] **app.js aufteilen**: UI-Komponenten extrahieren (Profile-Selector, Route-Config, Aggregation-Controls)
 6. [ ] **Constants-Datei**: Magic Numbers/Strings auslagern
-7. [ ] **Error-Handling**: Konsistentes Pattern
-8. [ ] **State-Management**: Single Source of Truth
 
-### Niedrig
-9. [ ] **CSS aufteilen**: Komponenten-basiert
-10. [ ] **geocoder.js aufteilen**: UI/API trennen
-11. [ ] **Performance-Optimierungen**: Debouncing, Memoization
-12. [ ] **Dokumentation**: Entwickler-Docs
+### Mittel 🟡
+7. [ ] **Target-Drag-Handling** aus visualization.js extrahieren
+8. [ ] **Route-Recalculations** aus app.js extrahieren
+9. [ ] **Error-Handling**: Konsistentes Pattern
+10. [ ] **State-Management**: Single Source of Truth
+11. [ ] **Config-Update-Pattern**: Fallback-Checks entfernen
+
+### Niedrig 🟢
+12. [ ] **CSS aufteilen**: Komponenten-basiert
+13. [ ] **geocoder.js aufteilen**: UI/API trennen
+14. [ ] **Performance-Optimierungen**: Debouncing, Memoization
+15. [ ] **Dokumentation**: Entwickler-Docs
 
 ## 📝 Notizen
 
-- Die Codebase ist bereits gut strukturiert mit klarer Trennung von Services, Handlers, UI, etc.
-- Hauptproblem: Große Dateien (visualization.js, app.js) und Code-Duplikate
-- State-Management funktioniert, könnte aber konsistenter sein
-- Event-System ist vorhanden, könnte erweitert werden
-- Error-Handling ist inkonsistent, sollte standardisiert werden
+### Fortschritt
+- ✅ **visualization.js erfolgreich aufgeteilt**: Von 1448 auf 791 Zeilen reduziert (~45% Reduktion)
+- ✅ **Helper-Funktionen erstellt**: `isRememberMode()` zentralisiert CONFIG.REMEMBER_TARGETS Checks
+- ✅ **Route-Polyline-Entfernung zentralisiert**: Alle Aufrufe über `MapRenderer.removePolylines()` oder `MapRenderer.clearRoutes()`
+- ✅ **Null-Checks hinzugefügt**: Alle kritischen LayerGroup-Zugriffe abgesichert
 
+### Nächste Schritte
+1. **app.js weiter aufteilen**: Beginne mit einfacheren Komponenten (Profile-Selector, Route-Config)
+2. **Constants-Datei erstellen**: Magic Numbers und Strings auslagern
+3. **Target-Drag-Handling extrahieren**: Letzter großer Block in visualization.js
+
+### Architektur-Status
+- ✅ Klare Trennung von Services, Handlers, UI, Visualization
+- ✅ Event-System vorhanden und funktional
+- ⚠️ State-Management funktioniert, könnte aber konsistenter sein (Single Source of Truth)
+- ⚠️ Error-Handling ist inkonsistent, sollte standardisiert werden
+- ✅ Neue Module (ColormapUtils, HistogramRenderer, MarkerManager, SchoolRenderer) funktionieren korrekt mit Delegation über Visualization

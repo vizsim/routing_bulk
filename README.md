@@ -11,6 +11,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 🎨 **Colormaps**: Verschiedene Farbschemata für die aggregierte Darstellung (viridis, plasma, inferno, magma)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
 - 📈 **Längenverteilung**: Verschiedene Verteilungsfunktionen für Startpunkte (lognormal, uniform, normal, etc.)
+- 🏫 **Schulen anzeigen**: Suche und Visualisierung von Schulen über OpenStreetMap (Rechtsklick-Menü)
 - 📤 **Export**: Export von Routen als GeoJSON
 - 🎛️ **Konfigurierbar**: Anpassbare Anzahl von Routen, Radius, Aggregierungsmethode und mehr
 
@@ -31,6 +32,7 @@ Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](htt
    - **Längenverteilung**: Verteilungsfunktion für Startpunkte
    - **Aggregierte Darstellung**: Zeigt Routen mit Farbcodierung basierend auf der Anzahl
    - **Zielpunkte merken**: Speichert mehrere Zielpunkte und ihre Routen
+4. **Schulen anzeigen**: Rechtsklick auf die Karte → "Schulen suchen" um Schulen im Umkreis anzuzeigen
 
 ## Projektstruktur
 
@@ -43,9 +45,9 @@ routing_bulk/
 ├── bulk_router_logo.svg   # Logo
 │
 ├── docs/                  # Dokumentation
-│   ├── AGGREGATION_PROBLEM.md # Dokumentation zum Aggregierungs-Problem
-│   ├── AGGREGATION_PARAMETERS.md # Dokumentation zu Aggregierungs-Parametern
-│   └── REFACTORING_APP_JS.md  # Refactoring-Dokumentation
+│   ├── AGGREGATION_PROBLEM.md      # Dokumentation zum Aggregierungs-Problem
+│   ├── AGGREGATION_PARAMETERS.md   # Dokumentation zu Aggregierungs-Parametern
+│   └── CODE_REVIEW_CHECKLIST.md    # Code Review & Refactoring Checkliste
 │
 └── src/
     ├── core/              # Kern-Module
@@ -57,10 +59,10 @@ routing_bulk/
     │
     ├── services/          # Business-Logik
     │   ├── route-service.js        # Route-Berechnung
-    │   ├── target-service.js      # Zielpunkt-Verwaltung
-    │   ├── export-service.js      # Export-Funktionalität
+    │   ├── target-service.js       # Zielpunkt-Verwaltung
+    │   ├── export-service.js       # Export-Funktionalität
     │   ├── aggregation-service.js  # Routen-Aggregierung
-    │   └── overpass-service.js    # Overpass API (OSM-Daten)
+    │   └── overpass-service.js     # Overpass API (OSM-Daten)
     │
     ├── domain/            # Domain-Modelle & Utilities
     │   ├── geo.js         # Geo-Funktionen
@@ -68,18 +70,26 @@ routing_bulk/
     │   └── api.js         # API-Calls
     │
     ├── visualization/     # Visualisierung
-    │   ├── visualization.js  # Visualisierungs-Utilities
-    │   ├── map-renderer.js  # Karten-Rendering
-    │   └── route-renderer.js # Route-Rendering
+    │   ├── visualization.js       # Visualisierungs-Orchestrierung
+    │   ├── map-renderer.js         # Karten-Rendering
+    │   ├── route-renderer.js       # Route-Rendering
+    │   ├── colormap-utils.js       # Colormap-Utilities
+    │   ├── histogram-renderer.js   # Histogramm-Rendering
+    │   ├── marker-manager.js       # Marker-Verwaltung
+    │   └── school-renderer.js      # Schul-Rendering
     │
     ├── ui/                # UI-Komponenten
-    │   ├── targets-list.js      # Zielpunkte-Liste
-    │   ├── config-helpers.js    # Config-UI-Helper
+    │   ├── targets-list.js         # Zielpunkte-Liste
+    │   ├── config-helpers.js       # Config-UI-Helper
     │   ├── distribution-selector.js # Verteilungs-Auswahl
-    │   └── colormap-selector.js # Colormap-Auswahl
+    │   ├── colormap-selector.js    # Colormap-Auswahl
+    │   └── route-warning.js        # Route-Warnung (Modal)
     │
     ├── handlers/          # Event-Handler
-    │   └── route-handler.js     # Route-Event-Handler
+    │   └── route-handler.js        # Route-Event-Handler
+    │
+    ├── utils/             # Utilities
+    │   └── geocoder.js    # Geocoding (Adresssuche)
     │
     └── app.js             # Haupt-Orchestrierung
 ```
@@ -120,11 +130,22 @@ Weitere Details zur Aggregierung finden sich in [`docs/AGGREGATION_PARAMETERS.md
 
 Die Anwendung folgt einer modularen Architektur mit klarer Trennung von Concerns:
 
-- **Core**: Kern-Funktionalität (Config, State, Events)
-- **Services**: Business-Logik (Route-Berechnung, Zielpunkt-Verwaltung, Export)
-- **Domain**: Domain-Modelle und Utilities
-- **Visualization**: Visualisierungs-Logik
-- **UI**: UI-Komponenten
+- **Core**: Kern-Funktionalität (Config, State, Events, Utils)
+- **Services**: Business-Logik (Route-Berechnung, Zielpunkt-Verwaltung, Export, Aggregation)
+- **Domain**: Domain-Modelle und Utilities (Geo-Funktionen, Verteilungen, API-Calls)
+- **Visualization**: Visualisierungs-Logik (modular aufgeteilt in spezialisierte Renderer)
+  - `visualization.js`: Orchestrierung und Delegation
+  - `map-renderer.js`: Karten-Rendering
+  - `route-renderer.js`: Route-Rendering
+  - `colormap-utils.js`: Colormap-Berechnungen
+  - `histogram-renderer.js`: Histogramm-Visualisierung
+  - `marker-manager.js`: Marker-Verwaltung
+  - `school-renderer.js`: Schul-Visualisierung
+- **UI**: UI-Komponenten (modulare, wiederverwendbare Komponenten)
+- **Handlers**: Event-Handler für lose Kopplung zwischen Modulen
+- **Utils**: Zusätzliche Utilities (Geocoding)
+
+Die Kommunikation zwischen Modulen erfolgt über einen Event-Bus (`EventBus`), was eine lose Kopplung und einfache Erweiterbarkeit ermöglicht.
 
 
 
@@ -132,14 +153,20 @@ Die Anwendung folgt einer modularen Architektur mit klarer Trennung von Concerns
 
 ### Modellierung von Schulwegen
 
-Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. Hierfür werden zusätzlich zu den Routenberechnungen zwei weitere Datenquellen benötigt:
+Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. Hierfür werden zusätzlich zu den Routenberechnungen weitere Datenquellen benötigt:
 
 1. **Nachfrage (Schülerinnen und Schüler)**: 
    - **Zensus 2022 Daten**: 100x100m Raster mit Einwohnerzahlen und "Anteil unter 18 Jähriger"
    - Diese Daten ermöglichen die Abschätzung der Anzahl von Schülerinnen und Schülern pro Rasterzelle
    - siehe https://atlas.zensus2022.de/
 
-2. **Einzugsbereiche der Schulen**:
+2. **Bushaltestellen und Fußverkehr**:
+   - Bushaltestellen in der Nähe von Schulen können als zusätzliche Startpunkte für Fußwege dienen
+   - Von diesen Haltestellen aus können Fußwege zu den Schulen modelliert werden
+   - Dies ermöglicht eine realistischere Darstellung von Schulwegen, die auch öffentliche Verkehrsmittel einbezieht
+   - **Datenquelle**: Bushaltestellen sind in OpenStreetMap (OSM) verfügbar und können ähnlich wie Schulen über die Overpass API abgerufen werden
+
+3. **Einzugsbereiche der Schulen**:
    - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind
    - Die Datenlage ist für verschiedene Bezirke in Berlin sehr unterschiedlich
    - Stand jetzt wurden nur Daten für Grundschulen gefunden
@@ -155,7 +182,8 @@ Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. H
 
 Die Integration dieser Datenquellen würde es ermöglichen:
 - synthetische Startpunkte basierend auf tatsächlichen Wohnorten von Schülerinnen und Schülern zu generieren
-- wahrscheinliche  Schulwegen zu visualisieren und zu analysieren
+- wahrscheinliche Schulwege zu visualisieren und zu analysieren
+- zusätzliche Fußwege von Bushaltestellen zu Schulen zu modellieren und zu visualisieren
 
 ## Lizenz
 
