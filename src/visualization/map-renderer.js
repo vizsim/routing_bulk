@@ -20,7 +20,15 @@ const MapRenderer = {
     };
     
     // Leaflet Setup
-    const map = L.map('map').setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
+    const map = L.map('map', {
+      zoomControl: false // Deaktiviere Standard-Zoom-Control
+    }).setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
+    
+    // Füge Zoom-Control unten links hinzu
+    L.control.zoom({
+      position: 'bottomleft'
+    }).addTo(map);
+    
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { 
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',

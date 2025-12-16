@@ -29,6 +29,11 @@ const App = {
     // Initiale Sichtbarkeit der Targets-Liste setzen
     TargetsList.toggle(CONFIG.REMEMBER_TARGETS);
     
+    // Geocoder initialisieren
+    Geocoder.init((lat, lng, suggestion) => {
+      this._handleGeocoderSelect(lat, lng, suggestion);
+    });
+    
     // Initiale Aggregation-UI Sichtbarkeit setzen
     if (typeof toggleAggregationUI === 'function') {
       toggleAggregationUI();
@@ -586,6 +591,35 @@ const App = {
     });
   },
   
+  /**
+   * Behandelt Geocoder-Auswahl
+   */
+  async _handleGeocoderSelect(lat, lng, suggestion) {
+    const map = State.getMap();
+    if (!map) return;
+
+    // Karte zur ausgewählten Position bewegen
+    map.setView([lat, lng], Math.max(map.getZoom(), 15));
+
+    // Zielpunkt setzen und Routen berechnen
+    const target = [lat, lng];
+    State.setLastTarget(target);
+
+    // Wenn "Zielpunkte merken" aktiviert ist, Zielpunkt hinzufügen
+    if (CONFIG.REMEMBER_TARGETS) {
+      State.setCurrentTargetMarker(null);
+      const added = TargetService.addTarget(target);
+    } else {
+      // Im normalen Modus: Karte leeren und Zielpunkt zeichnen
+      MapRenderer.clearLayersExceptSchools();
+      const marker = Visualization.drawTargetPoint(target);
+      State.setCurrentTargetMarker(marker);
+    }
+
+    // Routen berechnen
+    await RouteService.calculateRoutes(target);
+  },
+
   /**
    * Behandelt Map-Click
    */
