@@ -13,6 +13,11 @@ const RouteRenderer = {
     }
 
     const layerGroup = State.getLayerGroup();
+    if (!layerGroup) {
+      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
+      return null;
+    }
+    
     const polyline = L.polyline(latlngs, { 
       weight: 3, 
       opacity: 0.8, 
@@ -29,6 +34,10 @@ const RouteRenderer = {
    */
   drawAggregatedRoutes(aggregatedSegments, maxCount) {
     const layerGroup = State.getLayerGroup();
+    if (!layerGroup) {
+      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
+      return;
+    }
     
     // Berechne Min/Max und alle Counts für gewichtete Verteilung
     const counts = aggregatedSegments.map(seg => seg.count);
@@ -37,7 +46,7 @@ const RouteRenderer = {
     
     aggregatedSegments.forEach(seg => {
       // Gewichtete Verteilung: 15% Quantil, 85% linear
-      const weightedLevel = Visualization.calculateWeightedLevel(
+      const weightedLevel = ColormapUtils.calculateWeightedLevel(
         seg.count, 
         minCount, 
         maxCountValue, 
@@ -50,7 +59,7 @@ const RouteRenderer = {
       const opacity = 0.7 + (weightedLevel * 0.7); // 0.3-1.0
       
       // Farbe basierend auf gewichtetem Level
-      const color = Visualization.getColorForCount(seg.count, weightedLevel);
+      const color = ColormapUtils.getColorForCount(seg.count, weightedLevel);
       
       const polyline = L.polyline([seg.start, seg.end], {
         weight: weight,
@@ -76,7 +85,12 @@ const RouteRenderer = {
     const targetRoutes = State.getTargetRoutes();
     const layerGroup = State.getLayerGroup();
     
-    if (!layerGroup || !targetRoutes || targetRoutes.length === 0) return;
+    if (!layerGroup) {
+      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
+      return;
+    }
+    
+    if (!targetRoutes || targetRoutes.length === 0) return;
     
     // Alle bestehenden Polylines entfernen (nur Routen, nicht Marker)
     MapRenderer.clearRoutes();

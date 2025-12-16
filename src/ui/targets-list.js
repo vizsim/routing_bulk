@@ -200,7 +200,7 @@ const TargetsList = {
       }
       
       // Alle verbleibenden Routen neu zeichnen
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         EventBus.emit(Events.VISUALIZATION_UPDATE);
       }
       

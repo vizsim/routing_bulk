@@ -9,7 +9,7 @@ const RouteHandler = {
     
     // Startpunkte zeichnen (nur im normalen Modus oder beim ersten Klick im "Zielpunkte merken" Modus)
     if (routeInfo.starts && routeInfo.colors) {
-      if (!CONFIG.REMEMBER_TARGETS) {
+      if (!isRememberMode()) {
         // Im normalen Modus: Startpunkte normal zeichnen
         Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       } else {
@@ -20,7 +20,7 @@ const RouteHandler = {
     }
     
     // Routen visualisieren
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten anzeigen
       // (inklusive der gerade berechneten)
       RouteRenderer.drawAllTargetRoutes();
@@ -49,7 +49,7 @@ const RouteHandler = {
     this._updateExportButtonState();
     
     // Panel aktualisieren (damit Config-Informationen angezeigt werden)
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       TargetsList.update();
     }
     
@@ -70,7 +70,7 @@ const RouteHandler = {
     const { index } = data;
     
     // Visualisierung aktualisieren
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       RouteRenderer.drawAllTargetRoutes();
     } else {
       // Normaler Modus: Nur aktualisierte Route neu zeichnen
@@ -81,9 +81,8 @@ const RouteHandler = {
       if (allRouteData.length > 0 && allRouteResponses.length > 0) {
         // Alte Route entfernen
         const routePolylines = State.getRoutePolylines();
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup && routePolylines[index]) {
-          layerGroup.removeLayer(routePolylines[index]);
+        if (routePolylines[index]) {
+          MapRenderer.removePolylines([routePolylines[index]]);
         }
         
         // Neue Route zeichnen
@@ -106,7 +105,7 @@ const RouteHandler = {
     const exportBtn = Utils.getElement('#export-btn');
     if (!exportBtn) return;
     
-    const hasRoutes = CONFIG.REMEMBER_TARGETS 
+    const hasRoutes = isRememberMode() 
       ? State.getTargetRoutes().length > 0
       : State.getAllRouteData().length > 0;
     exportBtn.disabled = !hasRoutes;

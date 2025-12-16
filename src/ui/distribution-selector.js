@@ -43,7 +43,7 @@ const DistributionSelector = {
     
     // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
     const selectedIndex = State.getSelectedTargetIndex();
-    if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+    if (selectedIndex !== null && isRememberMode()) {
       return; // Früh beenden, nicht automatisch berechnen
     }
     
@@ -70,15 +70,10 @@ const DistributionSelector = {
         
         // Routen neu berechnen (mit neuen Startpunkten)
         // Alte Routen entfernen
-        if (!CONFIG.REMEMBER_TARGETS) {
-          MapRenderer.clearRoutes();
+        if (!isRememberMode()) {
           const routePolylines = State.getRoutePolylines();
-          const layerGroup = State.getLayerGroup();
-          if (layerGroup) {
-            routePolylines.forEach(polyline => {
-              if (polyline) layerGroup.removeLayer(polyline);
-            });
-          }
+          MapRenderer.removePolylines(routePolylines);
+          MapRenderer.clearRoutes();
           State.setRoutePolylines([]);
         }
         

@@ -15,3 +15,11 @@ const CONFIG = {
   REMEMBER_TARGETS: false // Zielpunkte merken
 };
 
+/**
+ * Prüft ob der "Zielpunkte merken" Modus aktiv ist
+ * @returns {boolean} - true wenn aktiv, false sonst
+ */
+function isRememberMode() {
+  return CONFIG.REMEMBER_TARGETS === true;
+}
+

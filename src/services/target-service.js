@@ -216,12 +216,7 @@ const TargetService = {
       const routeInfo = targetRoutes[routeInfoIndex];
       // Polylines von der Karte entfernen
       if (routeInfo.routePolylines) {
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup) {
-          routeInfo.routePolylines.forEach(polyline => {
-            if (polyline) layerGroup.removeLayer(polyline);
-          });
-        }
+        MapRenderer.removePolylines(routeInfo.routePolylines);
       }
       targetRoutes.splice(routeInfoIndex, 1);
       State.setTargetRoutes(targetRoutes);

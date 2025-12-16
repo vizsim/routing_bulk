@@ -79,7 +79,7 @@ const ColormapSelector = {
     
     // Routen neu zeichnen wenn vorhanden (nur bei aggregierter Darstellung)
     if (CONFIG.AGGREGATED) {
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         // Im "Zielpunkte merken" Modus: Alle Routen zu allen Zielpunkten neu zeichnen
         RouteRenderer.drawAllTargetRoutes();
       } else {

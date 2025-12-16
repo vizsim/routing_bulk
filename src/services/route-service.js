@@ -47,7 +47,7 @@ const RouteService = {
     }
     
     // Route-Daten zurücksetzen (nur wenn nicht im "Zielpunkte merken" Modus)
-    if (!CONFIG.REMEMBER_TARGETS) {
+    if (!isRememberMode()) {
       State.resetRouteData();
     }
     
@@ -106,7 +106,7 @@ const RouteService = {
       };
       
       // Wenn "Zielpunkte merken" aktiviert ist, Routen speichern
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         // ID aus State-Map holen (schnellster Zugriff)
         const targetId = State.getTargetId(target);
         if (targetId) {
@@ -175,7 +175,7 @@ const RouteService = {
           State.setAllRouteResponses(allRouteResponses);
           
           // Im "Zielpunkte merken" Modus: Route auch in targetRoutes aktualisieren
-          if (CONFIG.REMEMBER_TARGETS) {
+          if (isRememberMode()) {
             const targetRoutes = State.getTargetRoutes();
             const targetIndex = targetRoutes.findIndex(tr => 
               target && TargetService.isEqual(tr.target, target)

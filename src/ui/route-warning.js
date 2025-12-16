@@ -50,7 +50,7 @@ const RouteWarning = {
    * @returns {number} - Anzahl der Routen
    */
   getTotalRouteCount() {
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       // Im "Zielpunkte merken" Modus: Summe aller Routen aller Zielpunkte
       const targetRoutes = State.getTargetRoutes();
       let totalCount = 0;

@@ -97,7 +97,7 @@ const App = {
       Visualization.cleanupOrphanedTargetMarkers();
       // Liste aktualisieren
       TargetsList.update();
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         EventBus.emit(Events.VISUALIZATION_UPDATE);
       }
       RouteHandler._updateExportButtonState();
@@ -105,7 +105,7 @@ const App = {
     
     // Visualization Update
     EventBus.on(Events.VISUALIZATION_UPDATE, () => {
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         RouteRenderer.drawAllTargetRoutes();
       }
     });
@@ -126,7 +126,7 @@ const App = {
     
     // Config: Aggregation geändert
     EventBus.on(Events.CONFIG_AGGREGATION_CHANGED, () => {
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         RouteRenderer.drawAllTargetRoutes();
       } else {
         this._redrawCurrentRoutes();
@@ -202,7 +202,7 @@ const App = {
         
         // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun (wie bei anderen Config-Werten)
         const selectedIndex = State.getSelectedTargetIndex();
-        if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+        if (selectedIndex !== null && isRememberMode()) {
           // Nichts tun - Benutzer muss auf Stift-Icon klicken, um Änderungen zu übernehmen
           return;
         }
@@ -288,7 +288,7 @@ const App = {
    * Berechnet Routen für einen Zielpunkt neu und aktualisiert die Anzeige
    */
   async _recalculateTargetRoutes(target, targetIndex) {
-    if (!CONFIG.REMEMBER_TARGETS) return;
+    if (!isRememberMode()) return;
     
     // Routen neu berechnen
     const routeInfo = await RouteService.calculateRoutes(target, { silent: true });
@@ -348,15 +348,10 @@ const App = {
    * Helper: Entfernt alte Routen im normalen Modus
    */
   _clearRoutesInNormalMode() {
-    if (!CONFIG.REMEMBER_TARGETS) {
-      MapRenderer.clearRoutes();
+    if (!isRememberMode()) {
       const routePolylines = State.getRoutePolylines();
-      const layerGroup = State.getLayerGroup();
-      if (layerGroup) {
-        routePolylines.forEach(polyline => {
-          if (polyline) layerGroup.removeLayer(polyline);
-        });
-      }
+      MapRenderer.removePolylines(routePolylines);
+      MapRenderer.clearRoutes();
       State.setRoutePolylines([]);
     }
   },
@@ -419,7 +414,7 @@ const App = {
       // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
       // Benutzer muss explizit auf Stift-Icon klicken, um Änderungen zu übernehmen
       const selectedIndex = State.getSelectedTargetIndex();
-      if (selectedIndex !== null && CONFIG.REMEMBER_TARGETS) {
+      if (selectedIndex !== null && isRememberMode()) {
         return; // Nicht automatisch berechnen
       }
       
@@ -566,7 +561,7 @@ const App = {
       TargetsList.toggle(CONFIG.REMEMBER_TARGETS);
       
       // Wenn aktiviert, aktuellen Zielpunkt und Routen zur Liste hinzufügen (falls vorhanden)
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         const currentTarget = State.getLastTarget();
         if (currentTarget) {
           this._migrateCurrentTargetToRememberMode(currentTarget);
@@ -609,7 +604,7 @@ const App = {
     State.setLastTarget(target);
 
     // Wenn "Zielpunkte merken" aktiviert ist, Zielpunkt hinzufügen
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       State.setCurrentTargetMarker(null);
       const added = TargetService.addTarget(target);
     } else {
@@ -631,7 +626,7 @@ const App = {
     State.setLastTarget(target);
     
     // Wenn "Zielpunkte merken" aktiviert ist, Zielpunkt hinzufügen
-    if (CONFIG.REMEMBER_TARGETS) {
+    if (isRememberMode()) {
       // currentTargetMarker zurücksetzen, da wir im "Zielpunkte merken" Modus sind
       State.setCurrentTargetMarker(null);
       
@@ -706,7 +701,7 @@ const App = {
     const lastTarget = State.getLastTarget();
     if (lastTarget) {
       // Alte Routen entfernen (bevor neue berechnet werden)
-      if (CONFIG.REMEMBER_TARGETS) {
+      if (isRememberMode()) {
         // Im "Zielpunkte merken" Modus: Routen zum aktuellen Zielpunkt entfernen
         const targetRoutes = State.getTargetRoutes();
         const targetIndex = targetRoutes.findIndex(tr => 
@@ -732,7 +727,7 @@ const App = {
       const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: true });
       if (routeInfo) {
         // Im "Zielpunkte merken" Modus: Routen zum Zielpunkt aktualisieren
-        if (CONFIG.REMEMBER_TARGETS) {
+        if (isRememberMode()) {
           // RouteInfo enthält bereits die neuen Routen, werden in RouteService gespeichert
           // Jetzt alle Routen neu zeichnen
           RouteRenderer.drawAllTargetRoutes();
