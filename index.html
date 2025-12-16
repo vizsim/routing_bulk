@@ -9,12 +9,21 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="panel">
+  <div class="panel" id="main-panel">
     <div class="panel-header">
-      <h3 style="display: flex; align-items: center; gap: 10px;">
-        <img src="bulk_router_logo.svg" alt="Bulk-Router Logo" style="width: 32px; height: 32px;" />
-        Bulk-Router
-      </h3>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="display: flex; align-items: center; gap: 10px; margin: 0;">
+          <img src="bulk_router_logo.svg" alt="Bulk-Router Logo" style="width: 32px; height: 32px;" />
+          Bulk-Router
+        </h3>
+        <button class="btn-close" id="collapse-panel" title="Ein-/Ausklappen">
+          <svg width="16" height="16" viewBox="-20 -20 490 450" fill="currentColor">
+            <g transform="translate(32, 42.666667) rotate(180 225 200)">
+              <path d="M246.312928,5.62892705 C252.927596,9.40873724 258.409564,14.8907053 262.189374,21.5053731 L444.667042,340.84129 C456.358134,361.300701 449.250007,387.363834 428.790595,399.054926 C422.34376,402.738832 415.04715,404.676552 407.622001,404.676552 L42.6666667,404.676552 C19.1025173,404.676552 7.10542736e-15,385.574034 7.10542736e-15,362.009885 C7.10542736e-15,354.584736 1.93772021,347.288125 5.62162594,340.84129 L188.099293,21.5053731 C199.790385,1.04596203 225.853517,-6.06216498 246.312928,5.62892705 Z"/>
+            </g>
+          </svg>
+        </button>
+      </div>
       <p class="panel-description">Klick in die Karte → Zufällige Startpunkte → Routen zum Ziel.</p>
     </div>
     <div class="panel-section">
@@ -32,6 +41,8 @@
         <label>Zielpunkte:</label>
         <div id="targets-list" class="targets-list"></div>
       </div>
+      <div class="config-separator"></div>
+
       <div class="config-group">
         <label>Profil:</label>
         <div class="profile-buttons">

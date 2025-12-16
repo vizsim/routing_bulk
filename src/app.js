@@ -13,6 +13,9 @@ const App = {
     // Event-Listener registrieren
     this._registerEventListeners();
     
+    // Panel Collapse Handler
+    this._setupPanelCollapse();
+    
     console.log('App initialisiert');
   },
   
@@ -702,6 +705,26 @@ const App = {
         }
       }
     }
+  },
+  
+  /**
+   * Richtet Panel-Ein-/Ausklappen ein
+   */
+  _setupPanelCollapse() {
+    const collapseBtn = Utils.getElement('#collapse-panel');
+    const panel = Utils.getElement('#main-panel');
+    const arrow = collapseBtn?.querySelector('svg');
+    
+    if (!collapseBtn || !panel || !arrow) return;
+    
+    // Arrow-Klasse hinzufügen
+    if (arrow) {
+      arrow.classList.add('toggle-arrow');
+    }
+    
+    collapseBtn.addEventListener('click', () => {
+      panel.classList.toggle('collapsed');
+    });
   },
   
 };
