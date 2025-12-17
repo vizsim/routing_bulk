@@ -11,7 +11,7 @@ const OverpassService = {
     const overpassUrl = 'https://overpass-api.de/api/interpreter';
     
     // Overpass QL Query für Schulen
-    // Wir brauchen die vollständige Geometrie für Ways
+    // Wir brauchen die vollständige Geometrie für Ways und Center für Relations
     const query = `
       [out:json][timeout:25];
       (
@@ -22,6 +22,8 @@ const OverpassService = {
       out body;
       >;
       out skel qt;
+      relation["amenity"="school"](around:${radius},${lat},${lng});
+      out center;
     `;
     
     try {
@@ -109,17 +111,28 @@ const OverpassService = {
         }
       }
       
-      // Verarbeite Relations (vereinfacht als Punkt, da komplexer)
+      // Verarbeite Relations (als Punkt)
       for (const relation of relations) {
         if (!relation.tags || relation.tags.amenity !== 'school') continue;
         
-        // Für Relations verwenden wir den Center-Punkt (falls vorhanden)
-        if (relation.center) {
+        // Für Relations verwenden wir den Center-Punkt
+        // Overpass gibt center als {lat, lon} zurück
+        if (relation.center && relation.center.lat && relation.center.lon) {
           schools.push({
             id: relation.id,
             type: 'relation',
             lat: relation.center.lat,
             lng: relation.center.lon,
+            name: relation.tags?.name || 'Unbenannte Schule',
+            tags: relation.tags || {}
+          });
+        } else if (relation.lat && relation.lon) {
+          // Fallback: Falls center direkt auf der Relation ist
+          schools.push({
+            id: relation.id,
+            type: 'relation',
+            lat: relation.lat,
+            lng: relation.lon,
             name: relation.tags?.name || 'Unbenannte Schule',
             tags: relation.tags || {}
           });
