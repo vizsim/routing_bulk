@@ -729,6 +729,31 @@ const Visualization = {
     return SchoolRenderer.clearSchoolSearchRadius();
   },
   
+  // Delegiert an PublicTransportRenderer
+  createPlatformIcon(zoom) {
+    return PublicTransportRenderer.createPlatformIcon(zoom);
+  },
+  
+  updatePlatformIcons() {
+    return PublicTransportRenderer.updatePlatformIcons();
+  },
+  
+  drawPlatforms(platforms) {
+    return PublicTransportRenderer.drawPlatforms(platforms);
+  },
+  
+  clearPlatforms(platformLayers) {
+    return PublicTransportRenderer.clearPlatforms(platformLayers);
+  },
+  
+  drawPlatformSearchRadius(lat, lng, radiusMeters) {
+    return PublicTransportRenderer.drawPlatformSearchRadius(lat, lng, radiusMeters);
+  },
+  
+  clearPlatformSearchRadius() {
+    return PublicTransportRenderer.clearPlatformSearchRadius();
+  },
+  
   // Delegiert an MarkerManager
   highlightTargetMarker(index) {
     return MarkerManager.highlightTargetMarker(index);

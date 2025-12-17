@@ -49,7 +49,7 @@ const MapRenderer = {
       EventBus.emit(Events.MAP_CLICK, { latlng: e.latlng });
     });
     
-    // Zoom-Event: Schul-Icons aktualisieren (mit Debouncing für bessere Performance)
+    // Zoom-Event: Schul- und Haltestellen-Icons aktualisieren (mit Debouncing für bessere Performance)
     let zoomUpdateTimeout = null;
     map.on("zoomend", () => {
       // Debounce: Warte 100ms nach dem letzten Zoom-Event
@@ -58,6 +58,7 @@ const MapRenderer = {
       }
       zoomUpdateTimeout = setTimeout(() => {
         Visualization.updateSchoolIcons();
+        Visualization.updatePlatformIcons();
       }, 100);
     });
     
@@ -194,6 +195,88 @@ const MapRenderer = {
       });
     }
     
+    // ÖPNV-Haltestellen suchen
+    const platformsBtn = Utils.getElement('#context-menu-platforms');
+    if (platformsBtn) {
+      platformsBtn.addEventListener('click', async () => {
+        if (contextMenuLatLng) {
+          contextMenu.style.display = 'none';
+          
+          // Alten Radius-Kreis entfernen (falls vorhanden)
+          Visualization.clearPlatformSearchRadius();
+          
+          // Radius für Suche (500m)
+          const searchRadius = 500;
+          
+          // Radius-Kreis anzeigen
+          Visualization.drawPlatformSearchRadius(
+            contextMenuLatLng.lat,
+            contextMenuLatLng.lng,
+            searchRadius
+          );
+          
+          // Lade-Indikator anzeigen
+          Utils.showInfo('Suche nach ÖPNV-Haltestellen...', false);
+          
+          try {
+            // Haltestellen suchen
+            const platforms = await OverpassService.searchPublicTransportPlatforms(
+              contextMenuLatLng.lat,
+              contextMenuLatLng.lng,
+              searchRadius
+            );
+            
+            if (platforms.length === 0) {
+              Utils.showInfo('Keine ÖPNV-Haltestellen in der Nähe gefunden.', false);
+              // Kreis nach 3 Sekunden ausblenden
+              setTimeout(() => {
+                Visualization.clearPlatformSearchRadius();
+              }, 3000);
+              return;
+            }
+            
+            // Alte Haltestellen holen und neue hinzufügen (nicht ersetzen)
+            const oldPlatformLayers = State.getPlatformMarkers() || [];
+            const newPlatformLayers = Visualization.drawPlatforms(platforms);
+            
+            // Alle Haltestellen zusammenführen
+            const allPlatformLayers = [...oldPlatformLayers, ...newPlatformLayers];
+            State.setPlatformMarkers(allPlatformLayers);
+            
+            // Erfolgsmeldung
+            Utils.showInfo(`${platforms.length} Haltestelle${platforms.length !== 1 ? 'n' : ''} gefunden.`, false);
+            
+            // Radius-Kreis nach 3 Sekunden ausblenden
+            setTimeout(() => {
+              Visualization.clearPlatformSearchRadius();
+            }, 3000);
+            
+            // Karte zu den neuen Haltestellen zoomen (falls mehrere gefunden)
+            if (newPlatformLayers.length > 0) {
+              const bounds = [];
+              newPlatformLayers.forEach(layer => {
+                // Marker haben getLatLng(), Polygone haben getBounds()
+                if (layer.getLatLng) {
+                  bounds.push(layer.getLatLng());
+                } else if (layer.getBounds) {
+                  bounds.push(layer.getBounds().getCenter());
+                }
+              });
+              bounds.push(contextMenuLatLng); // Auch die Klick-Position einbeziehen
+              
+              if (bounds.length > 0) {
+                const latlngs = bounds.map(b => [b.lat, b.lng]);
+                this._map.fitBounds(latlngs, { padding: [50, 50], maxZoom: 16 });
+              }
+            }
+          } catch (error) {
+            console.error('Fehler bei Haltestellen-Suche:', error);
+            Utils.showError('Fehler beim Laden der ÖPNV-Haltestellen.', true);
+          }
+        }
+      });
+    }
+    
     // Menü schließen bei Klick außerhalb
     document.addEventListener('click', (e) => {
       if (contextMenu && !contextMenu.contains(e.target)) {
@@ -235,7 +318,7 @@ const MapRenderer = {
   },
   
   /**
-   * Löscht alle Layer außer Schul-Markern und Radius-Kreis
+   * Löscht alle Layer außer Schul- und Haltestellen-Markern und Radius-Kreisen
    * Verwendet selektive Entfernung statt clearLayers() für bessere Performance
    */
   clearLayersExceptSchools() {
@@ -243,22 +326,26 @@ const MapRenderer = {
     State.setCurrentTargetMarker(null);
     if (!this._layerGroup) return;
     
-    // Schul-Marker und Radius-Kreis behalten
+    // Schul- und Haltestellen-Marker und Radius-Kreise behalten
     const schoolLayers = State.getSchoolMarkers() || [];
     const schoolSearchRadiusCircle = State.getSchoolSearchRadiusCircle();
+    const platformLayers = State.getPlatformMarkers() || [];
+    const platformSearchRadiusCircle = State.getPlatformSearchRadiusCircle();
     
-    // Erstelle Set von Schul-Layer-Referenzen für schnellen Lookup
+    // Erstelle Set von Schul- und Haltestellen-Layer-Referenzen für schnellen Lookup
     const schoolLayerSet = new Set(schoolLayers);
+    const platformLayerSet = new Set(platformLayers);
     
     // Alle anderen Layer entfernen
     const layersToRemove = [];
     this._layerGroup.eachLayer(layer => {
-      // Prüfe auf mehrere Arten, ob es ein Schul-Layer ist:
+      // Prüfe auf mehrere Arten, ob es ein Schul- oder Haltestellen-Layer ist:
       // 1. Direkte Referenz im Set
-      // 2. Custom-Property _isSchoolLayer
+      // 2. Custom-Property _isSchoolLayer oder _isPlatformLayer
       const isSchoolLayer = schoolLayerSet.has(layer) || layer._isSchoolLayer === true;
-      const isRadiusCircle = layer === schoolSearchRadiusCircle;
-      if (!isSchoolLayer && !isRadiusCircle) {
+      const isPlatformLayer = platformLayerSet.has(layer) || layer._isPlatformLayer === true;
+      const isRadiusCircle = layer === schoolSearchRadiusCircle || layer === platformSearchRadiusCircle;
+      if (!isSchoolLayer && !isPlatformLayer && !isRadiusCircle) {
         layersToRemove.push(layer);
       }
     });
@@ -267,15 +354,15 @@ const MapRenderer = {
   },
   
   /**
-   * Löscht nur Routen (Polylines), aber nicht Schul-Polygone
-   * Wichtig: L.Polygon erweitert L.Polyline, daher müssen wir _isSchoolLayer prüfen
+   * Löscht nur Routen (Polylines), aber nicht Schul- oder Haltestellen-Polygone
+   * Wichtig: L.Polygon erweitert L.Polyline, daher müssen wir _isSchoolLayer und _isPlatformLayer prüfen
    */
   clearRoutes() {
     if (!this._layerGroup) return;
     
     const polylinesToRemove = [];
     this._layerGroup.eachLayer(layer => {
-      if (layer instanceof L.Polyline && !layer._isSchoolLayer) {
+      if (layer instanceof L.Polyline && !layer._isSchoolLayer && !layer._isPlatformLayer) {
         polylinesToRemove.push(layer);
       }
     });

@@ -19,6 +19,8 @@ const State = {
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
   schoolMarkers: [], // Marker für gefundene Schulen
   schoolSearchRadiusCircle: null, // Kreis für Suchradius-Visualisierung
+  platformMarkers: [], // Marker für gefundene ÖPNV-Haltestellen
+  platformSearchRadiusCircle: null, // Kreis für Haltestellen-Suchradius-Visualisierung
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
   targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
@@ -40,6 +42,8 @@ const State = {
   getExpectedDistribution() { return this.expectedDistribution; },
   getSchoolMarkers() { return this.schoolMarkers; },
   getSchoolSearchRadiusCircle() { return this.schoolSearchRadiusCircle; },
+  getPlatformMarkers() { return this.platformMarkers; },
+  getPlatformSearchRadiusCircle() { return this.platformSearchRadiusCircle; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
   getNextTargetId() { return this.nextTargetId; },
   getTargetId(target) { 
@@ -64,6 +68,8 @@ const State = {
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
   setSchoolMarkers(markers) { this.schoolMarkers = markers; },
   setSchoolSearchRadiusCircle(circle) { this.schoolSearchRadiusCircle = circle; },
+  setPlatformMarkers(markers) { this.platformMarkers = markers; },
+  setPlatformSearchRadiusCircle(circle) { this.platformSearchRadiusCircle = circle; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   setNextTargetId(id) { this.nextTargetId = id; },
   incrementNextTargetId() { this.nextTargetId++; },
