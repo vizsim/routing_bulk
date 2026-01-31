@@ -1,6 +1,14 @@
 // ==== Konfiguration ====
 const CONFIG = {
-  GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
+  // Overpass API: Reihenfolge = Fallback bei Fehlern (erster nicht erreichbar → nächster)
+  OVERPASS_SERVERS: [
+    "https://overpass-api.de/api/",
+    "https://overpass.kumi.systems/api/",
+    "https://maps.mail.ru/osm/tools/overpass/api/",
+    "https://overpass.openstreetmap.ru/api/"
+  ],
+  //GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
+  GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen

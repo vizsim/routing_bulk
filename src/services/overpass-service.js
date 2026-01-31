@@ -1,25 +1,72 @@
 // ==== Overpass Service: Abfragen von OpenStreetMap-Daten ====
 const OverpassService = {
+  _defaultServers: [
+    'https://overpass-api.de/api/',
+    'https://overpass.kumi.systems/api/',
+    'https://maps.mail.ru/osm/tools/overpass/api/',
+    'https://overpass.openstreetmap.ru/api/'
+  ],
+
   /**
    * Behandelt Fehler von Overpass API-Abfragen
-   * @param {Response} response - Die Response von der Overpass API
+   * @param {Response|null} response - Die Response von der Overpass API (null bei Netzwerkfehler)
    * @param {string} entityType - Typ der Entität (z.B. "Schulen" oder "ÖPNV-Haltestellen")
    * @throws {Error} Wirft einen Error mit spezifischer Meldung
    */
   _handleOverpassError(response, entityType) {
+    if (!response) {
+      const message = `Alle Overpass-Server nicht erreichbar. Fehler beim Laden der ${entityType}. ` +
+        `Bitte versuche es später erneut.`;
+      Utils.showError(message, true);
+      throw new Error('Overpass API: alle Server fehlgeschlagen');
+    }
     if (response.status === 504) {
       const message = `Die Overpass API hat ein Timeout zurückgegeben. ` +
         `Daten werden direkt via Overpass abgefragt, bitte nicht zu viele Abfragen machen :) ` +
         `Bitte versuche es in ein paar Sekunden erneut.`;
       Utils.showError(message, true);
       throw new Error(`Overpass API Gateway Timeout (504)`);
-    } else {
-      const message = `Fehler beim Laden der ${entityType}. ` +
-        `Daten werden direkt via Overpass abgefragt, bitte nicht zu viele Abfragen machen :) ` +
-        `Bitte versuche es später erneut.`;
-      Utils.showError(message, true);
-      throw new Error(`Overpass API error: ${response.status}`);
     }
+    const message = `Fehler beim Laden der ${entityType}. ` +
+      `Daten werden direkt via Overpass abgefragt, bitte nicht zu viele Abfragen machen :) ` +
+      `Bitte versuche es später erneut.`;
+    Utils.showError(message, true);
+    throw new Error(`Overpass API error: ${response.status}`);
+  },
+
+  /**
+   * Führt eine Overpass-Anfrage aus; bei Fehler wird der nächste Server aus der Liste versucht.
+   * @param {string} query - Overpass QL Query
+   * @param {string} entityType - z.B. "Schulen" oder "ÖPNV-Haltestellen"
+   * @returns {Promise<Response>} Response mit response.ok
+   * @throws {Error} Wenn alle Server fehlschlagen
+   */
+  async _fetchWithFallback(query, entityType) {
+    const servers = (typeof CONFIG !== 'undefined' && CONFIG.OVERPASS_SERVERS?.length)
+      ? CONFIG.OVERPASS_SERVERS
+      : this._defaultServers;
+    let lastResponse = null;
+    let lastError = null;
+
+    for (const baseUrl of servers) {
+      const url = baseUrl.replace(/\/?$/, '/') + 'interpreter';
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `data=${encodeURIComponent(query)}`
+        });
+        if (response.ok) {
+          return response;
+        }
+        lastResponse = response;
+      } catch (err) {
+        lastError = err;
+        console.warn(`Overpass ${url} fehlgeschlagen:`, err.message || err);
+      }
+    }
+
+    this._handleOverpassError(lastResponse, entityType);
   },
   
   /**
@@ -30,8 +77,6 @@ const OverpassService = {
    * @returns {Promise<Array>} Array von Schul-Objekten mit {id, type, lat, lng, coordinates, name, tags}
    */
   async searchSchools(lat, lng, radius = 500) {
-    const overpassUrl = 'https://overpass-api.de/api/interpreter';
-    
     // Overpass QL Query für Schulen
     // Wir brauchen die vollständige Geometrie für Ways und Center für Relations
     const query = `
@@ -49,19 +94,7 @@ const OverpassService = {
     `;
     
     try {
-      const response = await fetch(overpassUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `data=${encodeURIComponent(query)}`
-      });
-      
-      if (!response.ok) {
-        this._handleOverpassError(response, 'Schulen');
-        return [];
-      }
-      
+      const response = await this._fetchWithFallback(query, 'Schulen');
       const data = await response.json();
       
       // Verarbeite die Ergebnisse
@@ -178,8 +211,6 @@ const OverpassService = {
    * @returns {Promise<Array>} Array von Haltestellen-Objekten mit {id, type, lat, lng, coordinates, name, tags}
    */
   async searchPublicTransportPlatforms(lat, lng, radius = 500) {
-    const overpassUrl = 'https://overpass-api.de/api/interpreter';
-    
     // Overpass QL Query für ÖPNV-Haltestellen
     // Wir brauchen die vollständige Geometrie für Ways und Center für Relations
     const query = `
@@ -197,19 +228,7 @@ const OverpassService = {
     `;
     
     try {
-      const response = await fetch(overpassUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `data=${encodeURIComponent(query)}`
-      });
-      
-      if (!response.ok) {
-        this._handleOverpassError(response, 'ÖPNV-Haltestellen');
-        return [];
-      }
-      
+      const response = await this._fetchWithFallback(query, 'ÖPNV-Haltestellen');
       const data = await response.json();
       
       // Verarbeite die Ergebnisse

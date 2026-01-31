@@ -107,7 +107,8 @@ Die Hauptkonfiguration befindet sich in `src/core/config.js`:
 
 ```javascript
 const CONFIG = {
-  GH_ROUTE_URL: "https://ghroute.duckdns.org/route",
+  //GH_ROUTE_URL: "https://ghroute.duckdns.org/route",
+  GH_ROUTE_URL: "https://ghroute.vizsim.de/route",
   PROFILE: "bike",
   N: 10,
   RADIUS_M: 2000,
