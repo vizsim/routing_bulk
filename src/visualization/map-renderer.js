@@ -1,4 +1,7 @@
 // ==== Map-Renderer: Karten-Rendering ====
+/** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
+const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
+
 const MapRenderer = {
   _map: null,
   _layerGroup: null,
@@ -26,6 +29,9 @@ const MapRenderer = {
 
     if (visible) {
       this._setPopulationLegendVisible(true);
+      if (this._map && this._map.attributionControl) {
+        this._map.attributionControl.addAttribution(POPULATION_ATTRIBUTION);
+      }
       if (this._populationLayer) {
         this._populationLayer.addTo(this._map);
         this._bringOverlayLayerToFront();
@@ -111,6 +117,9 @@ const MapRenderer = {
     } else {
       this._setPopulationLegendVisible(false);
       this._detachPopulationHover();
+      if (this._map && this._map.attributionControl) {
+        this._map.attributionControl.removeAttribution(POPULATION_ATTRIBUTION);
+      }
       if (this._populationLayer) {
         this._map.removeLayer(this._populationLayer);
       }
