@@ -2,7 +2,214 @@
 const MapRenderer = {
   _map: null,
   _layerGroup: null,
-  
+  _populationLayer: null,
+  _populationTooltip: null,
+  _populationHoverTimeout: null,
+  _populationHoverAttached: false,
+
+  /** Stellt sicher, dass die Overlay-LayerGroup (Routen, Marker) über dem Einwohner-Layer liegt. */
+  _bringOverlayLayerToFront() {
+    if (this._layerGroup && typeof this._layerGroup.bringToFront === 'function') {
+      this._layerGroup.bringToFront();
+    }
+  },
+
+  /**
+   * Zeigt oder versteckt den optionalen Einwohner-PMTiles-Layer.
+   * Funktioniert nur, wenn CONFIG.POPULATION_PMTILES_URL gesetzt und protomaps-leaflet geladen ist.
+   * @param {boolean} visible - true = Layer anzeigen, false = entfernen
+   */
+  setPopulationLayerVisible(visible) {
+    if (!this._map) return;
+    const url = CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim();
+    if (!url) return;
+
+    if (visible) {
+      this._setPopulationLegendVisible(true);
+      if (this._populationLayer) {
+        this._populationLayer.addTo(this._map);
+        this._bringOverlayLayerToFront();
+        this._attachPopulationHover();
+        return;
+      }
+      if (typeof protomapsL !== 'undefined' && protomapsL.leafletLayer) {
+        const layerName = (CONFIG.POPULATION_LAYER_NAME && CONFIG.POPULATION_LAYER_NAME.trim()) || 'default';
+        const propName = (CONFIG.POPULATION_PROPERTY && CONFIG.POPULATION_PROPERTY.trim()) || 'Einwohner';
+        // Deutlicher Kontrast: 0 = sehr hell, hohe Werte = kräftig dunkel (log-Skala, stärkere Spreizung)
+        const popToRatio = function (pop) {
+          return Math.min(1, Math.pow(Math.log(1 + Math.max(0, pop)) / Math.log(1 + 2000), 0.7));
+        };
+        const fillByPopulation = function (z, f) {
+          const props = f && f.props ? f.props : {};
+          let pop = 0;
+          const v = props[propName] ?? props[propName.toLowerCase()];
+          if (typeof v === 'number') pop = v;
+          else if (typeof v === 'string') pop = parseFloat(v) || 0;
+          const ratio = popToRatio(pop);
+          const r = Math.round(255 - ratio * 245);
+          const g = Math.round(255 - ratio * 205);
+          const b = Math.round(255 - ratio * 135);
+          const a = 0.12 + ratio * 0.78;
+          return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+        };
+        const strokeByPopulation = function (z, f) {
+          const props = f && f.props ? f.props : {};
+          let pop = 0;
+          const v = props[propName] ?? props[propName.toLowerCase()];
+          if (typeof v === 'number') pop = v;
+          else if (typeof v === 'string') pop = parseFloat(v) || 0;
+          const ratio = popToRatio(pop);
+          const r = Math.round(200 - ratio * 80);
+          const g = Math.round(220 - ratio * 100);
+          const b = Math.round(240 - ratio * 100);
+          return 'rgba(' + r + ',' + g + ',' + b + ',0.2)';
+        };
+        const addLayer = function (maxDataZoom) {
+          try {
+            const opts = {
+              url: url,
+              maxDataZoom: maxDataZoom,
+              maxZoom: 22
+            };
+            if (protomapsL.PolygonSymbolizer) {
+              opts.paintRules = [{
+                dataLayer: layerName,
+                symbolizer: new protomapsL.PolygonSymbolizer({
+                  fill: fillByPopulation,
+                  stroke: strokeByPopulation,
+                  width: 0.8,
+                  perFeature: true
+                })
+              }];
+              opts.labelRules = [];
+            } else {
+              opts.flavor = opts.flavor || 'light';
+            }
+            const layer = protomapsL.leafletLayer(opts);
+            layer.addTo(this._map);
+            this._populationLayer = layer;
+            this._bringOverlayLayerToFront();
+            this._attachPopulationHover();
+          } catch (e) {
+            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
+          }
+        }.bind(this);
+        if (typeof PopulationService !== 'undefined' && PopulationService.getPopulationPMTilesMaxZoom) {
+          PopulationService.getPopulationPMTilesMaxZoom().then(function (maxDataZoom) {
+            const stillWanted = document.getElementById('config-population-layer-visible') && document.getElementById('config-population-layer-visible').checked;
+            if (this._map && !this._populationLayer && stillWanted) addLayer(maxDataZoom);
+          }.bind(this)).catch(function () {
+            const stillWanted = document.getElementById('config-population-layer-visible') && document.getElementById('config-population-layer-visible').checked;
+            if (this._map && !this._populationLayer && stillWanted) addLayer((typeof CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM === 'number') ? CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM : 14);
+          });
+        } else {
+          addLayer((typeof CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM === 'number') ? CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM : 14);
+        }
+      } else if (typeof Utils !== 'undefined' && Utils.showError) {
+        Utils.showError('Einwohnerlayer: protomaps-leaflet nicht geladen.', true);
+      }
+    } else {
+      this._setPopulationLegendVisible(false);
+      this._detachPopulationHover();
+      if (this._populationLayer) {
+        this._map.removeLayer(this._populationLayer);
+      }
+    }
+  },
+
+  _attachPopulationHover() {
+    if (!this._map || this._populationHoverAttached) return;
+    this._populationHoverAttached = true;
+    const self = this;
+    const onMove = function (e) {
+      if (self._populationHoverTimeout) clearTimeout(self._populationHoverTimeout);
+      self._populationHoverTimeout = setTimeout(function () {
+        self._populationHoverTimeout = null;
+        const latlng = e.latlng;
+        if (typeof PopulationService === 'undefined' || !PopulationService.getPopulationAtPoint) return;
+        PopulationService.getPopulationAtPoint(latlng.lat, latlng.lng).then(function (result) {
+          if (!self._map || !self._populationLayer) return;
+          if (!self._populationTooltip) {
+            self._populationTooltip = L.tooltip({
+              permanent: false,
+              direction: 'top',
+              opacity: 0.95,
+              className: 'population-tooltip'
+            });
+          }
+          if (result && result.population != null) {
+            if (!self._populationTooltip._map) self._populationTooltip.addTo(self._map);
+            self._populationTooltip.setLatLng(latlng);
+            self._populationTooltip.setContent('Einwohner: ' + result.population);
+          } else {
+            if (self._populationTooltip._map) self._populationTooltip.remove();
+          }
+        }).catch(function () {});
+      }, 80);
+    };
+    const onOut = function () {
+      if (self._populationTooltip && self._populationTooltip._map) self._populationTooltip.remove();
+    };
+    this._map.on('mousemove', onMove);
+    this._map.on('mouseout', onOut);
+    this._populationHoverHandler = onMove;
+    this._populationHoverOutHandler = onOut;
+  },
+
+  _renderPopulationLegend() {
+    const el = document.getElementById('population-legend');
+    if (!el) return;
+    const ticks = [0, 10, 50, 100, 500, 2000];
+    const popToRatio = function (pop) {
+      return Math.min(1, Math.pow(Math.log(1 + Math.max(0, pop)) / Math.log(1 + 2000), 0.7));
+    };
+    const fillForPop = function (pop) {
+      const ratio = popToRatio(pop);
+      const r = Math.round(255 - ratio * 245);
+      const g = Math.round(255 - ratio * 205);
+      const b = Math.round(255 - ratio * 135);
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    };
+    let html = '<div class="population-legend-bar">';
+    ticks.forEach(function (v) {
+      html += '<span class="population-legend-segment" style="background:' + fillForPop(v) + '" title="' + v + '"></span>';
+    });
+    html += '</div><div class="population-legend-labels">';
+    ticks.forEach(function (v) {
+      html += '<span class="population-legend-tick">' + v + '</span>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    el.setAttribute('aria-hidden', 'false');
+  },
+
+  _setPopulationLegendVisible(visible) {
+    const el = document.getElementById('population-legend');
+    if (!el) return;
+    el.style.display = visible ? 'block' : 'none';
+  },
+
+  _detachPopulationHover() {
+    if (this._populationHoverTimeout) {
+      clearTimeout(this._populationHoverTimeout);
+      this._populationHoverTimeout = null;
+    }
+    if (this._map) {
+      if (this._populationHoverHandler) {
+        this._map.off('mousemove', this._populationHoverHandler);
+        this._populationHoverHandler = null;
+      }
+      if (this._populationHoverOutHandler) {
+        this._map.off('mouseout', this._populationHoverOutHandler);
+        this._populationHoverOutHandler = null;
+      }
+    }
+    this._populationHoverAttached = false;
+    if (this._populationTooltip && this._populationTooltip._map) {
+      this._populationTooltip.remove();
+    }
+  },
+
   /**
    * Initialisiert die Karte
    */
@@ -64,6 +271,46 @@ const MapRenderer = {
     
     // Kontextmenü initialisieren
     this._initContextMenu();
+
+    // Einwohner-Bereich (Startpunkte gewichten + Layer anzeigen)
+    const populationWeightGroup = Utils.getElement('#population-weight-group');
+    const populationLayerCheckbox = Utils.getElement('#config-population-layer-visible');
+    const populationWeightCheckbox = Utils.getElement('#config-population-weight-starts');
+    if (CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim()) {
+      if (populationWeightGroup) populationWeightGroup.style.display = 'block';
+      this._renderPopulationLegend();
+      this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
+      if (populationLayerCheckbox) {
+        populationLayerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
+        populationLayerCheckbox.addEventListener('change', () => {
+          CONFIG.POPULATION_LAYER_VISIBLE = populationLayerCheckbox.checked;
+          this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
+        });
+        if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
+      }
+      // Beim Umschalten Einwohner-Gewichtung: Routen neu berechnen (wie bei Längenverteilung)
+      if (populationWeightCheckbox) {
+        populationWeightCheckbox.addEventListener('change', async () => {
+          const lastTarget = State.getLastTarget();
+          const lastStarts = State.getLastStarts();
+          if (!lastTarget || !lastStarts || lastStarts.length === 0 || isRememberMode()) return;
+          try {
+            MapRenderer.removePolylines(State.getRoutePolylines());
+            MapRenderer.clearRoutes();
+            State.setRoutePolylines([]);
+            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
+            if (routeInfo) {
+              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget);
+              EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
+            }
+          } catch (e) {
+            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
+          }
+        });
+      }
+    } else if (populationWeightGroup) {
+      populationWeightGroup.style.display = 'none';
+    }
     
     EventBus.emit(Events.MAP_READY);
   },

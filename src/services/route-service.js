@@ -28,19 +28,36 @@ const RouteService = {
       starts = State.getLastStarts();
       colors = State.getLastColors();
     } else {
-      // Verteilung: Option hat Priorität, sonst aktiver UI-Button, sonst Default
-      const distType = distributionType || 
-        (document.querySelector('.dist-btn.active')?.dataset.dist) || 
+      // Einwohner-Gewichtung: eigene Checkbox (unabhängig von Längenverteilung)
+      const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
+      const distType = distributionType ||
+        (document.querySelector('.dist-btn.active')?.dataset.dist) ||
         'lognormal';
-      const numBins = Math.min(15, CONFIG.N);
-      Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
-      
-      starts = Geo.generatePointsFromDistribution(
-        target[0], target[1], CONFIG.RADIUS_M, CONFIG.N
-      );
+
+      if (usePopulationWeight && CONFIG.POPULATION_PMTILES_URL) {
+        try {
+          starts = await (typeof PopulationService !== 'undefined' && PopulationService.getWeightedStartPoints
+            ? PopulationService.getWeightedStartPoints(target[0], target[1], CONFIG.RADIUS_M, CONFIG.N, distType)
+            : Promise.resolve([]));
+          if (!starts || starts.length === 0) {
+            Utils.showError('Keine Flächen mit Einwohnern im Radius. Bitte anderen Kartenbereich oder größeren Radius wählen.', true);
+            return null;
+          }
+        } catch (e) {
+          Utils.logError('RouteService', e);
+          Utils.showError('Einwohner-Layer fehlgeschlagen.', true);
+          return null;
+        }
+      } else {
+        const numBins = Math.min(15, CONFIG.N);
+        Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
+        starts = Geo.generatePointsFromDistribution(
+          target[0], target[1], CONFIG.RADIUS_M, CONFIG.N
+        );
+      }
+
       State.setLastStarts(starts);
-      
-      colors = Array.from({ length: CONFIG.N }, () => 
+      colors = Array.from({ length: CONFIG.N }, () =>
         `hsl(${Math.random() * 360}, 70%, 50%)`
       );
       State.setLastColors(colors);

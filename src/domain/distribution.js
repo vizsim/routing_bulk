@@ -1,5 +1,44 @@
 // ==== Verteilungsfunktionen ====
 const Distribution = {
+  /**
+   * Gibt das Distanz-Gewicht für einen einzelnen Abstand r (in m) zurück.
+   * Wird z. B. mit Einwohner-Gewichtung kombiniert: weight = population * getDistanceWeight(...).
+   * @param {string} type - 'lognormal' | 'uniform' | 'near' | 'far' | 'normal'
+   * @param {number} distanceM - Abstand in Metern
+   * @param {number} radiusM - Radius in Metern
+   * @returns {number} - nicht-negatives Gewicht (≥ 0)
+   */
+  getDistanceWeight(type, distanceM, radiusM) {
+    if (radiusM <= 0 || distanceM < 0) return 0;
+    const r = Math.min(distanceM, radiusM);
+    switch (type) {
+      case 'uniform':
+        return 1;
+      case 'near':
+        return Math.max(0.01, (radiusM - r) / radiusM);
+      case 'far':
+        return Math.max(0.01, r / radiusM);
+      case 'normal': {
+        const sigma = radiusM / 3;
+        const center = radiusM / 2;
+        const diff = r - center;
+        return Math.max(0.01, Math.exp(-(diff * diff) / (2 * sigma * sigma)));
+      }
+      case 'lognormal':
+      default: {
+        const mu = radiusM / 4;
+        const sigma = 2;
+        if (r <= 0.1) return 0.01;
+        const ratio = r / mu;
+        if (ratio <= 0) return 0.01;
+        const logX = Math.log(ratio);
+        const w = (1 / (r * sigma * Math.sqrt(2 * Math.PI))) *
+          Math.exp(-(logX * logX) / (2 * sigma * sigma));
+        return isFinite(w) && w > 0 ? Math.max(0.01, w) : 0.01;
+      }
+    }
+  },
+
   // Berechnet eine Verteilung für die gegebenen Parameter
   calculateDistribution(type, numBins, radiusM, totalPoints) {
     const binSize = radiusM / numBins;

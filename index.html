@@ -117,6 +117,24 @@
         </div>
         <canvas id="distance-histogram" width="250" height="120"></canvas>
       </div>
+      <div class="config-group config-group-with-border" id="population-weight-group" style="display: none;">
+        <label class="config-group-label">Einwohner (PMTiles)</label>
+        <div class="switch-toggle switch-toggle-small">
+          <label for="config-population-weight-starts">
+            <input type="checkbox" id="config-population-weight-starts" />
+            <span class="switch-slider"></span>
+          </label>
+          <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
+        </div>
+        <div class="switch-toggle switch-toggle-small">
+          <label for="config-population-layer-visible">
+            <input type="checkbox" id="config-population-layer-visible" />
+            <span class="switch-slider"></span>
+          </label>
+          <span class="switch-text">Einwohnerlayer anzeigen</span>
+        </div>
+        <div id="population-legend" class="population-legend" aria-hidden="true"></div>
+      </div>
       <div class="config-group config-group-with-border">
         <div class="switch-toggle">
           <label for="config-aggregated">
@@ -316,6 +334,9 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/pbf@3.2.1/dist/pbf.js"></script>
+  <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/protomaps-leaflet@2/dist/protomaps-leaflet.js"></script>
   
   <!-- Core -->
   <script src="src/core/utils.js"></script>
@@ -332,6 +353,7 @@
   <script src="src/services/aggregation-service.js"></script>
   <script src="src/services/target-service.js"></script>
   <script src="src/services/route-service.js"></script>
+  <script src="src/services/population-service.js"></script>
   <script src="src/services/export-service.js"></script>
   <script src="src/services/overpass-service.js"></script>
   

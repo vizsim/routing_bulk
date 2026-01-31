@@ -30,16 +30,15 @@ const DistributionSelector = {
    * @param {NodeList} allBtns - Alle Buttons
    */
   async _handleDistributionChange(clickedBtn, allBtns) {
-    // Alle Buttons deaktivieren
-    allBtns.forEach(b => b.classList.remove('active'));
-    // Aktiven Button aktivieren
-    clickedBtn.classList.add('active');
-    
     const distType = clickedBtn.dataset.dist;
     if (!distType) {
       Utils.logError('Distribution', 'Button hat kein data-dist Attribut');
       return;
     }
+
+    // Alle Buttons deaktivieren, aktiven aktivieren
+    allBtns.forEach(b => b.classList.remove('active'));
+    clickedBtn.classList.add('active');
     
     // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
     const selectedIndex = State.getSelectedTargetIndex();
@@ -47,46 +46,22 @@ const DistributionSelector = {
       return; // Früh beenden, nicht automatisch berechnen
     }
     
-    // Wenn Routen vorhanden sind, Verteilung aktualisieren
+    // Wenn Routen vorhanden sind, Verteilung aktualisieren und neu berechnen
     const lastTarget = State.getLastTarget();
     const lastStarts = State.getLastStarts();
     
     if (lastTarget && lastStarts && lastStarts.length > 0) {
       try {
-        // Berechne Verteilung basierend auf aktuellen Parametern
-        const numBins = Math.min(15, CONFIG.N);
-        Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
-        
-        // Neue Startpunkte generieren basierend auf der Verteilung
-        const newStarts = Geo.generatePointsFromDistribution(
-          lastTarget[0],
-          lastTarget[1],
-          CONFIG.RADIUS_M,
-          CONFIG.N
-        );
-        
-        // Startpunkte aktualisieren
-        State.setLastStarts(newStarts);
-        
-        // Routen neu berechnen (mit neuen Startpunkten)
-        // Alte Routen entfernen
         if (!isRememberMode()) {
           const routePolylines = State.getRoutePolylines();
           MapRenderer.removePolylines(routePolylines);
           MapRenderer.clearRoutes();
           State.setRoutePolylines([]);
         }
-        
         const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
         if (routeInfo) {
-          // Histogramm aktualisieren
-          Visualization.updateDistanceHistogram(newStarts, lastTarget);
-          
-          // Event emittieren, damit App die Visualisierung aktualisiert
-          EventBus.emit(Events.ROUTES_CALCULATED, { 
-            target: lastTarget, 
-            routeInfo 
-          });
+          Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget);
+          EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
         }
       } catch (error) {
         Utils.logError('Distribution', error);

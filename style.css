@@ -17,6 +17,46 @@ html, body {
   left: 10px;
 }
 
+/* Einwohner-Layer: Hover-Tooltip */
+.population-tooltip {
+  font-size: 13px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.population-tooltip::before {
+  border-bottom-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Einwohner-Layer: Legende / Colormap (nur sichtbar wenn Layer aktiv) */
+.population-legend {
+  display: none;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+.population-legend-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.population-legend-segment {
+  flex: 1;
+  min-width: 0;
+}
+.population-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #666;
+}
+.population-legend-tick {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
 /* ============================================
    LAYOUT - PANEL
    ============================================ */

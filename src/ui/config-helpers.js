@@ -53,6 +53,12 @@ function updateConfigFromUI() {
   if (rememberTargetsInput) {
     CONFIG.REMEMBER_TARGETS = rememberTargetsInput.checked;
   }
+
+  // Einwohnerlayer anzeigen
+  const populationLayerInput = Utils.getElement('#config-population-layer-visible');
+  if (populationLayerInput) {
+    CONFIG.POPULATION_LAYER_VISIBLE = populationLayerInput.checked;
+  }
 }
 
 /**
