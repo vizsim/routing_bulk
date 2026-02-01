@@ -49,6 +49,21 @@ const App = {
     
     // Initiale Button-Status setzen
     RouteHandler._updateExportButtonState();
+    
+    // Hinweis „Noch kein Ziel“ initial anzeigen/verstecken
+    this._updateNoTargetHint();
+    // Histogramm-Platzhalter anzeigen (keine Routen)
+    Visualization.updateDistanceHistogram([], null, {});
+  },
+  
+  /**
+   * Zeigt oder versteckt den Hinweis „Noch kein Ziel“ je nach Ziel-Status
+   */
+  _updateNoTargetHint() {
+    const hint = Utils.getElement('#no-target-hint');
+    if (!hint) return;
+    const hasTarget = State.getAllTargets().length > 0 || State.getLastTarget() !== null;
+    hint.classList.toggle('is-hidden', hasTarget);
   },
   
   /**
@@ -89,6 +104,7 @@ const App = {
       }
       // Liste aktualisieren
       TargetsList.update();
+      this._updateNoTargetHint();
     });
     
     // Target entfernt
@@ -101,6 +117,14 @@ const App = {
         EventBus.emit(Events.VISUALIZATION_UPDATE);
       }
       RouteHandler._updateExportButtonState();
+      this._updateNoTargetHint();
+      // Wenn keine Routen mehr: Histogramm-Platzhalter anzeigen
+      const hasRoutes = isRememberMode()
+        ? State.getTargetRoutes().length > 0
+        : State.getAllRouteData().length > 0;
+      if (!hasRoutes) {
+        Visualization.updateDistanceHistogram([], null, {});
+      }
     });
     
     // Visualization Update
@@ -632,6 +656,7 @@ const App = {
       State.setCurrentTargetMarker(marker);
     }
 
+    this._updateNoTargetHint();
     // Routen berechnen
     await RouteService.calculateRoutes(target);
   },
@@ -660,6 +685,7 @@ const App = {
       State.setCurrentTargetMarker(marker);
     }
     
+    this._updateNoTargetHint();
     // Routen berechnen
     await RouteService.calculateRoutes(target);
   },

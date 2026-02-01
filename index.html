@@ -24,28 +24,34 @@
           </svg>
         </button>
       </div>
-      <p class="panel-description">Klick in die Karte → Zufällige Startpunkte → Routen zum Ziel.</p>
+      <div id="no-target-hint" class="panel-hint panel-hint--no-target" role="status" aria-live="polite">
+        <p class="panel-hint-main">
+          <strong>Zielpunkt setzen</strong> Klick in die Karte → Es werden automatisch Startpunkte gewählt und Routen zum Ziel erstellt.
+        </p>
+        <p class="panel-hint-secondary">
+          Im Rechtsklick-Menü gibt es außerdem: Schulen suchen, ÖPNV-Haltestellen suchen.
+        </p>
+      </div>
     </div>
     <div class="panel-section">
-      <h4>Konfiguration</h4>
-      <div class="config-group">
-        <div class="switch-toggle">
-          <label for="config-remember-targets">
-            <input type="checkbox" id="config-remember-targets" />
-            <span class="switch-slider"></span>
-          </label>
-          <span class="switch-text">Zielpunkte merken</span>
+      <section class="config-block" aria-labelledby="block-einstellungen-heading">
+        <h4 id="block-einstellungen-heading" class="config-block-title">Einstellungen</h4>
+        <div class="config-group">
+          <div class="switch-toggle">
+            <label for="config-remember-targets">
+              <input type="checkbox" id="config-remember-targets" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Zielpunkte merken</span>
+            </label>
+          </div>
         </div>
-      </div>
-      <div class="config-group" id="targets-list-group" style="display: none;">
-        <label>Zielpunkte:</label>
-        <div id="targets-list" class="targets-list"></div>
-      </div>
-      <div class="config-separator"></div>
-
-      <div class="config-group">
-        <label>Profil:</label>
-        <div class="profile-buttons">
+        <div class="config-group" id="targets-list-group" style="display: none;">
+          <label>Zielpunkte:</label>
+          <div id="targets-list" class="targets-list"></div>
+        </div>
+        <div class="config-group">
+          <label>Profil:</label>
+          <div class="profile-buttons">
           <button id="profile-foot" class="profile-btn active" data-profile="foot" title="Fußgänger">
             <svg width="20" height="20" viewBox="0 0 59.351 59.351" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
               <path d="M16.113,51.517c-0.918,1.566-0.868,3.498,0.705,4.66c1.346,0.992,3.742,0.863,4.662-0.704
@@ -75,20 +81,20 @@
             </svg>
           </button>
         </div>
-      </div>
-      <div class="config-group config-group-inline">
-        <div class="config-field-half">
-          <label for="config-n">Anzahl Routen:</label>
-          <input type="number" id="config-n" min="1" max="1000" value="10" />
         </div>
-        <div class="config-field-half">
-          <label for="config-radius">Radius (km):</label>
-          <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
+        <div class="config-group config-group-inline">
+          <div class="config-field-half">
+            <label for="config-n">Anzahl Routen:</label>
+            <input type="number" id="config-n" min="1" max="1000" value="10" />
+          </div>
+          <div class="config-field-half">
+            <label for="config-radius">Radius (km):</label>
+            <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
+          </div>
         </div>
-      </div>
-      <div class="config-group">
-        <label>Längenverteilung (Beeline):</label>
-        <div class="distribution-buttons">
+        <div class="config-group">
+          <label>Längenverteilung (Beeline):</label>
+          <div class="distribution-buttons">
           <button class="dist-btn active" data-dist="lognormal" title="Lognormalverteilung">
             <svg width="20" height="12" viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
               <path d="M 5 55 C 7 15, 13 5, 19 18 C 28 35, 43 45, 68 52 C 83 55, 95 56, 98 56"></path>
@@ -123,8 +129,12 @@
           </div>
         </div>
         <canvas id="distance-histogram" width="250" height="120"></canvas>
-      </div>
-      <div class="config-group config-group-with-border" id="population-weight-group" style="display: none;">
+        </div>
+      </section>
+
+      <section class="config-block" aria-labelledby="block-darstellung-heading">
+        <h4 id="block-darstellung-heading" class="config-block-title">Darstellung & Export</h4>
+        <div class="config-group" id="population-weight-group" style="display: none;">
         <span class="config-group-label-row">
           <label class="config-group-label">Einwohner (Zensus 2022)</label>
           <span class="info-hint" role="img" aria-label="Quellenangabe">
@@ -136,76 +146,76 @@
           <label for="config-population-weight-starts">
             <input type="checkbox" id="config-population-weight-starts" checked />
             <span class="switch-slider"></span>
+            <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
           </label>
-          <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
         </div>
         <div class="switch-toggle switch-toggle-small">
           <label for="config-population-layer-visible">
             <input type="checkbox" id="config-population-layer-visible" />
             <span class="switch-slider"></span>
+            <span class="switch-text">Einwohnerlayer anzeigen</span>
           </label>
-          <span class="switch-text">Einwohnerlayer anzeigen</span>
         </div>
         <div id="population-legend" class="population-legend" aria-hidden="true"></div>
-      </div>
-      <div class="config-group config-group-with-border">
-        <div class="switch-toggle">
-          <label for="config-aggregated">
-            <input type="checkbox" id="config-aggregated" />
-            <span class="switch-slider"></span>
-          </label>
-          <span class="switch-text">Aggregierte Darstellung</span>
         </div>
-      </div>
-      <div class="config-group" id="aggregation-method-group" style="display: none;">
-        <label for="config-aggregation-method">Aggregierungs-Methode:</label>
-        <select id="config-aggregation-method">
-          <option value="simple">Einfach (schnell)</option>
-          <option value="lazyOverlap">Lazy Overlap Splitting (präzise)</option>
-        </select>
-      </div>
-      <div class="config-group" id="hide-start-points-group" style="display: none;">
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-hide-start-points">
-            <input type="checkbox" id="config-hide-start-points" />
-            <span class="switch-slider"></span>
-          </label>
-          <svg width="16" height="16" viewBox="0 0 16 16" style="margin: 0 0px; vertical-align: baseline; transform: translateY(2px); opacity: 0.7;">
-            <!-- Glow-Effekt (äußerer Ring, entspricht box-shadow) -->
-            <circle cx="8" cy="8" r="5.5" fill="#666" opacity="0.5" />
-            <!-- Hauptkreis mit grauer Farbe (entspricht background-color) -->
-            <circle cx="8" cy="8" r="4" fill="#666" />
-            <!-- Weißer Rand (entspricht border) -->
-            <circle cx="8" cy="8" r="3.25" fill="none" stroke="white" stroke-width="1.5" />
-          </svg>
-          <span class="switch-text">Startpunkte ausblenden</span>
+        <div class="config-group config-group-with-border">
+          <div class="switch-toggle">
+            <label for="config-aggregated">
+              <input type="checkbox" id="config-aggregated" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Aggregierte Darstellung</span>
+            </label>
+          </div>
         </div>
-      </div>
-      <div class="config-group" id="hide-target-points-group" style="display: none;">
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-hide-target-points">
-            <input type="checkbox" id="config-hide-target-points" />
-            <span class="switch-slider"></span>
-          </label>
-          <svg width="16" height="16" viewBox="0 0 16 16" style="margin: 0 0px; vertical-align: baseline; transform: translateY(2px); opacity: 0.7;">
-            <!-- Zielpunkt-Icon (Pin-Form, wie auf der Karte - Tropfenform) -->
-            <path d="M8 1.33c-2.76 0-5 2.24-5 5 0 4 5 5.67 5 5.67s5-1.67 5-5.67c0-2.76-2.24-5-5-5z" fill="#666" stroke="white" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- Inneres Symbol (Ziel-Symbol wie auf der Karte - Gebäude) -->
-            <g transform="translate(8, 5.5) scale(0.25)">
-              <!-- Vertikale Linie -->
-              <line x1="0" y1="24" x2="0" y2="0" stroke="white" stroke-width="3" stroke-linecap="round"/>
-              <!-- Äußeres Rechteck -->
-              <polyline points="-2,0 18,0 18,16 -2,16" stroke="white" stroke-width="1.5" fill="none"/>
-              <!-- Linkes gefülltes Rechteck -->
-              <rect x="-2" y="0" width="8" height="6" fill="white"/>
-              <!-- Rechtes gefülltes Rechteck -->
-              <rect x="12" y="8" width="6" height="6" fill="white"/>
-            </g>
-          </svg>
-          <span class="switch-text">Zielpunkte ausblenden</span>
+        <div class="config-group" id="aggregation-method-group" style="display: none;">
+          <label for="config-aggregation-method">Aggregierungs-Methode:</label>
+          <select id="config-aggregation-method">
+            <option value="simple">Einfach (schnell)</option>
+            <option value="lazyOverlap">Lazy Overlap Splitting (präzise)</option>
+          </select>
         </div>
-      </div>
-      <div id="legend" class="legend" style="display: none;">
+        <div class="config-group" id="hide-start-points-group" style="display: none;">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-hide-start-points">
+              <input type="checkbox" id="config-hide-start-points" />
+              <span class="switch-slider"></span>
+              <svg class="switch-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <!-- Glow-Effekt (äußerer Ring, entspricht box-shadow) -->
+                <circle cx="8" cy="8" r="5.5" fill="#666" opacity="0.5" />
+                <!-- Hauptkreis mit grauer Farbe (entspricht background-color) -->
+                <circle cx="8" cy="8" r="4" fill="#666" />
+                <!-- Weißer Rand (entspricht border) -->
+                <circle cx="8" cy="8" r="3.25" fill="none" stroke="white" stroke-width="1.5" />
+              </svg>
+              <span class="switch-text">Startpunkte ausblenden</span>
+            </label>
+          </div>
+        </div>
+        <div class="config-group" id="hide-target-points-group" style="display: none;">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-hide-target-points">
+              <input type="checkbox" id="config-hide-target-points" />
+              <span class="switch-slider"></span>
+              <svg class="switch-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <!-- Zielpunkt-Icon (Pin-Form, wie auf der Karte - Tropfenform) -->
+                <path d="M8 1.33c-2.76 0-5 2.24-5 5 0 4 5 5.67 5 5.67s5-1.67 5-5.67c0-2.76-2.24-5-5-5z" fill="#666" stroke="white" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Inneres Symbol (Ziel-Symbol wie auf der Karte - Gebäude) -->
+                <g transform="translate(8, 5.5) scale(0.25)">
+                  <!-- Vertikale Linie -->
+                  <line x1="0" y1="24" x2="0" y2="0" stroke="white" stroke-width="3" stroke-linecap="round"/>
+                  <!-- Äußeres Rechteck -->
+                  <polyline points="-2,0 18,0 18,16 -2,16" stroke="white" stroke-width="1.5" fill="none"/>
+                  <!-- Linkes gefülltes Rechteck -->
+                  <rect x="-2" y="0" width="8" height="6" fill="white"/>
+                  <!-- Rechtes gefülltes Rechteck -->
+                  <rect x="12" y="8" width="6" height="6" fill="white"/>
+                </g>
+              </svg>
+              <span class="switch-text">Zielpunkte ausblenden</span>
+            </label>
+          </div>
+        </div>
+        <div id="legend" class="legend" style="display: none;">
         <div class="legend-title">Anzahl Routen</div>
         <div class="legend-gradient">
           <div class="legend-gradient-bar" id="legend-gradient-bar"></div>
@@ -228,10 +238,12 @@
             <div class="colormap-preview-bar" id="colormap-preview-magma_r"></div>
           </div>
         </div>
-      </div>
-      <div class="config-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
-        <button id="export-btn" class="export-button" disabled>Routen als GeoJSON exportieren</button>
-      </div>
+        </div>
+        <div class="config-group config-group-export">
+          <button id="export-btn" class="export-button" disabled>Routen als GeoJSON exportieren</button>
+        </div>
+      </section>
+
       <div class="github-links">
         <img src="https://img.shields.io/badge/Status-Experimental-red" alt="Status: Experimental" class="status-badge">
         <div style="flex: 1;"></div>

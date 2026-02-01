@@ -109,6 +109,9 @@ const RouteHandler = {
       ? State.getTargetRoutes().length > 0
       : State.getAllRouteData().length > 0;
     exportBtn.disabled = !hasRoutes;
+    exportBtn.title = hasRoutes
+      ? 'Routen als GeoJSON herunterladen'
+      : 'Zuerst Routen berechnen';
   }
 };
 

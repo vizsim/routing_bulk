@@ -1,6 +1,37 @@
 // ==== Histogram-Renderer: Distanz-Histogramm ====
 const HistogramRenderer = {
   /**
+   * Zeigt Platzhalter-Text, wenn noch keine Routen vorhanden sind.
+   * @param {HTMLCanvasElement} canvas
+   */
+  _drawPlaceholder(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const baseWidth = 250;
+    const baseHeight = 120;
+    canvas.width = baseWidth * dpr;
+    canvas.height = baseHeight * dpr;
+    canvas.style.width = baseWidth + 'px';
+    canvas.style.height = baseHeight + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, baseWidth, baseHeight);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
+    ctx.fillStyle = '#888';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const lines = ['Keine Routen.', 'Zuerst Ziel setzen und Karte anklicken.'];
+    const lineHeight = 16;
+    const startY = (baseHeight - (lines.length - 1) * lineHeight) / 2;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, baseWidth / 2, startY + i * lineHeight);
+    });
+  },
+
+  /**
    * Aktualisiert das Distanz-Histogramm (Beeline oder echte Routenlänge).
    * @param {Array<Array<number>>} starts - Array von [lat, lng] Startpunkten
    * @param {Array<number>} target - [lat, lng] Zielpunkt
@@ -9,6 +40,11 @@ const HistogramRenderer = {
   updateDistanceHistogram(starts, target, options = {}) {
     const canvas = document.getElementById('distance-histogram');
     if (!canvas) return;
+
+    if (!starts || starts.length === 0) {
+      this._drawPlaceholder(canvas);
+      return;
+    }
 
     const modeBtn = document.querySelector('.histogram-mode-btn.active');
     const isRouteMode = modeBtn && modeBtn.dataset.mode === 'route';
