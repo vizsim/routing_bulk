@@ -265,18 +265,32 @@ const MapRenderer = {
       EventBus.emit(Events.MAP_CLICK, { latlng: e.latlng });
     });
     
-    // Zoom-Event: Schul- und Haltestellen-Icons aktualisieren (mit Debouncing für bessere Performance)
+    // Nach Kartenbewegung/Zoom: Marker-Positionen neu berechnen (Fix für Mobile Pinch-Zoom).
+    // Günstig: nur Projektion + style setzen pro Marker, läuft nur 1× pro Geste (debounced).
+    const syncMarkerPositions = () => {
+      const startMarkers = State.getStartMarkers() || [];
+      const targetMarkers = State.getTargetMarkers() || [];
+      if (startMarkers.length === 0 && targetMarkers.length === 0 && !State.getCurrentTargetMarker()) return;
+      const update = (m) => { if (m && typeof m._updatePosition === 'function') m._updatePosition(); };
+      startMarkers.forEach(update);
+      targetMarkers.forEach(update);
+      const currentTargetMarker = State.getCurrentTargetMarker();
+      if (currentTargetMarker && !targetMarkers.includes(currentTargetMarker)) update(currentTargetMarker);
+    };
+
+    // Zoom-Event: Schul- und Haltestellen-Icons aktualisieren + Marker-Positionen synchronisieren (Debounce)
     let zoomUpdateTimeout = null;
-    map.on("zoomend", () => {
-      // Debounce: Warte 100ms nach dem letzten Zoom-Event
-      if (zoomUpdateTimeout) {
-        clearTimeout(zoomUpdateTimeout);
-      }
+    const onViewChange = () => {
+      if (zoomUpdateTimeout) clearTimeout(zoomUpdateTimeout);
       zoomUpdateTimeout = setTimeout(() => {
+        zoomUpdateTimeout = null;
+        syncMarkerPositions();
         Visualization.updateSchoolIcons();
         Visualization.updatePlatformIcons();
       }, 100);
-    });
+    };
+    map.on("zoomend", onViewChange);
+    map.on("moveend", onViewChange);
     
     // Kontextmenü initialisieren
     this._initContextMenu();

@@ -55,24 +55,19 @@ const HistogramRenderer = {
     
     const maxCount = Math.max(...bins);
     
-    // Berechne erwartete Verteilung basierend auf ausgewählter Verteilung (nur bei Längenverteilung, nicht bei Einwohner-Gewichtung)
-    const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
+    // Erwartete Verteilung: immer die gewählte Längenverteilung als Linie anzeigen (auch bei Einwohner-Gewichtung)
     const activeDistBtn = document.querySelector('.dist-btn.active');
     const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
     const totalPoints = distances.length;
-    let expectedBins;
+    const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
 
+    let expectedBins;
     if (usePopulationWeight) {
-      expectedBins = new Array(numBins).fill(0); // Keine erwartete Kurve bei Einwohner-Gewichtung
+      expectedBins = Distribution.calculateDistribution(distType, numBins, maxDist, totalPoints);
     } else {
       expectedBins = State.getExpectedDistribution();
       if (!expectedBins || expectedBins.length !== numBins) {
-        expectedBins = Distribution.calculateDistribution(
-          distType,
-          numBins,
-          maxDist,
-          totalPoints
-        );
+        expectedBins = Distribution.calculateDistribution(distType, numBins, maxDist, totalPoints);
         State.setExpectedDistribution(expectedBins);
       }
     }
