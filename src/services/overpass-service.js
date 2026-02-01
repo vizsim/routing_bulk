@@ -73,10 +73,10 @@ const OverpassService = {
    * Sucht Schulen im Umkreis einer Position
    * @param {number} lat - Breitengrad
    * @param {number} lng - Längengrad
-   * @param {number} radius - Radius in Metern (Standard: 500)
+   * @param {number} radius - Radius in Metern (Standard: 1000)
    * @returns {Promise<Array>} Array von Schul-Objekten mit {id, type, lat, lng, coordinates, name, tags}
    */
-  async searchSchools(lat, lng, radius = 500) {
+  async searchSchools(lat, lng, radius = 1000) {
     // Overpass QL Query für Schulen
     // Wir brauchen die vollständige Geometrie für Ways und Center für Relations
     const query = `
@@ -207,10 +207,10 @@ const OverpassService = {
    * Sucht ÖPNV-Haltestellen (public_transport=platform) im Umkreis einer Position
    * @param {number} lat - Breitengrad
    * @param {number} lng - Längengrad
-   * @param {number} radius - Radius in Metern (Standard: 500)
+   * @param {number} radius - Radius in Metern (Standard: 1000)
    * @returns {Promise<Array>} Array von Haltestellen-Objekten mit {id, type, lat, lng, coordinates, name, tags}
    */
-  async searchPublicTransportPlatforms(lat, lng, radius = 500) {
+  async searchPublicTransportPlatforms(lat, lng, radius = 1000) {
     // Overpass QL Query für ÖPNV-Haltestellen
     // Wir brauchen die vollständige Geometrie für Ways und Center für Relations
     const query = `

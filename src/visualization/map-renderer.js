@@ -45,6 +45,8 @@ const MapRenderer = {
         const popToRatio = function (pop) {
           return Math.min(1, Math.pow(Math.log(1 + Math.max(0, pop)) / Math.log(1 + 2000), 0.7));
         };
+        // Alpha-Bereich für Layer: transparenter (0.06 … 0.5), Legende nutzt dieselbe Formel
+        const populationAlpha = function (ratio) { return 0.06 + ratio * 0.44; };
         const fillByPopulation = function (z, f) {
           const props = f && f.props ? f.props : {};
           let pop = 0;
@@ -55,7 +57,7 @@ const MapRenderer = {
           const r = Math.round(255 - ratio * 245);
           const g = Math.round(255 - ratio * 205);
           const b = Math.round(255 - ratio * 135);
-          const a = 0.12 + ratio * 0.78;
+          const a = populationAlpha(ratio);
           return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
         };
         const strokeByPopulation = function (z, f) {
@@ -68,7 +70,7 @@ const MapRenderer = {
           const r = Math.round(200 - ratio * 80);
           const g = Math.round(220 - ratio * 100);
           const b = Math.round(240 - ratio * 100);
-          return 'rgba(' + r + ',' + g + ',' + b + ',0.2)';
+          return 'rgba(' + r + ',' + g + ',' + b + ',0.12)';
         };
         const addLayer = function (maxDataZoom) {
           try {
@@ -172,12 +174,15 @@ const MapRenderer = {
     const popToRatio = function (pop) {
       return Math.min(1, Math.pow(Math.log(1 + Math.max(0, pop)) / Math.log(1 + 2000), 0.7));
     };
+    // Gleiche Alpha-Formel wie beim Einwohner-Layer (transparenter Bereich)
+    const populationAlpha = function (ratio) { return 0.06 + ratio * 0.44; };
     const fillForPop = function (pop) {
       const ratio = popToRatio(pop);
       const r = Math.round(255 - ratio * 245);
       const g = Math.round(255 - ratio * 205);
       const b = Math.round(255 - ratio * 135);
-      return 'rgb(' + r + ',' + g + ',' + b + ')';
+      const a = populationAlpha(ratio);
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
     };
     let html = '<div class="population-legend-bar">';
     ticks.forEach(function (v) {
@@ -394,7 +399,7 @@ const MapRenderer = {
           Visualization.clearSchoolSearchRadius();
           
           // Radius für Suche (500m)
-          const searchRadius = 500;
+          const searchRadius = 1000;
           
           // Radius-Kreis anzeigen
           Visualization.drawSchoolSearchRadius(
@@ -476,7 +481,7 @@ const MapRenderer = {
           Visualization.clearPlatformSearchRadius();
           
           // Radius für Suche (500m)
-          const searchRadius = 500;
+          const searchRadius = 1000;
           
           // Radius-Kreis anzeigen
           Visualization.drawPlatformSearchRadius(
