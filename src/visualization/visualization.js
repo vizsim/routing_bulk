@@ -272,7 +272,7 @@ const Visualization = {
           config: routeInfo.config
         };
         State.setTargetRoutes(targetRoutes);
-        
+
         // Startpunkte für diesen Zielpunkt anzeigen (nach dem Draggen)
         if (routeInfo.starts && routeInfo.colors) {
           Visualization.drawStartPoints(routeInfo.starts, routeInfo.colors, newTarget);
@@ -289,7 +289,7 @@ const Visualization = {
         
         // Histogramm aktualisieren
         if (routeInfo.starts && routeInfo.starts.length > 0) {
-          Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
+          Visualization.updateDistanceHistogram(routeInfo.starts, newTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
         }
       }
     }
@@ -313,7 +313,7 @@ const Visualization = {
     if (routeInfo) {
       // Histogramm aktualisieren
       if (routeInfo.starts && routeInfo.starts.length > 0) {
-        Visualization.updateDistanceHistogram(routeInfo.starts, newTarget);
+        Visualization.updateDistanceHistogram(routeInfo.starts, newTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
       }
     }
   },
@@ -424,9 +424,9 @@ const Visualization = {
     }
   },
   
-  // Delegiert an HistogramRenderer
-  updateDistanceHistogram(starts, target) {
-    return HistogramRenderer.updateDistanceHistogram(starts, target);
+  // Delegiert an HistogramRenderer (options.routeData für echte Routenlänge)
+  updateDistanceHistogram(starts, target, options = {}) {
+    return HistogramRenderer.updateDistanceHistogram(starts, target, options);
   },
   
   toggleStartPointsVisibility() {
@@ -665,7 +665,17 @@ const Visualization = {
               : State.getLastStarts();
             
             if (updatedStarts) {
-              Visualization.updateDistanceHistogram(updatedStarts, targetForRoute);
+              const routeDataForTarget = (() => {
+                const targetRoutes = State.getTargetRoutes();
+                const tr = targetRoutes.find(t => TargetService.isEqual(t.target, targetForRoute));
+                return tr ? tr.routeData : State.getAllRouteData();
+              })();
+              const routeDistancesForTarget = (() => {
+                const targetRoutes = State.getTargetRoutes();
+                const tr = targetRoutes.find(t => TargetService.isEqual(t.target, targetForRoute));
+                return tr ? RouteService.getRouteDistances(tr) : [];
+              })();
+              Visualization.updateDistanceHistogram(updatedStarts, targetForRoute, { routeData: routeDataForTarget, routeDistances: routeDistancesForTarget });
             }
           }
           } catch (routeErr) {
@@ -803,7 +813,7 @@ const Visualization = {
       this.drawStartPoints(routeInfo.starts, routeInfo.colors, target);
       // Histogramm aktualisieren
       if (routeInfo.starts.length > 0) {
-        HistogramRenderer.updateDistanceHistogram(routeInfo.starts, target);
+        HistogramRenderer.updateDistanceHistogram(routeInfo.starts, target, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
       }
     }
   },

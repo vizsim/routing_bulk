@@ -50,6 +50,18 @@ const API = {
 
     // GraphHopper gibt [lon, lat] zurück, konvertiere zu [lat, lon]
     return coords.map(([lon, lat]) => [lat, lon]);
+  },
+
+  /**
+   * Liest die Routenlänge in Metern aus der GraphHopper-Response (paths[0].distance).
+   * @param {Object} ghResponse - Response von POST /route
+   * @returns {number|null} - Distanz in Metern oder null
+   * @see https://docs.graphhopper.com/openapi/routing/postroute
+   */
+  extractRouteDistance(ghResponse) {
+    const path = ghResponse.paths?.[0];
+    if (path == null || typeof path.distance !== 'number') return null;
+    return path.distance;
   }
 };
 

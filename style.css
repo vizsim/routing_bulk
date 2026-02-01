@@ -398,6 +398,53 @@ html, body {
    HISTOGRAM
    ============================================ */
 
+.histogram-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.histogram-mode-label {
+  font-size: 13px;
+  color: #444;
+  flex-shrink: 0;
+}
+
+.histogram-mode-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.histogram-mode-btn {
+  flex: 1;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+}
+
+.histogram-mode-btn:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.histogram-mode-btn.active {
+  border-color: #0066ff;
+  background: #0066ff;
+  color: white;
+}
+
+.histogram-mode-btn[data-mode="route"].active {
+  border-color: #0a7d3a;
+  background: #0a7d3a;
+}
+
 #distance-histogram {
   width: 100%;
   height: 120px;
@@ -727,6 +774,12 @@ html, body {
 /* ============================================
    TOOLTIPS
    ============================================ */
+
+.route-distance-tooltip {
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
 
 .aggregated-route-tooltip {
   background-color: rgba(0, 0, 0, 0.8);

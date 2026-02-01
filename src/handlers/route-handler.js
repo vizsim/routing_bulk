@@ -42,7 +42,7 @@ const RouteHandler = {
     
     // Histogramm aktualisieren
     if (routeInfo.starts && target && routeInfo.starts.length > 0) {
-      Visualization.updateDistanceHistogram(routeInfo.starts, target);
+      Visualization.updateDistanceHistogram(routeInfo.starts, target, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
     }
     
     // Export-Button aktualisieren

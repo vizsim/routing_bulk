@@ -156,6 +156,9 @@ const App = {
     
     // Längenverteilungs-Buttons
     DistributionSelector.init();
+
+    // Histogramm-Modus: Beeline vs. Echte Routenlänge
+    this._setupHistogramModeButtons();
     
     // Colormap-Selector
     ColormapSelector.init();
@@ -209,6 +212,21 @@ const App = {
         
         // Nur wenn kein Zielpunkt ausgewählt ist, sofort umsetzen
         EventBus.emit(Events.CONFIG_PROFILE_CHANGED, { profile: CONFIG.PROFILE });
+      });
+    });
+  },
+
+  /**
+   * Histogramm-Modus: Beeline vs. Echte Routenlänge
+   */
+  _setupHistogramModeButtons() {
+    const btns = Utils.getElements('.histogram-mode-btn');
+    if (!btns || btns.length === 0) return;
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._refreshHistogram();
       });
     });
   },
@@ -325,7 +343,7 @@ const App = {
     
     // Histogramm aktualisieren
     if (routeInfo.starts && routeInfo.starts.length > 0) {
-      Visualization.updateDistanceHistogram(routeInfo.starts, target);
+      Visualization.updateDistanceHistogram(routeInfo.starts, target, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
     }
     
     // Panel aktualisieren (damit Config-Informationen angezeigt werden)
@@ -654,11 +672,23 @@ const App = {
   },
   
   /**
-   * Histogramm aktualisieren
+   * Histogramm mit aktuellem State neu zeichnen (z. B. nach Modus-Umschaltung)
+   */
+  _refreshHistogram() {
     const lastTarget = State.getLastTarget();
     if (lastTarget) {
       const updatedStarts = State.getLastStarts();
-      Visualization.updateDistanceHistogram(updatedStarts, lastTarget);
+      let routeData = State.getAllRouteData();
+      let routeDistances = (State.getAllRouteResponses?.() || []).map(r => r?.distance ?? 0);
+      const targetRoutes = State.getTargetRoutes();
+      if (targetRoutes && targetRoutes.length > 0) {
+        const tr = targetRoutes.find(t => TargetService.isEqual(t.target, lastTarget));
+        if (tr) {
+          if (tr.routeData) routeData = tr.routeData;
+          routeDistances = RouteService.getRouteDistances(tr);
+        }
+      }
+      Visualization.updateDistanceHistogram(updatedStarts, lastTarget, { routeData: routeData || [], routeDistances });
     }
   },
   

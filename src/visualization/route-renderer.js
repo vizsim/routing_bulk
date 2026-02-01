@@ -1,12 +1,27 @@
 // ==== Route-Renderer: Route-Visualisierung ====
 const RouteRenderer = {
   /**
-   * Zeichnet eine einzelne Route
+   * Formatiert Distanz in Metern für Anzeige (z. B. "1,8 km" oder "450 m").
+   * @param {number} meters
+   * @returns {string}
+   */
+  _formatDistance(meters) {
+    if (meters >= 1000) {
+      const km = meters / 1000;
+      return km % 1 === 0 ? `${km.toFixed(0)} km` : `${km.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+    }
+    return `${Math.round(meters)} m`;
+  },
+
+  /**
+   * Zeichnet eine einzelne Route (mit Hover-Tooltip für Routenlänge).
+   * Nutzt distanceM wenn übergeben (bereits aus GraphHopper), sonst einmalig aus Response.
    * @param {Object} ghResponse - GraphHopper Response
    * @param {string} color - Farbe
+   * @param {number} [distanceM] - Routenlänge in m (aus paths[].distance), optional
    * @returns {L.Polyline|null} - Polyline oder null
    */
-  drawRoute(ghResponse, color) {
+  drawRoute(ghResponse, color, distanceM) {
     const latlngs = API.extractRouteCoordinates(ghResponse);
     if (!latlngs) {
       return null;
@@ -17,13 +32,23 @@ const RouteRenderer = {
       console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
       return null;
     }
-    
-    const polyline = L.polyline(latlngs, { 
-      weight: 3, 
-      opacity: 0.8, 
+
+    const distance = distanceM ?? API.extractRouteDistance(ghResponse);
+
+    const polyline = L.polyline(latlngs, {
+      weight: 3,
+      opacity: 0.8,
       color: color
     }).addTo(layerGroup);
-    
+
+    if (distance != null && distance > 0) {
+      polyline.bindTooltip(this._formatDistance(distance), {
+        permanent: false,
+        direction: 'top',
+        className: 'route-distance-tooltip'
+      });
+    }
+
     return polyline;
   },
   
@@ -119,7 +144,7 @@ const RouteRenderer = {
         
         routeInfo.routeResponses.forEach((routeResponse, index) => {
           if (routeResponse && routeResponse.response) {
-            const polyline = this.drawRoute(routeResponse.response, routeResponse.color);
+            const polyline = this.drawRoute(routeResponse.response, routeResponse.color, routeResponse.distance ?? undefined);
             if (polyline) {
               routeInfo.routePolylines[index] = polyline;
             }
@@ -154,7 +179,7 @@ const RouteRenderer = {
       const routePolylines = [];
       routeResponses.forEach((routeInfo, index) => {
         if (routeInfo && routeInfo.response) {
-          const polyline = this.drawRoute(routeInfo.response, routeInfo.color || colors[index]);
+          const polyline = this.drawRoute(routeInfo.response, routeInfo.color || colors[index], routeInfo.distance ?? undefined);
           routePolylines[index] = polyline;
         }
       });

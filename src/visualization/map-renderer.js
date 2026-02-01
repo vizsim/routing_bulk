@@ -323,7 +323,7 @@ const MapRenderer = {
             State.setRoutePolylines([]);
             const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
             if (routeInfo) {
-              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget);
+              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
               EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
             }
           } catch (e) {

@@ -38,6 +38,22 @@ const Geo = {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   },
+
+  /**
+   * Berechnet die echte Routenlänge in Metern aus einer Koordinatenfolge [lat, lon][].
+   * @param {Array<Array<number>>} coords - Array von [lat, lon]
+   * @returns {number} Länge in Metern
+   */
+  routeLengthMeters(coords) {
+    if (!coords || coords.length < 2) return 0;
+    let sum = 0;
+    for (let i = 1; i < coords.length; i++) {
+      const [lat1, lon1] = coords[i - 1];
+      const [lat2, lon2] = coords[i];
+      sum += this.distanceMeters(lat1, lon1, lat2, lon2);
+    }
+    return sum;
+  },
   
   // Generiert einen Punkt in einer bestimmten Distanz vom Zielpunkt
   pointAtDistance(lat, lon, distanceM, angleRad) {

@@ -91,22 +91,23 @@ const RouteService = {
         ok++;
         
         const coords = API.extractRouteCoordinates(r);
+        const distance = API.extractRouteDistance(r);
         if (coords) {
           allRouteData.push(coords);
-          allRouteResponses.push({ response: r, color: colors[i], index: i });
+          allRouteResponses.push({ response: r, color: colors[i], index: i, distance: distance ?? null });
         } else {
           allRouteResponses.push(null);
         }
       }
-      
+
       // State aktualisieren
       State.setAllRouteData(allRouteData);
       State.setAllRouteResponses(allRouteResponses);
-      
+
       // Verteilungstyp ermitteln (für spätere Wiederherstellung)
       const activeDistBtn = document.querySelector('.dist-btn.active');
       const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
-      
+
       const routeInfo = {
         routeData: allRouteData,
         routeResponses: allRouteResponses,
@@ -145,6 +146,16 @@ const RouteService = {
     }
   },
   
+  /**
+   * Liefert die Routenlängen in Metern aus routeInfo (aus GraphHopper paths[].distance).
+   * Einzige Quelle: routeResponse.distance, kein doppeltes Berechnen.
+   * @param {{ routeResponses?: Array<{ distance?: number|null }> }} routeInfo
+   * @returns {number[]}
+   */
+  getRouteDistances(routeInfo) {
+    return (routeInfo?.routeResponses || []).map(r => r?.distance ?? 0);
+  },
+
   /**
    * Gibt alle Routen-Daten für alle Zielpunkte zurück
    * @returns {Array} - Array von routeData-Arrays
@@ -185,7 +196,8 @@ const RouteService = {
             allRouteData[index] = coords;
           }
           if (allRouteResponses[index] !== undefined) {
-            allRouteResponses[index] = { response: result, color: colors[index], index: index };
+            const distance = API.extractRouteDistance(result);
+            allRouteResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null };
           }
           
           State.setAllRouteData(allRouteData);
@@ -204,7 +216,8 @@ const RouteService = {
                 routeInfo.routeData[index] = coords;
               }
               if (routeInfo.routeResponses && routeInfo.routeResponses[index] !== undefined) {
-                routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index };
+                const distance = API.extractRouteDistance(result);
+                routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null };
               }
               State.setTargetRoutes(targetRoutes);
             }
