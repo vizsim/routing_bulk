@@ -56,3 +56,5 @@ logs/
 schrott/
 
 *.parquet
+*.pmtiles
+*.fgb

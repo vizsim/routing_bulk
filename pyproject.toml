@@ -1,0 +1,10 @@
+[project]
+name = "routing-bulk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas>=1.1.2",
+    "pyarrow>=23.0.0",
+]
