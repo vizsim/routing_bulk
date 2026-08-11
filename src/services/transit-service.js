@@ -58,6 +58,76 @@ export function decodePolyline(str, precision = 7) {
   return coords;
 }
 
+/** Haversine-Distanz zweier [lat,lng]-Punkte in Metern. */
+function distMeters(a, b) {
+  const R = 6371000;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/** Sprünge größer als das gelten als Naht zwischen Teilstücken der Leg-Geometrie. */
+const SEAM_JUMP_M = 120;
+
+/**
+ * Repariert eine Leg-Geometrie. MOTIS liefert (v.a. für `direct`-Verbindungen
+ * bei arriveBy) die Polyline teils als Teilstücke in falscher Reihenfolge und
+ * Orientierung, verbunden durch Luftlinien-Sprünge — auf der Karte ergibt das
+ * Geraden quer über die Blöcke. Vorgehen: an den Sprung-Nähten auftrennen und
+ * die Teilstücke vom Leg-Start aus gierig zu einer durchgehenden Kette
+ * zusammensetzen (Teilstücke werden bei Bedarf umgedreht). Für saubere
+ * Geometrien ist das ein No-Op (ein Teilstück, richtige Orientierung).
+ * @param {Array<[lat,lng]>} coords
+ * @param {{lat:number, lon:number}} [from] - Start des Legs
+ */
+function stitchLegGeometry(coords, from) {
+  if (!coords || coords.length < 2) return coords;
+
+  // An Nähten in Teilstücke schneiden
+  const chunks = [];
+  let current = [coords[0]];
+  for (let i = 1; i < coords.length; i++) {
+    if (distMeters(coords[i - 1], coords[i]) > SEAM_JUMP_M) {
+      if (current.length >= 2) chunks.push(current);
+      current = [coords[i]];
+    } else {
+      current.push(coords[i]);
+    }
+  }
+  if (current.length >= 2) chunks.push(current);
+  if (chunks.length <= 1) {
+    // Höchstens Orientierung korrigieren
+    const chunk = chunks[0] || coords;
+    if (from && distMeters(chunk[chunk.length - 1], [from.lat, from.lon]) <
+                distMeters(chunk[0], [from.lat, from.lon])) {
+      return [...chunk].reverse();
+    }
+    return chunk;
+  }
+
+  // Gierige Kette: immer das Teilstück anschließen, dessen (ggf. umgedrehtes)
+  // Ende der aktuellen Position am nächsten liegt
+  let pos = from ? [from.lat, from.lon] : chunks[0][0];
+  const out = [];
+  const remaining = [...chunks];
+  while (remaining.length) {
+    let bestIdx = 0, bestReversed = false, bestDist = Infinity;
+    remaining.forEach((chunk, i) => {
+      const dHead = distMeters(chunk[0], pos);
+      const dTail = distMeters(chunk[chunk.length - 1], pos);
+      if (dHead < bestDist) { bestDist = dHead; bestIdx = i; bestReversed = false; }
+      if (dTail < bestDist) { bestDist = dTail; bestIdx = i; bestReversed = true; }
+    });
+    const chunk = remaining.splice(bestIdx, 1)[0];
+    const oriented = bestReversed ? [...chunk].reverse() : chunk;
+    out.push(...oriented);
+    pos = oriented[oriented.length - 1];
+  }
+  return out;
+}
+
 /** Luftlinien-Länge einer [lat,lng]-Koordinatenfolge in Metern (für fehlende Leg-Distanzen). */
 function coordsLengthMeters(coords) {
   const R = 6371000;
@@ -148,9 +218,10 @@ export const TransitService = {
   /** MOTIS-Itinerary -> GH-förmige Response (+ __transit mit Leg-Details). */
   _normalize(itinerary) {
     const legs = itinerary.legs.map(leg => {
-      const geometry = leg.legGeometry && leg.legGeometry.points
+      let geometry = leg.legGeometry && leg.legGeometry.points
         ? decodePolyline(leg.legGeometry.points, leg.legGeometry.precision ?? 7)
         : [];
+      geometry = stitchLegGeometry(geometry, leg.from);
       return {
         mode: leg.mode,
         route: leg.routeShortName || null,
