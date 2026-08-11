@@ -16,6 +16,11 @@ export const AnalysisPanel = {
   _facilities: [],
   // Bearbeitbare Kopie der Typ-Defaults (Radius + Split je Typ)
   _typeSettings: null,
+  // Raumtyp/Gemeinde des Bereichs (RegioStaR7 aus den Zensus-Zellen)
+  _areaContext: null,
+  // Sobald der Nutzer einen Split angefasst hat, wird der RegioStaR7-Vorschlag
+  // nicht mehr automatisch angewendet (nur noch per Knopf)
+  _splitsEdited: false,
 
   init() {
     this._typeSettings = JSON.parse(JSON.stringify(FACILITY_TYPES));
@@ -109,7 +114,14 @@ export const AnalysisPanel = {
     group.style.display = 'block';
     listEl.innerHTML = '<div class="config-hint">Suche Einrichtungen im Bereich…</div>';
 
-    this._facilities = await AnalysisService.findFacilities(this._polygon);
+    // Einrichtungen (schools.pmtiles) und Raumtyp (Zensus) parallel laden
+    const [facilities, areaContext] = await Promise.all([
+      AnalysisService.findFacilities(this._polygon),
+      AnalysisService.getAreaContext(this._polygon).catch(() => null)
+    ]);
+    this._facilities = facilities;
+    this._areaContext = areaContext;
+    AnalysisService.areaContext = areaContext;
     MapRenderer.setAnalysisFacilities(this._facilities, {
       onHover: (index) => this._highlightRow(index)
     });
@@ -150,10 +162,49 @@ export const AnalysisPanel = {
       });
     });
 
+    // Split-Vorschlag nach Raumtyp anwenden — aber nur, solange der Nutzer
+    // die Splits noch nicht selbst angefasst hat
+    if (!this._splitsEdited) this._applySplitSuggestion();
     this._renderTypeSettings();
+    this._renderAreaContext();
     Utils.getElement('#analysis-settings-group').style.display = 'block';
     Utils.getElement('#analysis-run-group').style.display = 'block';
     this._updateEstimate();
+  },
+
+  /** Überträgt den RegioStaR7-Vorschlag in die editierbaren Typ-Einstellungen. */
+  _applySplitSuggestion() {
+    const suggestion = this._areaContext && AnalysisService.suggestSplits(this._areaContext.regioStaR7);
+    if (!suggestion) return false;
+    for (const type of Object.keys(this._typeSettings)) {
+      if (suggestion[type]) this._typeSettings[type].split = { ...suggestion[type] };
+    }
+    return true;
+  },
+
+  /** Zeile „Gebiet: Gemeinde · Raumtyp" über der Split-Tabelle. */
+  _renderAreaContext() {
+    const el = Utils.getElement('#analysis-area-context');
+    if (!el) return;
+    const ctx = this._areaContext;
+    if (!ctx) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const place = [ctx.gemeinde, ctx.label].filter(Boolean).map(Utils.escapeHtml).join(' · ');
+    const hasSuggestion = !!AnalysisService.suggestSplits(ctx.regioStaR7);
+    if (!hasSuggestion) {
+      el.innerHTML = `Gebiet: ${place}`;
+    } else if (!this._splitsEdited) {
+      el.innerHTML = `Gebiet: ${place} — Split-Vorschlag für diesen Raumtyp angewendet (anpassbar).`;
+    } else {
+      el.innerHTML = `Gebiet: ${place} · <button type="button" id="analysis-apply-split-btn" class="analysis-inline-btn">Split-Vorschlag anwenden</button>`;
+      Utils.getElement('#analysis-apply-split-btn')?.addEventListener('click', () => {
+        this._applySplitSuggestion();
+        this._splitsEdited = false;
+        this._renderTypeSettings();
+        this._renderAreaContext();
+        this._updateEstimate();
+      });
+    }
   },
 
   /** Hebt eine Panel-Zeile hervor (Karte → Panel, index null = keine). */
@@ -204,6 +255,10 @@ export const AnalysisPanel = {
           input.value = s.split[field];
           const sum = MODES.reduce((acc, m) => acc + (s.split[m.key] || 0), 0);
           input.closest('tr').classList.toggle('analysis-split-invalid', sum !== 100);
+          if (!this._splitsEdited) {
+            this._splitsEdited = true;
+            this._renderAreaContext();
+          }
         }
         this._updateEstimate();
       });
@@ -319,8 +374,11 @@ export const AnalysisPanel = {
     this._polygon = null;
     this._facilities = [];
     this._setProgress(null);
+    this._areaContext = null;
+    AnalysisService.areaContext = null;
     ['#analysis-facilities-group', '#analysis-settings-group', '#analysis-run-group',
-     '#analysis-result', '#analysis-filter-group', '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
+     '#analysis-result', '#analysis-area-context', '#analysis-filter-group',
+     '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
       const el = Utils.getElement(sel);
       if (el) el.style.display = 'none';
     });

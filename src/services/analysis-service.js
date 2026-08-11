@@ -56,10 +56,100 @@ export const MODES = [
   { key: 'car', label: 'Auto', ghProfile: 'car', radiusFactor: 1, distType: 'uniform' }
 ];
 
+// ---- RegioStaR7: Raumtyp der Zensus-Zellen → Modal-Split-Vorschlag ----
+//
+// Die Zensus-Kacheln tragen je Zelle die Regionalstatistische Raumtypologie
+// (Feld RegioStaR7, "71" Metropole … "77" ländlich). Für die Vorschläge werden
+// die 7 Typen zu 4 Gruppen zusammengefasst; die Zahlen sind an die MiD 2017
+// (Wege von Schüler:innen nach Raumtyp) angelehnte Setzungen — dokumentiert
+// in docs/GEBIETSANALYSE_IDEEN.md, in der UI bleiben sie editierbar.
+const REGIOSTAR_LABELS = {
+  71: 'Metropole',
+  72: 'Regiopole/Großstadt',
+  73: 'Mittelstadt (Stadtregion)',
+  74: 'Kleinstädtisch/dörflich (Stadtregion)',
+  75: 'Zentrale Stadt (ländlich)',
+  76: 'Mittelstadt (ländliche Region)',
+  77: 'Kleinstädtisch/dörflich (ländlich)'
+};
+
+const REGIOSTAR_GROUP = {
+  71: 'metro', 72: 'gross',
+  73: 'staedtisch', 75: 'staedtisch', 76: 'staedtisch',
+  74: 'laendlich', 77: 'laendlich'
+};
+
+const SPLIT_SUGGESTIONS = {
+  metro: {
+    kindergarten: { foot: 60, bike: 10, transit: 5, car: 25 },
+    grundschule: { foot: 55, bike: 20, transit: 10, car: 15 },
+    weiterfuehrend: { foot: 20, bike: 20, transit: 45, car: 15 },
+    schule: { foot: 45, bike: 20, transit: 20, car: 15 }
+  },
+  gross: {
+    kindergarten: { foot: 55, bike: 10, transit: 5, car: 30 },
+    grundschule: { foot: 50, bike: 20, transit: 10, car: 20 },
+    weiterfuehrend: { foot: 20, bike: 25, transit: 40, car: 15 },
+    schule: { foot: 40, bike: 20, transit: 20, car: 20 }
+  },
+  staedtisch: {
+    kindergarten: { foot: 45, bike: 10, transit: 5, car: 40 },
+    grundschule: { foot: 45, bike: 20, transit: 10, car: 25 },
+    weiterfuehrend: { foot: 20, bike: 30, transit: 35, car: 15 },
+    schule: { foot: 35, bike: 25, transit: 20, car: 20 }
+  },
+  laendlich: {
+    kindergarten: { foot: 30, bike: 5, transit: 5, car: 60 },
+    grundschule: { foot: 30, bike: 15, transit: 25, car: 30 },
+    weiterfuehrend: { foot: 10, bike: 20, transit: 50, car: 20 },
+    schule: { foot: 25, bike: 15, transit: 35, car: 25 }
+  }
+};
+
 export const AnalysisService = {
   _abortController: null,
   // Ergebnis der letzten Berechnung (für Export)
   lastResult: null,
+  // Raumtyp/Gemeinde des zuletzt gezeichneten Bereichs (für Export)
+  areaContext: null,
+
+  /**
+   * Ermittelt Raumtyp (RegioStaR7) und Gemeinde des Bereichs — per Mehrheit
+   * über die Zensus-Zellen im Polygon (die Felder stehen in jeder Zelle).
+   * @param {Array<[lat,lng]>} polygon
+   * @returns {Promise<{regioStaR7: string, label: string, gemeinde: string|null}|null>}
+   */
+  async getAreaContext(polygon) {
+    const url = (CONFIG.POPULATION_PMTILES_URL || '').trim();
+    if (!url) return null;
+    const cells = await PopulationService.readFeaturesInPolygon(
+      url, CONFIG.POPULATION_LAYER_NAME || '', polygon
+    );
+    if (cells.length === 0) return null;
+    const rsCount = {};
+    const gemCount = {};
+    for (const c of cells) {
+      const p = c.properties || {};
+      const rs = String(p.RegioStaR7 || '').trim();
+      if (rs) rsCount[rs] = (rsCount[rs] || 0) + 1;
+      const gem = String(p.name_23 || '').trim();
+      if (gem) gemCount[gem] = (gemCount[gem] || 0) + 1;
+    }
+    const top = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const rs7 = top(rsCount);
+    if (!rs7) return null;
+    return {
+      regioStaR7: rs7,
+      label: REGIOSTAR_LABELS[rs7] || `Raumtyp ${rs7}`,
+      gemeinde: top(gemCount)
+    };
+  },
+
+  /** Split-Vorschlag je Einrichtungstyp für einen RegioStaR7-Code (oder null). */
+  suggestSplits(regioStaR7) {
+    const group = REGIOSTAR_GROUP[String(regioStaR7)];
+    return group ? SPLIT_SUGGESTIONS[group] : null;
+  },
 
   /**
    * Einrichtungstyp aus OSM-Attributen ableiten. isced:level ist lückenhaft
@@ -313,6 +403,7 @@ export const AnalysisService = {
         polygon: polygon ? polygon.map(([lat, lng]) => [lng, lat]) : null,
         facilities: result.facilities.map(f => ({ name: f.name, type: f.type, trips: f.trips })),
         typeSettings: result.typeSettings,
+        areaContext: this.areaContext,
         modeBehavior: Object.fromEntries(MODES.map(m => [m.key, m.distType
           ? { radiusFactor: m.radiusFactor || 1, distType: m.distType }
           : { model: 'zielnaechste-haltestellen' }])),

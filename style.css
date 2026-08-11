@@ -141,6 +141,30 @@ html, body {
   margin: 0;
 }
 
+/* Raumtyp-Zeile über der Split-Tabelle (RegioStaR7 aus den Zensus-Zellen) */
+.analysis-area-context {
+  font-size: 11px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin-bottom: 6px;
+}
+
+.analysis-inline-btn {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  background: white;
+  color: #92400e;
+  cursor: pointer;
+}
+
+.analysis-inline-btn:hover {
+  background: #fde68a;
+}
+
 /* Modus-Filter für die Belastungskarte (nach dem Lauf) */
 .analysis-mode-filter {
   display: flex;

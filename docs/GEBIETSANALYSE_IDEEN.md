@@ -43,19 +43,23 @@ zweite Grenze bestehen.
   Kindern → deshalb editierbar lassen, nicht hart erzwingen.
 - Aufwand: **klein** (Filter + eine Tabellenspalte). Nutzen: hoch im ländlichen Raum.
 
-## 2. RegioStaR7-basierte Modal-Split-Vorschläge
+## 2. RegioStaR7-basierte Modal-Split-Vorschläge ✅ (umgesetzt 2026-08-11)
 
 **Idee (Simon, schon im Konzept):** „Je ruraler, desto mehr Auto.“ Die Zelle
 unter der Einrichtung liefert `RegioStaR7`; daraus Split-Defaults je Typ ×
 Raumtyp vorschlagen (Quelle: MiD 2017, Wege von Schüler:innen nach RegioStaR7).
 
-- UI-Varianten: (a) Defaults beim Laden automatisch nach Raumtyp vorbelegen
-  (mit Hinweis „Vorschlag: Metropole“), oder (b) Knopf „Split aus Raumtyp
-  vorschlagen“. Variante (a) ist die bessere UX, weil man nichts wissen muss.
-- Zahlenbasis einmalig sauber ableiten und als Tabelle in den Code legen
-  (MiD-Auswertung, notfalls plausibel gesetzt und dokumentiert).
-- Aufwand: **klein** (Lookup-Tabelle + Zelle lesen). Die Anzeige des Raumtyps
-  im Panel („Gebiet: Metropole · Berlin, Stadt“) ist nebenbei guter Kontext.
+- Umgesetzt als Variante (a): Raumtyp per Mehrheit über die Zensus-Zellen im
+  Polygon, Splits werden beim Laden automatisch vorbelegt — Zeile
+  „Gebiet: Berlin, Stadt · Metropole — Split-Vorschlag angewendet“ über der
+  Tabelle. Hat der Nutzer Splits schon angefasst, wird nichts überschrieben;
+  stattdessen erscheint ein Knopf „Split-Vorschlag anwenden“.
+- Vorschlagstabelle (`SPLIT_SUGGESTIONS` in `analysis-service.js`): die 7
+  RegioStaR7-Typen sind zu 4 Gruppen zusammengefasst (71 Metropole ·
+  72 Regiopole/Großstadt · 73/75/76 städtisch · 74/77 ländlich); Zahlen sind
+  an die MiD 2017 angelehnte, dokumentierte Setzungen — z. B. Grundschule
+  Metropole 55/20/10/15, ländlich 30/15/25/30 (Schulbus). In der UI bleibt
+  alles editierbar; der Raumtyp steht im Export unter `metadata.areaContext`.
 
 ## 3. Distanzverhalten je Modus ✅ (umgesetzt 2026-08-11)
 
@@ -71,10 +75,10 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 
 ## 4. Darstellung & Auswertung
 
-- **Modus-Filter für die Belastungskarte**: Checkboxen Fuß/Rad/ÖPNV/Auto —
+- **Modus-Filter für die Belastungskarte** ✅ (umgesetzt 2026-08-11):
+  Checkboxen „Angezeigte Wege: Fuß/Rad/ÖPNV/Auto“ unter dem Ergebnis —
   nur Fuß+Rad zeigt das Schulwegsicherheits-Bild, nur Auto die
-  Elterntaxi-Hotspots. Die Daten (`byProfile` je Kante) sind schon da,
-  es fehlt nur Filter + Neuzeichnen. Aufwand: **klein**.
+  Elterntaxi-Hotspots; Neuzeichnen aus den Kanten-Summen ohne Neuberechnung.
 - **Unfall-Overlay**: Unfalldaten aus der unfallkarte (PMTiles vorhanden) über
   die Belastungskarte legen → Kanten mit hoher Schulweg-Belastung **und**
   Unfallhäufung als priorisierte Konfliktstellen. Aufwand: **mittel**,
@@ -116,8 +120,8 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | # | Idee | Aufwand | Nutzen |
 | --- | --- | --- | --- |
 | 1 | AGS-Einzugsgrenze je Typ | klein | hoch (ländlicher Raum) |
-| 2 | RegioStaR7-Split-Vorschlag | klein | hoch |
-| 4a | Modus-Filter Karte | klein | hoch |
+| 2 | RegioStaR7-Split-Vorschlag ✅ | klein | hoch |
+| 4a | Modus-Filter Karte ✅ | klein | hoch |
 | 3 | Distanzverhalten je Modus ✅ | klein | mittel |
 | 5b | Altersfaktor je Typ | klein | klein–mittel |
 | 4b | Unfall-Overlay | mittel | sehr hoch |
@@ -125,5 +129,5 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | 4c | Querungsbelastung | mittel | mittel |
 | übrige | | mittel–groß | je nach Anwendungsfall |
 
-Startpaket wäre 1 + 2 + 4a: alle drei klein, alle drei zahlen direkt auf die
-Plausibilität bzw. Lesbarkeit ein und brauchen keine neuen Datenquellen.
+Vom Startpaket (1 + 2 + 4a) sind 2, 3 und der Modus-Filter (4a) umgesetzt —
+offen aus den „kleinen“ Ideen ist v. a. noch **1 (AGS-Einzugsgrenze)**.
