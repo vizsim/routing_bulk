@@ -12,6 +12,7 @@ import { ColormapSelector } from './ui/colormap-selector.js';
 import { toggleAggregationUI, updateConfigFromUI } from './ui/config-helpers.js';
 import { DemandSelector } from './ui/demand-selector.js';
 import { DistributionSelector } from './ui/distribution-selector.js';
+import { initInfoHints } from './ui/info-hints.js';
 import { RouteWarning } from './ui/route-warning.js';
 import { TargetsList } from './ui/targets-list.js';
 import { Geocoder } from './utils/geocoder.js';
@@ -207,6 +208,9 @@ export const App = {
 
     // Nachfragedetails (Basis der Startpunkte, ÖPNV-Anteil)
     DemandSelector.init(() => this._recalculateWithNewStarts());
+
+    // ⓘ-Tooltips am Icon ausrichten (fixed, damit das Panel sie nicht abschneidet)
+    initInfoHints();
 
     // Histogramm-Modus: Beeline vs. Echte Routenlänge
     this._setupHistogramModeButtons();

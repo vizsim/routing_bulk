@@ -168,25 +168,21 @@
           </div>
         </div>
         <div class="config-group" id="transit-share-group">
-          <label for="config-transit-share">
-            Start an ÖPNV-Haltestelle: <strong id="transit-share-value">0 %</strong>
-          </label>
+          <span class="config-group-label-row">
+            <label for="config-transit-share">
+              Start an ÖPNV-Haltestelle: <strong id="transit-share-value">0 %</strong>
+            </label>
+            <span class="info-hint" role="img" aria-label="Erklärung">
+              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-text">Anteil der Startpunkte, die statt am Wohnort an einer Haltestelle beginnen (Zubringer mit Bus/Bahn). Für diesen Anteil gilt die Längenverteilung nicht: Fahrgäste steigen zielnah aus, die nächste Haltestelle trägt am meisten. Wege ab Haltestelle werden immer zu Fuß gerechnet — auch wenn oben Rad oder Auto gewählt ist.</span>
+            </span>
+          </span>
           <input type="range" id="config-transit-share" min="0" max="100" step="5" value="0" />
-          <p class="config-hint">
-            Anteil der Startpunkte, die statt am Wohnort an einer Haltestelle beginnen
-            (Zubringer mit Bus/Bahn). 0 % = alle vom Wohnort.
-          </p>
           <div class="config-field-inline" id="transit-stops-field">
             <label for="config-transit-stops">Ausstieg an den nächsten</label>
             <input type="number" id="config-transit-stops" min="1" max="20" step="1" value="3" />
             <span>Haltestellen</span>
           </div>
-          <p class="config-hint">
-            Für den ÖPNV-Anteil gilt die Längenverteilung nicht: Fahrgäste steigen
-            zielnah aus, die nächste Haltestelle trägt am meisten.
-            Wege ab Haltestelle werden immer <strong>zu Fuß</strong> gerechnet —
-            auch wenn oben Rad oder Auto gewählt ist.
-          </p>
         </div>
         <div id="demand-info" class="demand-info" style="display: none;"></div>
         </div>

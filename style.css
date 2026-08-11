@@ -475,10 +475,12 @@ html, body {
   color: #555;
 }
 .info-hint-text {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+  /* fixed statt absolute: das Panel scrollt (overflow) und würde den Tooltip
+     an seiner Kante abschneiden. Die Koordinaten setzt ui/info-hints.js beim
+     Hovern anhand der Icon-Position (mit Viewport-Klemmung). */
+  position: fixed;
+  left: 0;
+  top: 0;
   width: max(260px, min(320px, 90vw));
   padding: 10px 12px;
   font-size: 12px;
