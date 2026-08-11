@@ -20,28 +20,30 @@ kein Verwaltungsgrenzen-Layer nötig, die Zugehörigkeit steht in jeder Zelle.
 
 ---
 
-## 1. Einzugsgrenze nach Verwaltungsebene je Einrichtungstyp
+## 1. Einzugsgrenze nach Verwaltungsebene je Einrichtungstyp ✅ (umgesetzt 2026-08-11)
 
 **Idee (Simon):** Gerade im ländlichen Raum ist der reine Radius unplausibel —
 eine Kita in Gemeinde A zieht keine Kinder aus der Nachbargemeinde, auch wenn
-die im 1-km-Radius liegt. Plausibel wäre:
+die im 1-km-Radius liegt.
 
-- **Kindergarten, Grundschule** → nur Startpunkte innerhalb der **Gemeinde**
-- **Weiterführende Schule** → innerhalb des **Landkreises**, mindestens des
-  **Bundeslands**
+**Umgesetzt** über den AGS der Zensus-Zellen (Gemeinde = 8 Stellen,
+Kreis = 5, Land = 2; `boundary` je Typ in `FACILITY_TYPES`,
+Anwendung in `_applyBoundary`):
 
-**Umsetzung:** Zelle unter der Einrichtung liefert deren `ags`; beim Filtern
-der Zellen je Einrichtung (heute nur Distanz ≤ Radius in
-`analysis-service.run`) zusätzlich AGS-Präfix vergleichen:
-Gemeinde = 8 Stellen gleich, Kreis = 5, Land = 2. Der Radius bleibt als
-zweite Grenze bestehen.
-
-- UI: Spalte „Einzug“ in der Typ-Tabelle (Gemeinde / Kreis / Land / nur Radius),
-  Default je Typ wie oben.
-- Randfälle: Stadtstaaten (Berlin/Hamburg = eine Gemeinde → Filter wirkungslos,
-  gut so), Einrichtungen direkt an der Gemeindegrenze mit legitim „auswärtigen“
-  Kindern → deshalb editierbar lassen, nicht hart erzwingen.
-- Aufwand: **klein** (Filter + eine Tabellenspalte). Nutzen: hoch im ländlichen Raum.
+- **Kindergarten, Grundschule** → **hart**: Startpunkte nur aus der eigenen
+  Gemeinde (Zellen außerhalb werden verworfen)
+- **Weiterführende Schule** → **weich**: außerhalb des eigenen Landkreises
+  wird die Personenzahl der Zelle mit ×0,3 abgewertet (Zieh-Wahrscheinlichkeit
+  UND Kapazität), in einem anderen Bundesland mit ×0,1 — Einzug über die
+  Kreisgrenze bleibt möglich, ist aber selten
+- **„Schule“ (Typ unbekannt)** → weich an der Gemeindegrenze (könnte auch
+  weiterführend sein — hart wäre riskant)
+- Ohne AGS-Treffer (Einrichtung in unbewohntem Gebiet) greift keine Grenze;
+  Stadtstaaten sind automatisch ein No-op. Faktoren stehen im Export unter
+  `metadata.boundaryPenalties`, die Grenzen je Typ in `metadata.typeSettings`.
+- Verifiziert: Wriezen hart 513 → 363 Zellen (nur noch Gemeinde 12064512);
+  Kreisgrenze MOL/Barnim weich: Barnim-Zellen unter18 200 → 60 (exakt ×0,3),
+  keine Zelle verworfen.
 
 ## 2. RegioStaR7-basierte Modal-Split-Vorschläge ✅ (umgesetzt 2026-08-11)
 
@@ -119,7 +121,7 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 
 | # | Idee | Aufwand | Nutzen |
 | --- | --- | --- | --- |
-| 1 | AGS-Einzugsgrenze je Typ | klein | hoch (ländlicher Raum) |
+| 1 | AGS-Einzugsgrenze je Typ ✅ | klein | hoch (ländlicher Raum) |
 | 2 | RegioStaR7-Split-Vorschlag ✅ | klein | hoch |
 | 4a | Modus-Filter Karte ✅ | klein | hoch |
 | 3 | Distanzverhalten je Modus ✅ | klein | mittel |
@@ -129,5 +131,6 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | 4c | Querungsbelastung | mittel | mittel |
 | übrige | | mittel–groß | je nach Anwendungsfall |
 
-Vom Startpaket (1 + 2 + 4a) sind 2, 3 und der Modus-Filter (4a) umgesetzt —
-offen aus den „kleinen“ Ideen ist v. a. noch **1 (AGS-Einzugsgrenze)**.
+Das Startpaket (1 + 2 + 4a) und Idee 3 sind komplett umgesetzt — als nächste
+„kleine“ Idee bietet sich **5b (Altersfaktor je Typ)** an, als nächster großer
+Mehrwert **4b (Unfall-Overlay)**.

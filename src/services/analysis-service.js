@@ -18,33 +18,53 @@ import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
 import { PopulationService } from './population-service.js';
 
-// Defaults je Einrichtungstyp: Wege/Tag, Einzugsradius, Modal Split (%)
+// Defaults je Einrichtungstyp: Wege/Tag, Einzugsradius, Modal Split (%).
+//
+// boundary = Einzugsgrenze über den Amtlichen Gemeindeschlüssel der
+// Zensus-Zellen (2 Stellen Land · 5 Kreis · 8 Gemeinde):
+// - 'hard': Startpunkte NUR innerhalb der Ebene (Kita/Grundschule kommen
+//   nicht aus der Nachbargemeinde, auch wenn sie im Radius liegt)
+// - 'penalty': außerhalb der Ebene stark abgewertet statt ausgeschlossen
+//   (×BOUNDARY_PENALTY_OUTSIDE, in einem anderen Bundesland
+//   ×BOUNDARY_PENALTY_OUTSIDE_LAND) — weiterführende Schulen haben
+//   legitime Einzugsbereiche über die Kreisgrenze, nur eben seltener
 export const FACILITY_TYPES = {
   kindergarten: {
     label: 'Kindergarten',
     trips: 50,
     radiusM: 1000,
-    split: { foot: 50, bike: 10, transit: 5, car: 35 }
+    split: { foot: 50, bike: 10, transit: 5, car: 35 },
+    boundary: { level: 'gemeinde', mode: 'hard' }
   },
   grundschule: {
     label: 'Grundschule',
     trips: 200,
     radiusM: 2000,
-    split: { foot: 50, bike: 20, transit: 10, car: 20 }
+    split: { foot: 50, bike: 20, transit: 10, car: 20 },
+    boundary: { level: 'gemeinde', mode: 'hard' }
   },
   weiterfuehrend: {
     label: 'Weiterführende Schule',
     trips: 500,
     radiusM: 4000,
-    split: { foot: 25, bike: 25, transit: 35, car: 15 }
+    split: { foot: 25, bike: 25, transit: 35, car: 15 },
+    boundary: { level: 'kreis', mode: 'penalty' }
   },
   schule: {
     label: 'Schule',
     trips: 200,
     radiusM: 2000,
-    split: { foot: 50, bike: 20, transit: 10, car: 20 }
+    split: { foot: 50, bike: 20, transit: 10, car: 20 },
+    // Typ unbekannt (kann auch weiterführend sein) → weich statt hart
+    boundary: { level: 'gemeinde', mode: 'penalty' }
   }
 };
+
+// Abwertungsfaktoren für 'penalty'-Grenzen (wirken auf die Personenzahl der
+// Zelle, also auf Zieh-Wahrscheinlichkeit UND Kapazität)
+const BOUNDARY_PENALTY_OUTSIDE = 0.3;
+const BOUNDARY_PENALTY_OUTSIDE_LAND = 0.1;
+const AGS_PREFIX = { gemeinde: 8, kreis: 5, land: 2 };
 
 // Distanzverhalten je Modus: Fußwege sind kurz (halber Radius, lognormal),
 // Auto fährt auch weit (voller Radius, gleichverteilt statt nah-lastig).
@@ -149,6 +169,39 @@ export const AnalysisService = {
   suggestSplits(regioStaR7) {
     const group = REGIOSTAR_GROUP[String(regioStaR7)];
     return group ? SPLIT_SUGGESTIONS[group] : null;
+  },
+
+  /** AGS der Zelle, in der die Einrichtung steht (nächstes Zell-Zentrum). */
+  _facilityAgs(allCells, target) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const c of allCells) {
+      const d = Geo.distanceMeters(c.center[0], c.center[1], target[0], target[1]);
+      if (d < bestDist) { bestDist = d; best = c; }
+    }
+    // 300 m: großzügig gegenüber Zellrastern (Zentren liegen max. ~71 m
+    // vom Punkt), aber kein Treffer aus der Nachbarschaft, wenn die
+    // Einrichtung in unbewohntem Gebiet ohne Zensus-Zellen steht
+    return best && bestDist < 300 ? best.ags : null;
+  },
+
+  /**
+   * Wendet die Einzugsgrenze eines Typs auf die Zellen an:
+   * 'hard' filtert Zellen außerhalb der Ebene weg, 'penalty' skaliert deren
+   * Personenzahl herunter (weniger wahrscheinlich UND weniger Kapazität).
+   */
+  _applyBoundary(cells, facilityAgs, boundary) {
+    if (!facilityAgs || !boundary) return cells;
+    const n = AGS_PREFIX[boundary.level] || 8;
+    const inside = (c) => c.ags && c.ags.slice(0, n) === facilityAgs.slice(0, n);
+    if (boundary.mode === 'hard') return cells.filter(inside);
+    return cells.map(c => {
+      if (!c.ags || inside(c)) return c;
+      const factor = c.ags.slice(0, 2) === facilityAgs.slice(0, 2)
+        ? BOUNDARY_PENALTY_OUTSIDE
+        : BOUNDARY_PENALTY_OUTSIDE_LAND;
+      return { ...c, population: c.population * factor, under18: c.under18 * factor };
+    });
   },
 
   /**
@@ -282,7 +335,12 @@ export const AnalysisService = {
 
       const inRadius = (lat, lon, radiusM) =>
         Geo.distanceMeters(lat, lon, target[0], target[1]) <= radiusM;
-      const cells = allCells.filter(c => inRadius(c.center[0], c.center[1], settings.radiusM));
+      // Einzugsgrenze je Typ (Gemeinde hart bzw. Kreis/Land als Abwertung)
+      const facilityAgs = this._facilityAgs(allCells, target);
+      const cells = this._applyBoundary(
+        allCells.filter(c => inRadius(c.center[0], c.center[1], settings.radiusM)),
+        facilityAgs, settings.boundary
+      );
 
       for (const p of plan) {
         let points = [];
@@ -404,6 +462,7 @@ export const AnalysisService = {
         facilities: result.facilities.map(f => ({ name: f.name, type: f.type, trips: f.trips })),
         typeSettings: result.typeSettings,
         areaContext: this.areaContext,
+        boundaryPenalties: { outside: BOUNDARY_PENALTY_OUTSIDE, outsideLand: BOUNDARY_PENALTY_OUTSIDE_LAND },
         modeBehavior: Object.fromEntries(MODES.map(m => [m.key, m.distType
           ? { radiusFactor: m.radiusFactor || 1, distType: m.distType }
           : { model: 'zielnaechste-haltestellen' }])),

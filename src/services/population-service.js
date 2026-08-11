@@ -454,11 +454,16 @@ import { Utils } from '../core/utils.js';
               const share = numericProp(f.properties, "AnteilUnter18");
               under18 = share != null ? (pop * share) / 100 : 0;
             }
+            // Amtlicher Gemeindeschlüssel (8-stellig: 2 Land · 5 Kreis · 8 Gemeinde)
+            // für Einzugsgrenzen der Gebietsanalyse. padStart, falls die Tile-Property
+            // numerisch ist und führende Nullen verloren hat (z. B. Schleswig-Holstein "01…").
+            const agsRaw = f.properties.ags != null ? f.properties.ags : f.properties.gem_23_str;
             results.push({
               geometry: { rings, z, tileX, tileY, extent },
               center: [wgs84.lat, wgs84.lon],
               population: Math.max(0, pop),
-              under18: Math.max(0, under18)
+              under18: Math.max(0, under18),
+              ags: agsRaw != null ? String(agsRaw).padStart(8, "0") : null
             });
           }
         }

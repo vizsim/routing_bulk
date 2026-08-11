@@ -240,7 +240,9 @@ export const AnalysisPanel = {
       ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
       Anfragen gehen an den eigenen Routing-Server). Distanzverhalten je Modus:
       Fuß startet im halben Radius (kurze Wege), Auto gleichverteilt im vollen
-      Radius, Rad dazwischen.</p>`;
+      Radius, Rad dazwischen. Einzugsgrenzen: Kita/Grundschule nur aus der
+      eigenen Gemeinde; weiterführende Schulen bevorzugt aus dem eigenen
+      Landkreis (außerhalb stark abgewertet, anderes Bundesland noch stärker).</p>`;
 
     el.querySelectorAll('input').forEach(input => {
       input.addEventListener('change', () => {
