@@ -93,7 +93,8 @@ export const App = {
     const hint = Utils.getElement('#no-target-hint');
     if (!hint) return;
     const hasTarget = State.getAllTargets().length > 0 || State.getLastTarget() !== null;
-    hint.classList.toggle('is-hidden', hasTarget);
+    // In der Gebietsanalyse setzen Karten-Klicks kein Ziel — Hinweis wäre irreführend
+    hint.classList.toggle('is-hidden', hasTarget || State.isAnalysisMode());
   },
   
   /**

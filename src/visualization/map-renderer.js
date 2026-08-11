@@ -432,6 +432,56 @@ export const MapRenderer = {
     });
   },
 
+  /**
+   * Zeigt die in der Gebietsanalyse gefundenen Einrichtungen als Badge-Icons
+   * (unabhängig vom deutschlandweiten Schul-Layer, der ein Toggle bleibt).
+   * Nutzt die beim Schul-Layer registrierten Icon-Bilder.
+   */
+  setAnalysisFacilities(facilities) {
+    const map = this._ready && this._map;
+    if (!map) return;
+    const data = {
+      type: 'FeatureCollection',
+      features: (facilities || []).map(f => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
+        properties: {
+          amenity: f.type === 'kindergarten' ? 'kindergarten' : 'school',
+          name: f.name
+        }
+      }))
+    };
+    const src = map.getSource('analysis-facilities');
+    if (src) { src.setData(data); return; }
+    map.addSource('analysis-facilities', { type: 'geojson', data });
+    map.addLayer({
+      id: 'analysis-facility-icons',
+      type: 'symbol',
+      source: 'analysis-facilities',
+      layout: {
+        'icon-image': ['match', ['get', 'amenity'], 'kindergarten', 'kindergarten-icon', 'school-icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64],
+        'icon-allow-overlap': true
+      }
+    });
+    map.on('click', 'analysis-facility-icons', (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      const p = f.properties || {};
+      const typ = p.amenity === 'kindergarten' ? 'Kindergarten' : 'Schule';
+      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '250px' })
+        .setLngLat(e.lngLat)
+        .setHTML(`<strong>${Utils.escapeHtml(p.name || typ)}</strong><br>${typ}`)
+        .addTo(this._map);
+    });
+    map.on('mouseenter', 'analysis-facility-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'analysis-facility-icons', () => { map.getCanvas().style.cursor = ''; });
+  },
+
+  clearAnalysisFacilities() {
+    this.setAnalysisFacilities([]);
+  },
+
   setSchoolsLayerVisible(visible) {
     this._setLayerLegendVisible('schools-legend', visible);
     if (!this._ready) {

@@ -42,8 +42,17 @@ export const AnalysisPanel = {
     Utils.getElement('#tab-routing')?.setAttribute('aria-selected', String(!analysis));
     Utils.getElement('#tab-analysis')?.setAttribute('aria-selected', String(analysis));
 
-    // Panel-Bereiche umschalten
+    // „Zielpunkt setzen“-Hinweis passt nur zum Routing-Modus
+    const hint = Utils.getElement('#no-target-hint');
+    if (hint) {
+      const hasTarget = State.getAllTargets().length > 0 || State.getLastTarget() !== null;
+      hint.classList.toggle('is-hidden', analysis || hasTarget);
+    }
+
+    // Panel-Bereiche umschalten. Die Kartenebenen (Einwohner, Schulen,
+    // Haltestellen) sind Kontextdaten und bleiben in beiden Modi sichtbar.
     document.querySelectorAll('.panel-section > .config-block').forEach(block => {
+      if (block.id === 'layers-block') return;
       const isAnalysisBlock = block.id === 'analysis-block';
       block.style.display = (isAnalysisBlock === analysis) ? '' : 'none';
     });
@@ -58,6 +67,7 @@ export const AnalysisPanel = {
       AnalysisService.abort();
       PolygonDraw.clear();
       MapRenderer.clearRoutes();
+      MapRenderer.clearAnalysisFacilities();
       this._setProgress(null);
     }
   },
@@ -100,6 +110,7 @@ export const AnalysisPanel = {
     listEl.innerHTML = '<div class="config-hint">Suche Einrichtungen im Bereich…</div>';
 
     this._facilities = await AnalysisService.findFacilities(this._polygon);
+    MapRenderer.setAnalysisFacilities(this._facilities);
     if (this._facilities.length === 0) {
       listEl.innerHTML = '<div class="config-hint">Keine Schulen oder Kindergärten im Bereich gefunden.</div>';
       return;
@@ -144,7 +155,9 @@ export const AnalysisPanel = {
         }).join('')}
         </tbody>
       </table>
-      <p class="config-hint">Radius in Metern · Split-Summe je Zeile sollte 100 % sein.</p>`;
+      <p class="config-hint">Radius in Metern · Split-Summe je Zeile sollte 100 % sein.
+      ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
+      Anfragen gehen an den eigenen Routing-Server).</p>`;
 
     el.querySelectorAll('input').forEach(input => {
       input.addEventListener('change', () => {
@@ -232,6 +245,7 @@ export const AnalysisPanel = {
     AnalysisService.lastResult = null;
     PolygonDraw.clear();
     MapRenderer.clearRoutes();
+    MapRenderer.clearAnalysisFacilities();
     this._polygon = null;
     this._facilities = [];
     this._setProgress(null);

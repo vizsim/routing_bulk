@@ -120,6 +120,11 @@ html, body {
   text-align: right;
 }
 
+/* Falls es doch mal eng wird (Browser-Zoom): innen scrollen statt abschneiden */
+#analysis-settings {
+  overflow-x: auto;
+}
+
 .analysis-settings-table {
   width: 100%;
   border-collapse: collapse;
@@ -143,6 +148,15 @@ html, body {
   padding: 3px 2px;
   font-size: 11px;
   text-align: right;
+  /* Spinner ausblenden — mit ihnen sprengen 5 Zahlenspalten die Panelbreite */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.analysis-settings-table td input::-webkit-outer-spin-button,
+.analysis-settings-table td input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* Radius braucht 4-5 Stellen (z. B. 2000, 10000) */
@@ -152,7 +166,8 @@ html, body {
 
 .analysis-settings-type {
   font-size: 11px;
-  white-space: nowrap;
+  /* darf umbrechen — nowrap sprengt mit "Weiterführende Schule" die Panelbreite */
+  overflow-wrap: anywhere;
 }
 
 .analysis-split-invalid td {
