@@ -436,14 +436,19 @@ export const MapRenderer = {
    * Zeigt die in der Gebietsanalyse gefundenen Einrichtungen als Badge-Icons
    * (unabhängig vom deutschlandweiten Schul-Layer, der ein Toggle bleibt).
    * Nutzt die beim Schul-Layer registrierten Icon-Bilder.
+   * @param {Array} facilities - {lat, lon, name, type}; der Array-Index ist die Feature-ID
+   * @param {{onHover?: (index: number|null) => void}} [callbacks] - Karte → Panel
    */
-  setAnalysisFacilities(facilities) {
+  setAnalysisFacilities(facilities, callbacks) {
     const map = this._ready && this._map;
     if (!map) return;
+    if (callbacks) this._analysisFacilityCallbacks = callbacks;
+    this.setAnalysisFacilityHover(null);
     const data = {
       type: 'FeatureCollection',
-      features: (facilities || []).map(f => ({
+      features: (facilities || []).map((f, i) => ({
         type: 'Feature',
+        id: i, // Feature-ID für feature-state (Hover-Halo)
         geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
         properties: {
           amenity: f.type === 'kindergarten' ? 'kindergarten' : 'school',
@@ -454,6 +459,20 @@ export const MapRenderer = {
     const src = map.getSource('analysis-facilities');
     if (src) { src.setData(data); return; }
     map.addSource('analysis-facilities', { type: 'geojson', data });
+    // Hover-Halo unter den Icons: sichtbar nur mit feature-state hover=true
+    // (gesetzt vom Panel-Hover oder vom Mauszeiger auf dem Icon)
+    map.addLayer({
+      id: 'analysis-facility-hover',
+      type: 'circle',
+      source: 'analysis-facilities',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 10, 13, 18, 17, 28],
+        'circle-color': '#d97706',
+        'circle-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.25, 0],
+        'circle-stroke-color': '#d97706',
+        'circle-stroke-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2, 0]
+      }
+    });
     map.addLayer({
       id: 'analysis-facility-icons',
       type: 'symbol',
@@ -474,8 +493,31 @@ export const MapRenderer = {
         .setHTML(`<strong>${Utils.escapeHtml(p.name || typ)}</strong><br>${typ}`)
         .addTo(this._map);
     });
-    map.on('mouseenter', 'analysis-facility-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'analysis-facility-icons', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mousemove', 'analysis-facility-icons', (e) => {
+      const f = e.features && e.features[0];
+      if (!f || f.id === this._analysisHoverId) return;
+      map.getCanvas().style.cursor = 'pointer';
+      this.setAnalysisFacilityHover(f.id);
+      this._analysisFacilityCallbacks?.onHover?.(f.id);
+    });
+    map.on('mouseleave', 'analysis-facility-icons', () => {
+      map.getCanvas().style.cursor = '';
+      this.setAnalysisFacilityHover(null);
+      this._analysisFacilityCallbacks?.onHover?.(null);
+    });
+  },
+
+  /** Hebt eine Einrichtung auf der Karte hervor (null = keine). */
+  setAnalysisFacilityHover(index) {
+    const map = this._ready && this._map;
+    if (!map || !map.getSource('analysis-facilities')) return;
+    if (this._analysisHoverId != null && this._analysisHoverId !== index) {
+      map.setFeatureState({ source: 'analysis-facilities', id: this._analysisHoverId }, { hover: false });
+    }
+    if (index != null) {
+      map.setFeatureState({ source: 'analysis-facilities', id: index }, { hover: true });
+    }
+    this._analysisHoverId = index;
   },
 
   clearAnalysisFacilities() {

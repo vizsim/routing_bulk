@@ -110,15 +110,17 @@ export const AnalysisPanel = {
     listEl.innerHTML = '<div class="config-hint">Suche Einrichtungen im Bereich…</div>';
 
     this._facilities = await AnalysisService.findFacilities(this._polygon);
-    MapRenderer.setAnalysisFacilities(this._facilities);
+    MapRenderer.setAnalysisFacilities(this._facilities, {
+      onHover: (index) => this._highlightRow(index)
+    });
     if (this._facilities.length === 0) {
       listEl.innerHTML = '<div class="config-hint">Keine Schulen oder Kindergärten im Bereich gefunden.</div>';
       return;
     }
 
     listEl.innerHTML = this._facilities.map((f, i) => `
-      <div class="analysis-facility">
-        <span class="analysis-facility-name" title="${Utils.escapeHtml(f.name)}">${Utils.escapeHtml(f.name)}</span>
+      <div class="analysis-facility" data-index="${i}">
+        <span class="analysis-facility-name" title="${Utils.escapeHtml(f.name)} — Klick zentriert die Karte">${Utils.escapeHtml(f.name)}</span>
         <span class="analysis-facility-type">${FACILITY_TYPES[f.type].label}</span>
         <input type="number" min="0" max="5000" step="10" value="${f.trips}" data-facility="${i}" class="analysis-trips-input" />
       </div>`).join('');
@@ -130,11 +132,39 @@ export const AnalysisPanel = {
         this._updateEstimate();
       });
     });
+    // Hover Panel → Karte (Halo am Icon); Klick auf den Namen zentriert die Karte
+    listEl.querySelectorAll('.analysis-facility').forEach(row => {
+      const i = Number(row.dataset.index);
+      row.addEventListener('mouseenter', () => {
+        row.classList.add('is-hovered');
+        MapRenderer.setAnalysisFacilityHover(i);
+      });
+      row.addEventListener('mouseleave', () => {
+        row.classList.remove('is-hovered');
+        MapRenderer.setAnalysisFacilityHover(null);
+      });
+      row.querySelector('.analysis-facility-name').addEventListener('click', () => {
+        const f = this._facilities[i];
+        const map = State.getMap();
+        if (f && map) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 14) });
+      });
+    });
 
     this._renderTypeSettings();
     Utils.getElement('#analysis-settings-group').style.display = 'block';
     Utils.getElement('#analysis-run-group').style.display = 'block';
     this._updateEstimate();
+  },
+
+  /** Hebt eine Panel-Zeile hervor (Karte → Panel, index null = keine). */
+  _highlightRow(index) {
+    document.querySelectorAll('.analysis-facility.is-hovered').forEach(el => el.classList.remove('is-hovered'));
+    if (index == null) return;
+    const row = document.querySelector(`.analysis-facility[data-index="${index}"]`);
+    if (row) {
+      row.classList.add('is-hovered');
+      row.scrollIntoView({ block: 'nearest' });
+    }
   },
 
   _renderTypeSettings() {
