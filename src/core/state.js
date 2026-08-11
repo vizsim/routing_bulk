@@ -18,6 +18,7 @@ export const State = {
   allRouteResponses: [],
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
   demandInfo: null, // Ergebnis der letzten Startpunkt-Erzeugung (Kapazität, Quellen-Mix)
+  analysisMode: false, // Gebietsanalyse aktiv (eigener Panel-Modus, Karten-Klicks setzen kein Ziel)
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
   targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
@@ -38,6 +39,7 @@ export const State = {
   getAllRouteResponses() { return this.allRouteResponses; },
   getExpectedDistribution() { return this.expectedDistribution; },
   getDemandInfo() { return this.demandInfo; },
+  isAnalysisMode() { return this.analysisMode; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
   getNextTargetId() { return this.nextTargetId; },
   getTargetId(target) { 
@@ -61,6 +63,7 @@ export const State = {
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
   setDemandInfo(info) { this.demandInfo = info; },
+  setAnalysisMode(active) { this.analysisMode = active; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   setNextTargetId(id) { this.nextTargetId = id; },
   incrementNextTargetId() { this.nextTargetId++; },

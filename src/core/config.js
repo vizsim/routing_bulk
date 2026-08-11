@@ -11,6 +11,11 @@ export const CONFIG = {
   TRANSIT_MAX_ROUTES: 30, // hartes Cap im ÖPNV-Modus (unabhängig von N)
   TRANSIT_CONCURRENCY: 2, // max. parallele Plan-Anfragen
   TRANSIT_ARRIVE_HOUR: 8, // Ankunft nächster Werktag um diese Stunde (Schulwege)
+
+  // Gebietsanalyse (experimentell): max. Routen je Einrichtung×Modus.
+  // Jede Route trägt das Gewicht Fahrten/Stichprobe; die Aggregation
+  // summiert Gewichte. Alle Requests gehen an den eigenen GH-Server.
+  ANALYSIS_MAX_SAMPLE: 150,
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen
   ROUTE_CONCURRENCY: 12, // Max. parallele GH-Requests (schont Server; HTTP/1.1-Browserlimit liegt ähnlich)

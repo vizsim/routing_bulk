@@ -108,7 +108,8 @@ export const RouteRenderer = {
    * @param {Array} aggregatedSegments - Aggregierte Segmente
    * @param {number} maxCount - Maximale Anzahl für Skalierung
    */
-  drawAggregatedRoutes(aggregatedSegments, maxCount) {
+  drawAggregatedRoutes(aggregatedSegments, maxCount, options = {}) {
+    const unit = options.unit || null; // z.B. 'Fahrten/Tag' (Gebietsanalyse)
     // Berechne Min/Max und alle Counts für gewichtete Verteilung
     const counts = aggregatedSegments.map(seg => seg.count);
     const minCount = Math.min(...counts);
@@ -131,7 +132,9 @@ export const RouteRenderer = {
           weight: 2 + (weightedLevel * 10),   // 2-12px
           opacity: 0.7 + (weightedLevel * 0.7),
           color: ColormapUtils.getColorForCount(seg.count, weightedLevel),
-          label: `${seg.count} Route${seg.count !== 1 ? 'n' : ''}`
+          label: unit
+            ? `~${Math.round(seg.count)} ${unit}`
+            : `${seg.count} Route${seg.count !== 1 ? 'n' : ''}`
         },
         geometry: {
           type: 'LineString',

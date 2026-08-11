@@ -34,15 +34,15 @@ export const AggregationService = {
     const rnd = (v) => Math.round(v * 1e6) / 1e6; // ~10cm, robust gegen Float-Rauschen
     let skipped = 0;
 
-    const bump = (key, coordsLatLng, profile, source) => {
+    const bump = (key, coordsLatLng, profile, source, weight) => {
       let entry = edgeMap.get(key);
       if (!entry) {
         entry = { count: 0, coords: coordsLatLng, byProfile: {}, bySource: {} };
         edgeMap.set(key, entry);
       }
-      entry.count++;
-      if (profile) entry.byProfile[profile] = (entry.byProfile[profile] || 0) + 1;
-      if (source) entry.bySource[source] = (entry.bySource[source] || 0) + 1;
+      entry.count += weight;
+      if (profile) entry.byProfile[profile] = (entry.byProfile[profile] || 0) + weight;
+      if (source) entry.bySource[source] = (entry.bySource[source] || 0) + weight;
       return entry;
     };
 
@@ -51,6 +51,9 @@ export const AggregationService = {
       const resp = item && item.paths ? item : item?.response;
       const profile = (item && !item.paths && item.profile) || null;
       const source = (item && !item.paths && item.startSource) || null;
+      // Gewicht: 1 im Normalfall; die Gebietsanalyse rechnet Stichproben und
+      // gibt jeder Route ein Gewicht (Fahrten ÷ Stichprobengröße)
+      const weight = (item && !item.paths && typeof item.weight === 'number') ? item.weight : 1;
 
       // ÖPNV-Verbindungen (Beta): Aggregation pro Leg — gleiche Linie mit
       // gleichem Ein- und Ausstieg zählt zusammen (Fußweg-Legs über ihre
@@ -64,7 +67,7 @@ export const AggregationService = {
           const key = leg.mode === 'WALK'
             ? `ptw:${a}:${b}`
             : `pt:${leg.mode}:${leg.routeId || leg.route || ''}:${leg.fromStopId || a}:${leg.toStopId || b}`;
-          bump(key, leg.coords, profile, source);
+          bump(key, leg.coords, profile, source, weight);
         }
         return;
       }
@@ -83,14 +86,7 @@ export const AggregationService = {
         const b = `${rnd(slice[slice.length - 1][0])},${rnd(slice[slice.length - 1][1])}`;
         const key = a < b ? `${edgeId}:${a}:${b}` : `${edgeId}:${b}:${a}`;
 
-        let entry = edgeMap.get(key);
-        if (!entry) {
-          entry = { count: 0, coords: slice.map(([lon, lat]) => [lat, lon]), byProfile: {}, bySource: {} };
-          edgeMap.set(key, entry);
-        }
-        entry.count++;
-        if (profile) entry.byProfile[profile] = (entry.byProfile[profile] || 0) + 1;
-        if (source) entry.bySource[source] = (entry.bySource[source] || 0) + 1;
+        bump(key, slice.map(([lon, lat]) => [lat, lon]), profile, source, weight);
       }
     });
 

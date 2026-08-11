@@ -521,6 +521,92 @@ import { Utils } from '../core/utils.js';
     return randomPointInPolygon(toWgs84Feature(feature));
   }
 
+  /** Punkt-in-Polygon in WGS84 (Ring: [[lat, lng], ...], Raycasting). */
+  function pointInPolygonLatLng(lat, lon, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const yi = ring[i][0], xi = ring[i][1];
+      const yj = ring[j][0], xj = ring[j][1];
+      if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  /**
+   * Liest alle Features eines PMTiles-Archivs innerhalb eines Polygons
+   * (Punkte direkt, Flächen über ihren Zentroid). Dedupliziert über osm_id,
+   * weil Features in mehreren Kacheln auftauchen. Für die Gebietsanalyse.
+   * @param {string} url - PMTiles-URL
+   * @param {string} layerName - Source-Layer (leer = alle)
+   * @param {Array<[lat,lng]>} polygon - Ring in WGS84
+   * @param {number} [desiredZoom] - Wunsch-Zoom (auf maxZoom begrenzt)
+   * @returns {Promise<Array<{lat, lon, properties}>>}
+   */
+  async function readFeaturesInPolygon(url, layerName, polygon, desiredZoom) {
+    const pm = pmtilesFor(url);
+    if (!pm || !polygon || polygon.length < 3) return [];
+
+    let header = null;
+    try {
+      header = await pm.getHeader();
+    } catch (e) {
+      if (typeof Utils !== "undefined" && Utils.logError) Utils.logError("PopulationService", "getHeader (Polygon) fehlgeschlagen: " + e);
+      return [];
+    }
+    const maxZoom = header && typeof header.maxZoom === "number" ? header.maxZoom : 14;
+    const zoom = Math.min(desiredZoom != null ? desiredZoom : maxZoom, maxZoom);
+
+    const lats = polygon.map(p => p[0]);
+    const lons = polygon.map(p => p[1]);
+    const bbox = [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
+    const tiles = bboxToTileRange(bbox, zoom);
+
+    const out = [];
+    const seen = new Set();
+    for (const [z, tileX, tileY] of tiles) {
+      try {
+        const resp = await pm.getZxy(z, tileX, tileY);
+        const data = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        if (!data) continue;
+        const layers = parseMVT(data);
+        for (const lname of getLayerKeysForTile(layers, layerName)) {
+          const layer = layers[lname];
+          if (!layer) continue;
+          const extent = layer.extent || DEFAULT_EXTENT;
+          for (const f of layer.features) {
+            let lat, lon;
+            if (f.type === 1) {
+              const geom = f.loadGeometry();
+              const pt = geom && geom[0] && geom[0][0];
+              if (!pt) continue;
+              [lat, lon] = tileCoordToWgs84(pt.x, pt.y, z, tileX, tileY, extent);
+            } else if (f.type === 3) {
+              const geom = f.loadGeometry();
+              const ring = geom && geom[0];
+              if (!ring || ring.length < 3) continue;
+              let sx = 0, sy = 0;
+              for (const p of ring) { sx += p.x; sy += p.y; }
+              [lat, lon] = tileCoordToWgs84(sx / ring.length, sy / ring.length, z, tileX, tileY, extent);
+            } else {
+              continue;
+            }
+            if (!pointInPolygonLatLng(lat, lon, polygon)) continue;
+            const p = f.properties || {};
+            const key = p.osm_id || p.osm_way_id || `${lat.toFixed(6)},${lon.toFixed(6)}:${p.name || ""}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({ lat, lon, properties: p });
+          }
+        }
+      } catch (e) {
+        if (typeof Utils !== "undefined" && Utils.logError) Utils.logError("PopulationService", e);
+      }
+    }
+    return out;
+  }
+
   window.PopulationService = {
     getPopulationFeaturesInRadius,
     getPopulationAtPoint,
@@ -528,6 +614,7 @@ import { Utils } from '../core/utils.js';
     getPopulationPMTilesMaxZoom,
     parseMVT,
     readPointFeaturesInRadius,
+    readFeaturesInPolygon,
     randomPointInFeature
   };
 })();
