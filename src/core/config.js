@@ -25,6 +25,9 @@ export const CONFIG = {
   // Startpunkte kommen, wie dort Personen der gewählten Basis wohnen.
   DEMAND_BASIS: "population", // "population" (alle Einwohner) oder "under18" (unter 18-Jährige)
   DEMAND_TRANSIT_SHARE: 0, // % der Startpunkte an ÖPNV-Haltestellen statt an Wohnorten (0-100)
+  // Wie viele der zielnächsten Haltestellen als Ausstiegspunkte dienen. Für ÖPNV
+  // gilt die Längenverteilung NICHT — wer mit Bus/Bahn kommt, steigt zielnah aus.
+  DEMAND_TRANSIT_STOPS: 3,
 
   POPULATION_PROPERTY: "Einwohner", // Attributname für Einwohnerzahl im PMTiles-Layer
   POPULATION_LAYER_NAME: "rasters-polys", // Layer-Name im PMTiles (leer = erster Layer mit Features)

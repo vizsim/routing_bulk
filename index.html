@@ -92,7 +92,7 @@
           </div>
         </div>
         <div class="config-group">
-          <label>Längenverteilung (Beeline):</label>
+          <label>Längenverteilung (Beeline, Wohnorte):</label>
           <div class="distribution-buttons">
           <button class="dist-btn active" data-dist="lognormal" title="Lognormalverteilung">
             <svg width="20" height="12" viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
@@ -154,6 +154,15 @@
           <p class="config-hint">
             Anteil der Startpunkte, die statt am Wohnort an einer Haltestelle beginnen
             (Zubringer mit Bus/Bahn). 0 % = alle vom Wohnort.
+          </p>
+          <div class="config-field-inline" id="transit-stops-field">
+            <label for="config-transit-stops">Ausstieg an den nächsten</label>
+            <input type="number" id="config-transit-stops" min="1" max="20" step="1" value="3" />
+            <span>Haltestellen</span>
+          </div>
+          <p class="config-hint">
+            Für den ÖPNV-Anteil gilt die Längenverteilung nicht: Fahrgäste steigen
+            zielnah aus, die nächste Haltestelle trägt am meisten.
           </p>
         </div>
         <div id="demand-info" class="demand-info" style="display: none;"></div>

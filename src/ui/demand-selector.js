@@ -46,18 +46,35 @@ export const DemandSelector = {
   _initTransitSlider() {
     const slider = Utils.getElement('#config-transit-share');
     const value = Utils.getElement('#transit-share-value');
-    if (!slider) return;
+    const stopsInput = Utils.getElement('#config-transit-stops');
+    const stopsField = Utils.getElement('#transit-stops-field');
 
-    slider.value = CONFIG.DEMAND_TRANSIT_SHARE;
-    const label = () => { if (value) value.textContent = `${slider.value} %`; };
-    label();
+    const syncStopsVisibility = () => {
+      if (stopsField) stopsField.style.display = Number(slider?.value) > 0 ? 'flex' : 'none';
+    };
 
-    // Während des Ziehens nur die Beschriftung, erst beim Loslassen rechnen
-    slider.addEventListener('input', label);
-    slider.addEventListener('change', () => {
-      CONFIG.DEMAND_TRANSIT_SHARE = Number(slider.value) || 0;
-      this._recalculate();
-    });
+    if (slider) {
+      slider.value = CONFIG.DEMAND_TRANSIT_SHARE;
+      const label = () => { if (value) value.textContent = `${slider.value} %`; };
+      label();
+      syncStopsVisibility();
+
+      // Während des Ziehens nur die Beschriftung, erst beim Loslassen rechnen
+      slider.addEventListener('input', () => { label(); syncStopsVisibility(); });
+      slider.addEventListener('change', () => {
+        CONFIG.DEMAND_TRANSIT_SHARE = Number(slider.value) || 0;
+        this._recalculate();
+      });
+    }
+
+    if (stopsInput) {
+      stopsInput.value = CONFIG.DEMAND_TRANSIT_STOPS;
+      stopsInput.addEventListener('change', () => {
+        CONFIG.DEMAND_TRANSIT_STOPS = Utils.validateNumber(stopsInput.value, 1, 20, CONFIG.DEMAND_TRANSIT_STOPS);
+        stopsInput.value = CONFIG.DEMAND_TRANSIT_STOPS;
+        if (CONFIG.DEMAND_TRANSIT_SHARE > 0) this._recalculate();
+      });
+    }
   },
 
   /** Startpunkte müssen neu gezogen werden (nicht nur neu gezeichnet). */
@@ -78,11 +95,19 @@ export const DemandSelector = {
     if (!el || !info) return;
 
     const label = info.basis === 'under18' ? 'unter 18-Jährige' : 'Einwohner';
+    const usedStops = info.transitStops || [];
     const parts = [];
     if (info.residential > 0) parts.push(`${info.residential} vom Wohnort`);
-    if (info.transit > 0) parts.push(`${info.transit} von ${info.stops} Haltestelle${info.stops !== 1 ? 'n' : ''}`);
+    if (info.transit > 0) parts.push(`${info.transit} vom ÖPNV`);
 
     let html = `<div>${parts.join(' · ') || 'Keine Startpunkte'}</div>`;
+    // Genutzte Ausstiegs-Haltestellen mit Luftlinie zum Ziel
+    if (usedStops.length > 0) {
+      const rows = usedStops
+        .map(s => `<div class="demand-info-stop">${s.count}× ${Utils.escapeHtml(s.name || 'Haltestelle')} <span>(${s.distance} m)</span></div>`)
+        .join('');
+      html += `<div class="demand-info-stops">${rows}</div>`;
+    }
     // Kapazität nur zeigen, wenn überhaupt Wohn-Startpunkte angefragt waren
     // (bei 100 % ÖPNV werden die Zensus-Zellen gar nicht erst geladen)
     if (info.residentialRequested > 0) {

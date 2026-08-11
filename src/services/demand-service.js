@@ -15,8 +15,11 @@ import { Distribution } from '../domain/distribution.js';
 import { Geo } from '../domain/geo.js';
 import { PopulationService } from './population-service.js';
 
-/** Haltestellen, die dichter als das beieinander liegen, gelten als eine (Node + Bahnsteig doppelt gemappt). */
+/** Haltestellen dichter als das gelten als eine (Node + Bahnsteig doppelt gemappt). */
 const STOP_DEDUP_M = 30;
+/** Gleichnamige Haltestellen in diesem Umkreis sind Steige derselben Haltestelle
+ *  (Richtungspaare, Bussteige) — für die Nachfrage ein einziger Ausstiegsort. */
+const STOP_SAME_NAME_M = 250;
 
 export const DemandService = {
   /**
@@ -124,63 +127,86 @@ export const DemandService = {
   },
 
   /**
-   * Zieht Startpunkte an ÖPNV-Haltestellen (mehrere Fahrgäste pro Haltestelle
-   * sind plausibel, daher keine Kapazitätsgrenze).
+   * Zieht Startpunkte an ÖPNV-Haltestellen.
+   *
+   * Bewusst OHNE Längenverteilung: Wer mit Bus/Bahn kommt, steigt an der
+   * Haltestelle aus, die dem Ziel am nächsten liegt, und läuft die letzte
+   * Strecke — die Fußweglänge ergibt sich also aus der Lage der Haltestellen,
+   * nicht aus einer Verteilungsannahme. Genutzt werden die N zielnächsten
+   * Haltestellen (CONFIG.DEMAND_TRANSIT_STOPS), gewichtet nach Nähe: die
+   * nächste trägt am meisten, ein Bahnhof etwas weiter weg entsprechend weniger.
+   *
+   * Keine Kapazitätsgrenze — von einer Haltestelle können viele Fahrgäste kommen.
+   * @returns {{ points: Array, used: Array }} used = tatsächlich genutzte Haltestellen (mit Distanz)
    */
-  _drawFromStops(stops, target, radiusM, numPoints, distType) {
-    if (stops.length === 0 || numPoints <= 0) return [];
-    const numBins = Math.min(15, Math.max(1, numPoints));
-    const bins = this._byDistanceBin(stops, s => s.lat, s => s.lon, target, radiusM, numBins);
-    const targets = this._binTargets(numPoints, numBins, distType, radiusM);
+  _drawFromStops(stops, target, numPoints, maxStops) {
+    if (stops.length === 0 || numPoints <= 0) return { points: [], used: [] };
 
-    let orphaned = 0;
-    for (let b = 0; b < numBins; b++) {
-      if (targets[b] > 0 && bins[b].length === 0) { orphaned += targets[b]; targets[b] = 0; }
-    }
-    while (orphaned > 0) {
-      let moved = false;
-      for (let b = 0; b < numBins && orphaned > 0; b++) {
-        if (bins[b].length > 0) { targets[b]++; orphaned--; moved = true; }
-      }
-      if (!moved) break;
-    }
+    const withDistance = stops
+      .map(s => ({ ...s, distance: Geo.distanceMeters(s.lat, s.lon, target[0], target[1]) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.max(1, maxStops));
+
+    // Nähe-Gewicht: 1/(d + 100 m) — dämpft, dass eine Haltestelle direkt am Ziel
+    // alles an sich zieht, lässt die nächste aber klar dominieren.
+    const weights = withDistance.map(s => 1 / Math.max(50, s.distance + 100));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
 
     const points = [];
-    for (let b = 0; b < numBins; b++) {
-      const list = bins[b];
-      if (!list.length) continue;
-      for (let i = 0; i < (targets[b] || 0); i++) {
-        const s = list[Math.floor(Math.random() * list.length)];
-        points.push([s.lat, s.lon]);
+    const counts = new Array(withDistance.length).fill(0);
+    for (let i = 0; i < numPoints; i++) {
+      let r = Math.random() * totalWeight;
+      let idx = withDistance.length - 1;
+      for (let k = 0; k < withDistance.length; k++) {
+        r -= weights[k];
+        if (r <= 0) { idx = k; break; }
       }
-    }
-    while (points.length < numPoints && stops.length) {
-      const s = stops[Math.floor(Math.random() * stops.length)];
+      const s = withDistance[idx];
+      counts[idx]++;
       points.push([s.lat, s.lon]);
     }
-    return points;
+
+    const used = withDistance
+      .map((s, i) => ({ name: s.properties && s.properties.name, distance: Math.round(s.distance), count: counts[i] }))
+      .filter(s => s.count > 0);
+    return { points, used };
   },
 
-  /** Haltestellen zusammenfassen, die faktisch dieselbe sind (Node + Bahnsteig). */
+  /**
+   * Fasst Haltestellen zusammen, die faktisch eine sind:
+   * - Punkte dichter als STOP_DEDUP_M (Node + Bahnsteig doppelt gemappt)
+   * - gleichnamige Steige im Umkreis STOP_SAME_NAME_M (Richtungspaare, Bussteige) —
+   *   sonst wären „die 3 nächsten Haltestellen“ oft dreimal dieselbe.
+   */
   _dedupeStops(stops) {
     const kept = [];
-    // Grid-Bucket in ~STOP_DEDUP_M, damit der Vergleich nicht quadratisch wird
-    const cell = STOP_DEDUP_M / 111320;
-    const seen = new Map();
+    // Grid-Bucket, damit der Vergleich nicht quadratisch wird
+    const cell = STOP_SAME_NAME_M / 111320;
+    const buckets = new Map();
+    const nameOf = (s) => ((s.properties && s.properties.name) || '').trim().toLowerCase();
+
     for (const s of stops) {
-      const key = `${Math.round(s.lat / cell)}:${Math.round(s.lon / cell)}`;
+      const bx = Math.round(s.lat / cell);
+      const by = Math.round(s.lon / cell);
       const neighbours = [];
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
-          const bucket = seen.get(`${Math.round(s.lat / cell) + dx}:${Math.round(s.lon / cell) + dy}`);
+          const bucket = buckets.get(`${bx + dx}:${by + dy}`);
           if (bucket) neighbours.push(...bucket);
         }
       }
-      const dup = neighbours.some(o => Geo.distanceMeters(s.lat, s.lon, o.lat, o.lon) < STOP_DEDUP_M);
-      if (dup) continue;
+      const name = nameOf(s);
+      const duplicate = neighbours.some(o => {
+        const d = Geo.distanceMeters(s.lat, s.lon, o.lat, o.lon);
+        if (d < STOP_DEDUP_M) return true;
+        return name && name === nameOf(o) && d < STOP_SAME_NAME_M;
+      });
+      if (duplicate) continue;
+
       kept.push(s);
-      if (!seen.has(key)) seen.set(key, []);
-      seen.get(key).push(s);
+      const key = `${bx}:${by}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(s);
     }
     return kept;
   },
@@ -216,7 +242,8 @@ export const DemandService = {
 
     const stops = this._dedupeStops(rawStops);
     const residential = this._drawFromCells(cells, target, radiusM, nResidential, distType, basis);
-    const transitPoints = this._drawFromStops(stops, target, radiusM, nTransit, distType);
+    const transit = this._drawFromStops(stops, target, nTransit, CONFIG.DEMAND_TRANSIT_STOPS || 3);
+    const transitPoints = transit.points;
 
     const points = [...residential.points, ...transitPoints];
     // Reihenfolge mischen, damit Farben/Indizes nicht nach Quelle sortiert sind
@@ -235,6 +262,8 @@ export const DemandService = {
         transit: transitPoints.length,
         capacity: residential.capacity,
         stops: stops.length,
+        // genutzte Haltestellen mit Entfernung zum Ziel (für die Panel-Anzeige)
+        transitStops: transit.used,
         // true, wenn die Personen im Radius für die gewünschte Anzahl nicht reichen
         capacityLimited: residential.used < nResidential
       }

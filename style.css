@@ -75,6 +75,35 @@ html, body {
   font-size: 11px;
 }
 
+.demand-info-stops {
+  margin-top: 4px;
+  padding-left: 2px;
+}
+
+.demand-info-stop {
+  font-size: 11px;
+  color: #10b981;
+  line-height: 1.5;
+}
+
+.demand-info-stop span {
+  color: #888;
+}
+
+.config-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #444;
+}
+
+.config-field-inline input[type="number"] {
+  width: 56px;
+  margin: 0;
+}
+
 .demand-info-warn {
   margin-top: 4px;
   color: #b45309;
