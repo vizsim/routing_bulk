@@ -8,10 +8,11 @@ export const API = {
    * @param {Array} startLatLng - [lat, lng]
    * @param {Array} endLatLng - [lat, lng]
    * @param {AbortSignal} [signal] - bricht den Request ab (neuer Klick ersetzt alte Berechnung)
+   * @param {string} [profile] - überschreibt CONFIG.PROFILE (z.B. 'foot' ab Haltestelle)
    */
-  async fetchRoute(startLatLng, endLatLng, signal = undefined) {
+  async fetchRoute(startLatLng, endLatLng, signal = undefined, profile = undefined) {
     const body = {
-      profile: CONFIG.PROFILE,
+      profile: profile || CONFIG.PROFILE,
       points: [
         Geo.llToGhPoint(startLatLng[0], startLatLng[1]),
         Geo.llToGhPoint(endLatLng[0], endLatLng[1]),

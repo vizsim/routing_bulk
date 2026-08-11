@@ -98,7 +98,10 @@ export const DemandSelector = {
     const usedStops = info.transitStops || [];
     const parts = [];
     if (info.residential > 0) parts.push(`${info.residential} vom Wohnort`);
-    if (info.transit > 0) parts.push(`${info.transit} vom ÖPNV`);
+    // Ab Haltestelle wird immer zu Fuß geroutet — bei anderem Profil dazusagen
+    if (info.transit > 0) {
+      parts.push(`${info.transit} vom ÖPNV${CONFIG.PROFILE !== 'foot' ? ' (zu Fuß)' : ''}`);
+    }
 
     let html = `<div>${parts.join(' · ') || 'Keine Startpunkte'}</div>`;
     // Genutzte Ausstiegs-Haltestellen mit Luftlinie zum Ziel

@@ -581,7 +581,8 @@ export const Visualization = {
           
           // Neue Route berechnen
           try {
-            const result = await API.fetchRoute(newStart, targetForRoute);
+            // Profil des Startpunkts beibehalten (ÖPNV-Zubringer bleiben Fußwege)
+            const result = await API.fetchRoute(newStart, targetForRoute, undefined, RouteService.profileForStart(index));
             if (result.paths?.[0]) {
             // Route-Daten extrahieren und im State aktualisieren
             const coords = API.extractRouteCoordinates(result);

@@ -10,6 +10,7 @@ export const State = {
   currentTargetMarker: null, // Marker für aktuellen Zielpunkt im normalen Modus
   targetRoutes: [], // Routen pro Zielpunkt: [{target: [lat, lng], routeData: [...], routeResponses: [...], routePolylines: [...], starts: [...], colors: [...]}, ...]
   lastStarts: null,
+  lastStartSources: null, // 'residential' | 'transit' je Startpunkt (steuert das Profil)
   lastColors: null,
   startMarkers: [],
   routePolylines: [],
@@ -29,6 +30,7 @@ export const State = {
   getCurrentTargetMarker() { return this.currentTargetMarker; },
   getTargetRoutes() { return this.targetRoutes; },
   getLastStarts() { return this.lastStarts; },
+  getLastStartSources() { return this.lastStartSources; },
   getLastColors() { return this.lastColors; },
   getStartMarkers() { return this.startMarkers; },
   getRoutePolylines() { return this.routePolylines; },
@@ -51,6 +53,7 @@ export const State = {
   setCurrentTargetMarker(marker) { this.currentTargetMarker = marker; },
   setTargetRoutes(routes) { this.targetRoutes = routes; },
   setLastStarts(starts) { this.lastStarts = starts; },
+  setLastStartSources(sources) { this.lastStartSources = sources; },
   setLastColors(colors) { this.lastColors = colors; },
   setStartMarkers(markers) { this.startMarkers = markers; },
   setRoutePolylines(polylines) { this.routePolylines = polylines; },

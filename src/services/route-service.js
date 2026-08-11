@@ -15,6 +15,19 @@ export const RouteService = {
   _abortController: null,
 
   /**
+   * Profil für einen Startpunkt. Wege ab einer ÖPNV-Haltestelle sind immer
+   * Fußwege — wer mit Bus/Bahn ankommt, läuft die letzte Strecke, unabhängig
+   * vom gewählten Profil der Wohnort-Startpunkte.
+   * @param {number} index - Index des Startpunkts
+   * @param {Array<string>} [sources] - 'residential' | 'transit' je Startpunkt
+   * @returns {string} GraphHopper-Profil
+   */
+  profileForStart(index, sources) {
+    const list = sources || State.getLastStartSources();
+    return list && list[index] === 'transit' ? 'foot' : CONFIG.PROFILE;
+  },
+
+  /**
    * Berechnet Routen zu einem Zielpunkt
    * @param {Array} target - [lat, lng]
    * @param {Object} options - Optionen (reuseStarts, etc.)
@@ -36,10 +49,11 @@ export const RouteService = {
     }
 
     // Startpunkte erzeugen oder wiederverwenden
-    let starts, colors;
+    let starts, colors, startSources;
     if (reuseStarts && State.getLastStarts() && State.getLastColors()) {
       starts = State.getLastStarts();
       colors = State.getLastColors();
+      startSources = State.getLastStartSources();
     } else {
       // Einwohner-Gewichtung: eigene Checkbox (unabhängig von Längenverteilung)
       const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
@@ -51,6 +65,7 @@ export const RouteService = {
         try {
           const demand = await DemandService.generateStartPoints(target, CONFIG.N, distType);
           starts = demand.points;
+          startSources = demand.sources;
           State.setDemandInfo(demand.info);
           EventBus.emit(Events.DEMAND_UPDATED, demand.info);
           if (!starts || starts.length === 0) {
@@ -74,6 +89,7 @@ export const RouteService = {
       }
 
       State.setLastStarts(starts);
+      State.setLastStartSources(startSources || null);
       colors = Array.from({ length: starts.length }, () =>
         `hsl(${Math.random() * 360}, 70%, 50%)`
       );
@@ -108,7 +124,7 @@ export const RouteService = {
           const i = nextIndex++;
           if (i >= total) return;
           try {
-            results[i] = await API.fetchRoute(starts[i], target, signal);
+            results[i] = await API.fetchRoute(starts[i], target, signal, RouteService.profileForStart(i, startSources));
           } catch (err) {
             results[i] = { __err: err };
           }
@@ -244,7 +260,7 @@ export const RouteService = {
    */
   async updateRoute(index, newStart, target) {
     try {
-      const result = await API.fetchRoute(newStart, target);
+      const result = await API.fetchRoute(newStart, target, undefined, this.profileForStart(index));
       if (result.paths?.[0]) {
         const coords = API.extractRouteCoordinates(result);
         if (coords) {

@@ -342,6 +342,17 @@ werden. Drei Bausteine, in dieser Reihenfolge angewandt:
    Haltestellen haben bewusst **keine** Kapazitätsgrenze (von einer Haltestelle
    können viele Fahrgäste kommen).
 
+   Für diesen Anteil gilt die **Längenverteilung nicht**: Wer mit Bus/Bahn
+   ankommt, steigt an der Haltestelle nächst dem *Ziel* aus und läuft die letzte
+   Strecke — die Fußweglänge ergibt sich also aus der Lage der Haltestellen, nicht
+   aus einer Verteilungsannahme. Genutzt werden die N zielnächsten Haltestellen
+   (Default 3, im Panel einstellbar), gewichtet mit 1/(d+100 m).
+
+   Wege ab einer Haltestelle werden **immer als Fußweg** gerechnet, auch wenn das
+   Profil Rad oder Auto ist — bewusst ohne Bedienelement, weil jede andere
+   Einstellung fachlich falsch wäre. Sichtbar gemacht über den Panel-Hinweis und
+   die Info-Zeile („20 vom ÖPNV (zu Fuß)").
+
 **Datenbasis:** Das Zensus-2022-PMTiles enthält neben `Einwohner` auch
 `Unter18` als **absolute Zahl** je 100×100-m-Zelle (plus `AnteilUnter18` als
 Prozentwert, der als Fallback dient). Damit ist „nur Kinder/Jugendliche“ eine

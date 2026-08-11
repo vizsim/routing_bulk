@@ -246,14 +246,22 @@ export const DemandService = {
     const transitPoints = transit.points;
 
     const points = [...residential.points, ...transitPoints];
+    // Quelle je Startpunkt: bestimmt später das Routing-Profil
+    // ('transit' fährt immer zu Fuß weiter, siehe RouteService)
+    const sources = [
+      ...new Array(residential.points.length).fill('residential'),
+      ...new Array(transitPoints.length).fill('transit')
+    ];
     // Reihenfolge mischen, damit Farben/Indizes nicht nach Quelle sortiert sind
     for (let i = points.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [points[i], points[j]] = [points[j], points[i]];
+      [sources[i], sources[j]] = [sources[j], sources[i]];
     }
 
     return {
       points,
+      sources,
       info: {
         basis,
         requested: numPoints,
