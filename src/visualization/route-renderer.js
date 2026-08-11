@@ -12,13 +12,15 @@ import { ColormapUtils } from './colormap-utils.js';
 import { MapRenderer } from './map-renderer.js';
 
 // Farben je ÖPNV-Modus (MOTIS-Leg-Modes):
-// Bus lila, Tram rot, U-Bahn blau, S-Bahn grün, Bahn dunkelgrau
+// Bus lila, Tram rot, U-Bahn blau, S-Bahn grün, Bahn dunkelgrau.
+// Achtung: MOTIS meldet S-Bahnen (GTFS route_type 109) als METRO,
+// U-Bahnen als SUBWAY — METRO gehört daher zur S-Bahn-Familie.
 const TRANSIT_MODE_COLORS = {
   WALK: '#9ca3af',
   BUS: '#9333ea',
   TRAM: '#dc2626',
   SUBWAY: '#1d4ed8',
-  METRO: '#1d4ed8',
+  METRO: '#15803d',
   SUBURBAN: '#15803d',
   RAIL: '#475569',
   REGIONAL_RAIL: '#475569',
@@ -29,7 +31,7 @@ const TRANSIT_MODE_COLORS = {
 };
 
 const TRANSIT_MODE_NAMES = {
-  WALK: 'Fußweg', BUS: 'Bus', TRAM: 'Tram', SUBWAY: 'U-Bahn', METRO: 'U-Bahn',
+  WALK: 'Fußweg', BUS: 'Bus', TRAM: 'Tram', SUBWAY: 'U-Bahn', METRO: 'S-Bahn',
   SUBURBAN: 'S-Bahn', RAIL: 'Bahn', REGIONAL_RAIL: 'Bahn', REGIONAL_FAST_RAIL: 'Bahn',
   LONG_DISTANCE: 'Bahn', HIGHSPEED_RAIL: 'Bahn', FERRY: 'Fähre'
 };
