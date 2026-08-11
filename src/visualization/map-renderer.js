@@ -24,33 +24,55 @@ export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/"
 /** Attribution für OSM-Datenlayer (Schulen, Haltestellen) aus der unfallkarte-Pipeline. */
 export const OSM_LAYER_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
 
-const PLATFORM_COLOR = '#10b981';
-const SCHOOL_COLOR = '#3b82f6';       // Schulen: kräftiges Blau
-const KINDERGARTEN_COLOR = '#7db4fa'; // Kindergärten: helleres Blau
+const PLATFORM_COLOR = '#10b981';      // ÖPNV-Haltestellen: Grün
+const SCHOOL_COLOR = '#2563eb';        // Schulen: kräftiges Blau
+const KINDERGARTEN_COLOR = '#60a5fa';  // Kindergärten: helleres Blau (noch kontrastreich auf Weiß)
 
-// Schul-Glyphe (gekreuzte Stifte, aus der alten Overpass-Darstellung übernommen)
+// Schul-Glyphe (gekreuzte Stifte, aus der alten Overpass-Darstellung übernommen), 512er-viewBox
 const SCHOOL_GLYPH_PATH = 'M463.313,346.29c-0.758-2.274-2.224-4.747-4.085-6.608l-83.683-83.682l131.503-131.502c6.603-6.603,6.603-17.307,0-23.909 L411.411,4.952C408.241,1.782,403.941,0,399.456,0s-8.785,1.782-11.954,4.952 c-4.677,4.677-123.793,123.793-131.502,131.502l-71.724-71.725c-0.001-0.001-0.002-0.002-0.003-0.005 c-0.001-0.002-0.002-0.002-0.005-0.003l-47.815-47.815c-19.819-19.821-51.904-19.826-71.727,0L16.908,64.726 c-19.776,19.775-19.776,51.952,0,71.727l119.547,119.547C134.263,258.19,16.761,375.691,4.952,387.5 c-6.603,6.603-6.603,17.307,0,23.909l95.637,95.639c3.171,3.17,7.47,4.952,11.954,4.952s8.785-1.782,11.954-4.952 l131.502-131.502l83.682,83.682c1.853,1.853,4.317,3.322,6.608,4.085l143.456,47.818c6.058,2.02,12.762,0.455,17.301-4.085 c4.529-4.528,6.11-11.226,4.085-17.301L463.313,346.29z M303.82,136.453l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952 s8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909l-23.909-23.909l23.909-23.909l23.91,23.909 c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952c6.603-6.603,6.603-17.307,0-23.909l-23.909-23.909 l23.909-23.909l71.728,71.728L351.638,232.09l-71.728-71.728L303.82,136.453z M423.366,351.637l-23.91,23.91L148.408,124.499 l23.909-23.909L423.366,351.637z M76.681,148.408l-35.864-35.864c-6.591-6.592-6.591-17.318,0-23.909l47.819-47.819 c6.607-6.606,17.301-6.609,23.909,0l35.864,35.864C145.133,79.956,79.944,145.145,76.681,148.408z M112.545,471.183l-71.728-71.728 l23.91-23.909l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909 l-23.908-23.91l23.909-23.909l23.91,23.909c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952 c6.603-6.603,6.603-17.307,0-23.909l-23.91-23.909l23.909-23.909l71.728,71.728L112.545,471.183z M351.637,423.366L100.59,172.317 l23.909-23.909l251.048,251.048L351.637,423.366z M382.935,439.886l56.952-56.952l28.475,85.427L382.935,439.886z';
 
-/** Badge-Icon (weißer Kreis, farbiger Rand + Glyphe) als SVG-String, 64px. */
-function schoolBadgeSvg(color) {
+// Kindergarten-Glyphe: Bauklötze (Kreis, Quadrat, Dreieck), 24er-viewBox
+const KINDERGARTEN_GLYPH = `
+    <circle cx="12" cy="6.2" r="4.2"/>
+    <rect x="2.5" y="13" width="8.5" height="8.5" rx="1"/>
+    <path d="M17.2 12.6 L22 21.5 L12.4 21.5 Z"/>`;
+
+// Bus-Glyphe (24er-viewBox)
+const PLATFORM_GLYPH = `
+    <path d="M4 16c0 .88.39 1.67 1 2.22V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>`;
+
+/**
+ * Badge-Icon (weißer Kreis, farbiger Rand + Glyphe) als SVG-String, 64px.
+ * Eine Quelle für Karten-Icon UND Legenden-Symbol.
+ * @param {string} color - Rand-/Glyphenfarbe
+ * @param {string} glyph - SVG-Inhalt der Glyphe
+ * @param {number} viewBox - Koordinatensystem der Glyphe (24 oder 512)
+ */
+export function badgeSvg(color, glyph, viewBox = 24) {
+  const scale = 30 / viewBox; // Glyphe auf ~30px im 64px-Badge
   return `
 <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <circle cx="32" cy="32" r="29" fill="white" stroke="${color}" stroke-width="5"/>
-  <g transform="translate(17, 17) scale(0.0586)">
-    <path fill="${color}" d="${SCHOOL_GLYPH_PATH}"/>
+  <g transform="translate(17, 17) scale(${scale})" fill="${color}">${glyph}
   </g>
 </svg>`;
 }
 
-// Bus-Icon als eigenständiges Badge (weißer Kreis, grüner Rand, Bus-Symbol) —
-// wird als Rasterbild in die Map geladen und per icon-size zoomskaliert.
-const PLATFORM_ICON_SVG = `
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="32" cy="32" r="29" fill="white" stroke="${PLATFORM_COLOR}" stroke-width="5"/>
-  <g transform="translate(14, 14) scale(1.5)">
-    <path fill="${PLATFORM_COLOR}" d="M4 16c0 .88.39 1.67 1 2.22V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
-  </g>
-</svg>`;
+/** Legenden-Einträge: id -> [{ color, glyph, viewBox, label }] */
+const LAYER_LEGENDS = {
+  'schools-legend': [
+    { color: SCHOOL_COLOR, glyph: `<path d="${SCHOOL_GLYPH_PATH}"/>`, viewBox: 512, label: 'Schule' },
+    { color: KINDERGARTEN_COLOR, glyph: KINDERGARTEN_GLYPH, viewBox: 24, label: 'Kindergarten' }
+  ],
+  'platforms-legend': [
+    { color: PLATFORM_COLOR, glyph: PLATFORM_GLYPH, viewBox: 24, label: 'ÖPNV-Haltestelle' }
+  ]
+};
+
+/** Bild-URL eines Badges (data:-URI, für addImage und Legende) */
+function badgeUrl(color, glyph, viewBox) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(badgeSvg(color, glyph, viewBox))}`;
+}
 
 // pmtiles://-Protokoll einmalig registrieren
 const _pmtilesProtocol = new Protocol();
@@ -266,6 +288,37 @@ export const MapRenderer = {
     map.on('mouseleave', 'agg-lines', hide);
   },
 
+  // ---- Layer-Icons & Legenden ----
+
+  /** Lädt ein Badge-Icon in die Karte (idempotent). */
+  _addBadgeImage(name, color, glyph, viewBox) {
+    const map = this._map;
+    if (map.hasImage(name)) return;
+    const img = new Image(64, 64);
+    img.onload = () => {
+      if (!map.hasImage(name)) map.addImage(name, img);
+    };
+    img.src = badgeUrl(color, glyph, viewBox);
+  },
+
+  /**
+   * Füllt einen Legenden-Block mit Symbol + Beschriftung und zeigt/versteckt ihn.
+   * Symbole stammen aus derselben SVG-Quelle wie die Karten-Icons.
+   */
+  _setLayerLegendVisible(legendId, visible) {
+    const el = document.getElementById(legendId);
+    if (!el) return;
+    if (visible && !el.dataset.filled) {
+      el.innerHTML = (LAYER_LEGENDS[legendId] || []).map(item => `
+        <div class="layer-legend-row">
+          <img class="layer-legend-icon" src="${badgeUrl(item.color, item.glyph, item.viewBox)}" alt="" />
+          <span>${item.label}</span>
+        </div>`).join('');
+      el.dataset.filled = '1';
+    }
+    el.style.display = visible ? 'block' : 'none';
+  },
+
   // ---- Schul-Layer (PMTiles aus der unfallkarte-Pipeline, ersetzt Overpass) ----
 
   _initSchoolsLayer() {
@@ -281,14 +334,9 @@ export const MapRenderer = {
       attribution: OSM_LAYER_ATTRIBUTION
     });
 
-    // Badge-Icons laden (Schule kräftig, Kindergarten heller)
-    [['school-icon', SCHOOL_COLOR], ['kindergarten-icon', KINDERGARTEN_COLOR]].forEach(([name, color]) => {
-      const img = new Image(64, 64);
-      img.onload = () => {
-        if (!map.hasImage(name)) map.addImage(name, img);
-      };
-      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(schoolBadgeSvg(color))}`;
-    });
+    // Badge-Icons laden: Schule (Stifte, kräftiges Blau), Kindergarten (Bauklötze, helles Blau)
+    this._addBadgeImage('school-icon', SCHOOL_COLOR, `<path d="${SCHOOL_GLYPH_PATH}"/>`, 512);
+    this._addBadgeImage('kindergarten-icon', KINDERGARTEN_COLOR, KINDERGARTEN_GLYPH, 24);
 
     // Farbe nach Typ (amenity=school | kindergarten)
     const colorByType = ['match', ['get', 'amenity'], 'kindergarten', KINDERGARTEN_COLOR, SCHOOL_COLOR];
@@ -348,6 +396,7 @@ export const MapRenderer = {
   },
 
   setSchoolsLayerVisible(visible) {
+    this._setLayerLegendVisible('schools-legend', visible);
     if (!this._ready) {
       this._map?.once('load', () => this.setSchoolsLayerVisible(visible));
       return;
@@ -367,6 +416,7 @@ export const MapRenderer = {
       return;
     }
     checkbox.checked = !!CONFIG.SCHOOLS_LAYER_VISIBLE;
+    this._setLayerLegendVisible('schools-legend', checkbox.checked);
     checkbox.addEventListener('change', () => {
       CONFIG.SCHOOLS_LAYER_VISIBLE = checkbox.checked;
       this.setSchoolsLayerVisible(checkbox.checked);
@@ -388,12 +438,8 @@ export const MapRenderer = {
       attribution: OSM_LAYER_ATTRIBUTION
     });
 
-    // Bus-Icon einmalig als Rasterbild laden
-    const img = new Image(64, 64);
-    img.onload = () => {
-      if (!map.hasImage('platform-icon')) map.addImage('platform-icon', img);
-    };
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PLATFORM_ICON_SVG)}`;
+    // Bus-Badge einmalig als Rasterbild laden
+    this._addBadgeImage('platform-icon', PLATFORM_COLOR, PLATFORM_GLYPH, 24);
 
     // Bahnsteig-Flächen und lineare Bahnsteige unter den Routen
     map.addLayer({
@@ -464,6 +510,7 @@ export const MapRenderer = {
   },
 
   setPlatformsLayerVisible(visible) {
+    this._setLayerLegendVisible('platforms-legend', visible);
     if (!this._ready) {
       this._map?.once('load', () => this.setPlatformsLayerVisible(visible));
       return;
@@ -483,6 +530,7 @@ export const MapRenderer = {
       return;
     }
     checkbox.checked = !!CONFIG.PLATFORMS_LAYER_VISIBLE;
+    this._setLayerLegendVisible('platforms-legend', checkbox.checked);
     checkbox.addEventListener('change', () => {
       CONFIG.PLATFORMS_LAYER_VISIBLE = checkbox.checked;
       this.setPlatformsLayerVisible(checkbox.checked);
