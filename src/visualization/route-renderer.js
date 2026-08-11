@@ -69,12 +69,6 @@ export const RouteRenderer = {
         0.15
       );
 
-      // Kanten-Aggregation liefert vollständige Polylines (coords),
-      // die geometrischen Methoden nur 2-Punkt-Segmente (start/end)
-      const lineCoords = seg.coords
-        ? seg.coords.map(([lat, lng]) => [lng, lat])
-        : [[seg.start[1], seg.start[0]], [seg.end[1], seg.end[0]]];
-
       return {
         type: 'Feature',
         properties: {
@@ -86,7 +80,7 @@ export const RouteRenderer = {
         },
         geometry: {
           type: 'LineString',
-          coordinates: lineCoords
+          coordinates: seg.coords.map(([lat, lng]) => [lng, lat])
         }
       };
     });
@@ -106,12 +100,11 @@ export const RouteRenderer = {
 
     if (CONFIG.AGGREGATED) {
       // Aggregierte Darstellung: Alle Routen aller Zielpunkte zusammen aggregieren
-      const allRouteData = RouteService.getAllRoutesForTargets();
       const allResponses = RouteService.getAllRouteResponsesForTargets();
 
-      if (allRouteData.length > 0) {
+      if (allResponses.length > 0) {
         // Alle Routen zusammen aggregieren (egal von welchem Zielpunkt)
-        const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData, allResponses);
+        const aggregatedSegments = AggregationService.aggregateRoutes(allResponses);
         if (aggregatedSegments.length > 0) {
           const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
           this.drawAggregatedRoutes(aggregatedSegments, maxCount);
@@ -155,7 +148,7 @@ export const RouteRenderer = {
     if (CONFIG.AGGREGATED && routeData.length > 0) {
       // Aggregierte Darstellung
       const rawResponses = (routeResponses || []).map(r => r?.response);
-      const aggregatedSegments = AggregationService.aggregateRoutes(routeData, rawResponses);
+      const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
       if (aggregatedSegments.length > 0) {
         const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
         this.drawAggregatedRoutes(aggregatedSegments, maxCount);

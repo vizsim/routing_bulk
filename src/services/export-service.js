@@ -44,20 +44,16 @@ export const ExportService = {
       const rawResponses = rememberMode
         ? RouteService.getAllRouteResponsesForTargets()
         : (allRouteResponses || []).map(r => r?.response);
-      const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData, rawResponses);
+      const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
       aggregatedSegments.forEach((segment, index) => {
-        // Kanten-Aggregation liefert vollständige Polylines, geometrische
-        // Methoden 2-Punkt-Segmente. Export immer als Geometrie — edge_ids
-        // sind nach einem Graph-Rebuild nicht mehr stabil.
-        const coordinates = segment.coords
-          ? segment.coords.map(([lat, lng]) => [lng, lat])
-          : [
-              [segment.start[1], segment.start[0]],
-              [segment.end[1], segment.end[0]]
-            ];
+        // Export immer als Geometrie — edge_ids sind nach einem
+        // Graph-Rebuild nicht mehr stabil.
         features.push({
           type: 'Feature',
-          geometry: { type: 'LineString', coordinates },
+          geometry: {
+            type: 'LineString',
+            coordinates: segment.coords.map(([lat, lng]) => [lng, lat])
+          },
           properties: {
             count: segment.count,
             segmentIndex: index
@@ -112,7 +108,7 @@ export const ExportService = {
     const metadata = {
       exportDate: new Date().toISOString(),
       mode: CONFIG.AGGREGATED ? 'aggregated' : 'individual',
-      aggregationMethod: CONFIG.AGGREGATED ? CONFIG.AGGREGATION_METHOD : null,
+      aggregationMethod: CONFIG.AGGREGATED ? 'edges' : null,
       routeCount: totalRouteCount,
       profile: CONFIG.PROFILE
     };
@@ -132,7 +128,7 @@ export const ExportService = {
     
     let filename = 'routes_';
     if (CONFIG.AGGREGATED) {
-      filename += `aggregated_${CONFIG.AGGREGATION_METHOD}_`;
+      filename += 'aggregated_edges_';
     } else {
       filename += 'individual_';
     }

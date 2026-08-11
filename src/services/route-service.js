@@ -166,25 +166,6 @@ export const RouteService = {
   },
 
   /**
-   * Gibt alle Routen-Daten für alle Zielpunkte zurück
-   * @returns {Array} - Array von routeData-Arrays
-   */
-  getAllRoutesForTargets() {
-    const targetRoutes = State.getTargetRoutes();
-    const allRouteData = [];
-
-    targetRoutes.forEach(routeInfo => {
-      if (routeInfo && routeInfo.routeData && routeInfo.routeData.length > 0) {
-        routeInfo.routeData.forEach(routeData => {
-          allRouteData.push(routeData);
-        });
-      }
-    });
-
-    return allRouteData;
-  },
-
-  /**
    * Sammelt die rohen GraphHopper-Responses aller gespeicherten Zielpunkte
    * (für die exakte edge_id-Aggregation).
    * @returns {Array} - Array von GH-Responses

@@ -16,8 +16,7 @@ export const CONFIG = {
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
   MAP_CENTER: [52.6858, 14.10078], // [lat, lon]
   MAP_ZOOM: 13,
-  AGGREGATED: false, // Aggregierte Darstellung
-  AGGREGATION_METHOD: "edges", // "edges" (exakt via GH edge_id), "simple" oder "lazyOverlap"
+  AGGREGATED: false, // Aggregierte Darstellung (exakt über GH edge_id, siehe aggregation-service.js)
   HIDE_START_POINTS: false, // Startpunkte ausblenden
   HIDE_TARGET_POINTS: false, // Zielpunkte ausblenden
   COLORMAP: "viridis_r", // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"

@@ -33,13 +33,7 @@ export function updateConfigFromUI() {
   if (aggregatedInput) {
     CONFIG.AGGREGATED = aggregatedInput.checked;
   }
-  
-  // Aggregierungsmethode
-  const methodInput = Utils.getElement('#config-aggregation-method');
-  if (methodInput) {
-    CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
-  }
-  
+
   // Startpunkte ausblenden
   const hideStartPointsInput = Utils.getElement('#config-hide-start-points');
   if (hideStartPointsInput) {
@@ -70,15 +64,11 @@ export function updateConfigFromUI() {
  */
 export function toggleAggregationUI() {
   const legend = Utils.getElement('#legend');
-  const methodGroup = Utils.getElement('#aggregation-method-group');
   const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
   const hideTargetPointsGroup = Utils.getElement('#hide-target-points-group');
-  
+
   if (legend) {
     legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-  }
-  if (methodGroup) {
-    methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
   }
   if (hideStartPointsGroup) {
     hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';

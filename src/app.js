@@ -191,7 +191,6 @@ export const App = {
     // Profil-Buttons und Aggregation-Toggle
     this._setupProfileButtons();
     this._setupAggregationToggle();
-    this._setupAggregationMethod();
     
     // Anzahl Routen und Radius
     this._setupRouteCountInput();
@@ -293,58 +292,13 @@ export const App = {
       }
       
       // UI aktualisieren
-      if (typeof toggleAggregationUI === 'function') {
-        toggleAggregationUI();
-      } else {
-        // Fallback: UI manuell aktualisieren
-        const legend = Utils.getElement('#legend');
-        const methodGroup = Utils.getElement('#aggregation-method-group');
-        const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
-        
-        if (legend) {
-          legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        if (methodGroup) {
-          methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        if (hideStartPointsGroup) {
-          hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        
-        // Legende-Gradient aktualisieren wenn sichtbar
-        if (CONFIG.AGGREGATED && legend && legend.style.display === 'block') {
-          Visualization.updateLegendGradient();
-          Visualization.updateColormapPreviews();
-        }
-      }
-      
+      toggleAggregationUI();
+
       EventBus.emit(Events.CONFIG_AGGREGATION_CHANGED);
     });
   },
-  
-  /**
-   * Richtet die Aggregierungsmethode ein
-   */
-  _setupAggregationMethod() {
-    const methodInput = Utils.getElement('#config-aggregation-method');
-    if (!methodInput) return;
-    
-    // Initialer Wert
-    methodInput.value = CONFIG.AGGREGATION_METHOD;
-    
-    // Event-Listener
-    methodInput.addEventListener('change', () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
-      }
-      
-      EventBus.emit(Events.CONFIG_AGGREGATION_CHANGED);
-    });
-  },
-  
-  
+
+
   /**
    * Berechnet Routen für einen Zielpunkt neu und aktualisiert die Anzeige
    */

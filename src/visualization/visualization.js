@@ -624,9 +624,8 @@ export const Visualization = {
                 RouteRenderer.drawAllTargetRoutes();
               } else if (CONFIG.AGGREGATED) {
                 // Aggregierte Darstellung neu berechnen (nur aktueller Zielpunkt)
-                const allRouteData = State.getAllRouteData();
                 const rawResponses = (State.getAllRouteResponses() || []).map(r => r?.response);
-                const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData, rawResponses);
+                const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
                 if (aggregatedSegments.length > 0) {
                   const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
                   RouteRenderer.drawAggregatedRoutes(aggregatedSegments, maxCount);
