@@ -9,6 +9,7 @@ import { ExportService } from './services/export-service.js';
 import { RouteService } from './services/route-service.js';
 import { TargetService } from './services/target-service.js';
 import { Accordion } from './ui/accordion.js';
+import { AnalysisPanel } from './ui/analysis-panel.js';
 import { ColormapSelector } from './ui/colormap-selector.js';
 import { toggleAggregationUI, updateBetaHint, updateConfigFromUI } from './ui/config-helpers.js';
 import { DemandSelector } from './ui/demand-selector.js';
@@ -219,6 +220,9 @@ export const App = {
 
     // ⓘ-Tooltips am Icon ausrichten (fixed, damit das Panel sie nicht abschneidet)
     initInfoHints();
+
+    // Gebietsanalyse (eigener Panel-Modus über die Tabs)
+    AnalysisPanel.init();
 
     // Histogramm-Modus: Beeline vs. Echte Routenlänge
     this._setupHistogramModeButtons();
@@ -629,6 +633,12 @@ export const App = {
     const map = State.getMap();
     if (!map) return;
 
+    // Im Analysemodus nur hinfliegen, kein Ziel setzen
+    if (State.isAnalysisMode()) {
+      map.jumpTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13) });
+      return;
+    }
+
     // Karte zur ausgewählten Position bewegen (Zoom 14 in MapLibre ≈ Leaflet 15)
     map.jumpTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
 
@@ -656,6 +666,10 @@ export const App = {
    * Behandelt Map-Click
    */
   async handleMapClick(latlng) {
+    // Im Analysemodus setzen Karten-Klicks kein Ziel (Polygon-Zeichnen
+    // nutzt eigene Handler)
+    if (State.isAnalysisMode()) return;
+
     const target = [latlng.lat, latlng.lng];
     State.setLastTarget(target);
     

@@ -17,6 +17,148 @@ html, body {
   left: 10px;
 }
 
+/* Panel-Tabs (Routing / Gebietsanalyse) */
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 3px;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.panel-tab {
+  flex: 1;
+  padding: 7px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.panel-tab:hover {
+  color: #2563eb;
+}
+
+.panel-tab.active {
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.panel-tab-beta {
+  font-size: 9px;
+  font-weight: 700;
+  color: #b45309;
+  vertical-align: super;
+}
+
+/* Gebietsanalyse */
+.analysis-btn {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.analysis-btn:hover:not(:disabled) {
+  border-color: #d97706;
+  color: #d97706;
+}
+
+.analysis-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#analysis-facilities {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.analysis-facility {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.analysis-facility-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-facility-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Höhere Spezifität als ".config-group input" (width: 100% dort) */
+.analysis-facility .analysis-trips-input {
+  width: 60px;
+  flex-shrink: 0;
+  padding: 3px 4px;
+  font-size: 12px;
+  text-align: right;
+}
+
+.analysis-settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.analysis-settings-table th {
+  text-align: center;
+  font-weight: 600;
+  color: #64748b;
+  padding: 2px;
+}
+
+.analysis-settings-table td {
+  padding: 2px;
+}
+
+.analysis-settings-table td input {
+  width: 100%;
+  min-width: 36px;
+  padding: 3px 2px;
+  font-size: 11px;
+  text-align: right;
+}
+
+/* Radius braucht 4-5 Stellen (z. B. 2000, 10000) */
+.analysis-settings-table td input[data-field="radiusM"] {
+  min-width: 52px;
+}
+
+.analysis-settings-type {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.analysis-split-invalid td {
+  background: #fef2f2;
+}
+
 /* Fester Beta-Hinweis, solange das ÖPNV-Profil aktiv ist */
 .beta-hint {
   margin-top: 8px;

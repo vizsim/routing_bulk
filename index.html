@@ -33,6 +33,10 @@
       </div>
     </div>
     <div class="panel-section">
+      <div class="panel-tabs" role="tablist">
+        <button id="tab-routing" class="panel-tab active" type="button" role="tab" aria-selected="true">Routing</button>
+        <button id="tab-analysis" class="panel-tab" type="button" role="tab" aria-selected="false">Gebietsanalyse <span class="panel-tab-beta">β</span></button>
+      </div>
       <section class="config-block" aria-labelledby="block-einstellungen-heading">
         <h4 id="block-einstellungen-heading" class="config-block-title">Einstellungen</h4>
         <div class="config-group">
@@ -314,6 +318,40 @@
         <h4 id="block-export-heading" class="config-block-title">Export</h4>
         <div class="config-group config-group-export">
           <button id="export-btn" class="export-button" disabled>Routen als GeoJSON exportieren</button>
+        </div>
+      </section>
+
+      <section class="config-block" id="analysis-block" style="display: none;" aria-labelledby="block-analyse-heading">
+        <h4 id="block-analyse-heading" class="config-block-title">Gebietsanalyse</h4>
+        <div class="beta-hint">
+          <strong>Experimentell.</strong> Bereich zeichnen → Schulen &amp; Kitas darin
+          finden → Fahrten je Einrichtung und Modal Split annehmen → alle Wege als
+          Belastungskarte rechnen (unter 18-Jährige, eigener Routing-Server).
+        </div>
+        <div class="config-group">
+          <button id="analysis-draw-btn" class="analysis-btn" type="button">Bereich zeichnen</button>
+          <p class="config-hint" id="analysis-draw-hint" style="display: none;">
+            Klick: Punkt setzen · Doppelklick oder Enter: fertig · Esc: abbrechen
+          </p>
+        </div>
+        <div class="config-group" id="analysis-facilities-group" style="display: none;">
+          <label class="config-group-label">Einrichtungen im Bereich (Fahrten/Tag editierbar):</label>
+          <div id="analysis-facilities"></div>
+        </div>
+        <div class="config-group" id="analysis-settings-group" style="display: none;">
+          <label class="config-group-label">Einzugsradius &amp; Modal Split je Typ (%):</label>
+          <div id="analysis-settings"></div>
+        </div>
+        <div class="config-group" id="analysis-run-group" style="display: none;">
+          <button id="analysis-run-btn" class="export-button" type="button">Berechnen</button>
+          <p class="config-hint" id="analysis-estimate"></p>
+        </div>
+        <div id="analysis-result" class="demand-info" style="display: none;"></div>
+        <div class="config-group" id="analysis-export-group" style="display: none;">
+          <button id="analysis-export-btn" class="export-button" type="button">Analyse als GeoJSON exportieren</button>
+        </div>
+        <div class="config-group" id="analysis-reset-group" style="display: none;">
+          <button id="analysis-reset-btn" class="analysis-btn" type="button">Analyse zurücksetzen</button>
         </div>
       </section>
 
