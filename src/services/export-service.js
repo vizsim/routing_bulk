@@ -5,6 +5,7 @@ import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
 import { AggregationService } from './aggregation-service.js';
+import { RouteService } from './route-service.js';
 
 export const ExportService = {
   /**
@@ -40,17 +41,23 @@ export const ExportService = {
     const features = [];
 
     if (CONFIG.AGGREGATED) {
-      const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData);
+      const rawResponses = rememberMode
+        ? RouteService.getAllRouteResponsesForTargets()
+        : (allRouteResponses || []).map(r => r?.response);
+      const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData, rawResponses);
       aggregatedSegments.forEach((segment, index) => {
-        features.push({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: [
+        // Kanten-Aggregation liefert vollständige Polylines, geometrische
+        // Methoden 2-Punkt-Segmente. Export immer als Geometrie — edge_ids
+        // sind nach einem Graph-Rebuild nicht mehr stabil.
+        const coordinates = segment.coords
+          ? segment.coords.map(([lat, lng]) => [lng, lat])
+          : [
               [segment.start[1], segment.start[0]],
               [segment.end[1], segment.end[0]]
-            ]
-          },
+            ];
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates },
           properties: {
             count: segment.count,
             segmentIndex: index

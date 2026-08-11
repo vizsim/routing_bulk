@@ -1,7 +1,63 @@
 // ==== Aggregation-Service: Routen-Aggregierung ====
 import { CONFIG } from '../core/config.js';
+import { API } from '../domain/api.js';
 
 export const AggregationService = {
+  /**
+   * Exakte Aggregation über GraphHopper-Kanten-IDs (Path Detail edge_id).
+   *
+   * Zwei Routen benutzen genau dann dieselbe Kante, wenn GraphHopper dieselbe
+   * edge_id liefert — kein Grid-Tuning, keine Winkel-Toleranzen, kein
+   * Overlap-Splitting. Gegenläufige Richtungen haben dieselbe edge_id und
+   * werden zusammengezählt (für "alle Routen zum selben Ziel" erwünscht).
+   *
+   * Snap-Kanten am Start/Ziel: GraphHopper meldet auch für die virtuellen
+   * Randstücke die ID der zugrundeliegenden echten Kante, traversiert sie aber
+   * ggf. nur teilweise (ab Snap-Punkt). Deshalb ist der Schlüssel edge_id PLUS
+   * richtungsnormalisierte Endpunkte des tatsächlich gefahrenen Stücks —
+   * volle Traversierungen matchen exakt, unterschiedliche Teilstücke bleiben
+   * getrennt (Zubringer-Stummel mit count=1).
+   *
+   * @param {Array} ghResponses - Roh-Responses von POST /route
+   * @returns {Array} - [{coords: [[lat,lng],...], start, end, count}]
+   */
+  aggregateRoutesEdges(ghResponses) {
+    const edgeMap = new Map(); // key -> {count, coords}
+    const rnd = (v) => Math.round(v * 1e6) / 1e6; // ~10cm, robust gegen Float-Rauschen
+
+    ghResponses.forEach(resp => {
+      const coords = resp?.paths?.[0]?.points?.coordinates; // [lon, lat]
+      const intervals = API.extractEdgeIntervals(resp);
+      if (!coords || !intervals) return;
+
+      for (const [from, to, edgeId] of intervals) {
+        if (!(to > from)) continue;
+        const slice = coords.slice(from, to + 1);
+        const a = `${rnd(slice[0][0])},${rnd(slice[0][1])}`;
+        const b = `${rnd(slice[slice.length - 1][0])},${rnd(slice[slice.length - 1][1])}`;
+        const key = a < b ? `${edgeId}:${a}:${b}` : `${edgeId}:${b}:${a}`;
+
+        let entry = edgeMap.get(key);
+        if (!entry) {
+          entry = { count: 0, coords: slice.map(([lon, lat]) => [lat, lon]) };
+          edgeMap.set(key, entry);
+        }
+        entry.count++;
+      }
+    });
+
+    const aggregatedSegments = [];
+    edgeMap.forEach(entry => {
+      aggregatedSegments.push({
+        coords: entry.coords,
+        start: entry.coords[0],
+        end: entry.coords[entry.coords.length - 1],
+        count: entry.count
+      });
+    });
+    return aggregatedSegments;
+  },
+
   // Einfache Aggregierungsmethode (schnell, stabil)
   aggregateRoutesSimple(routeDataArray) {
     const GRID_SIZE = 0.0001; // ~10m in Grad für Grid-Normalisierung (nur für Matching)
@@ -305,12 +361,22 @@ export const AggregationService = {
   },
   
   // Hauptfunktion - wählt Methode basierend auf CONFIG
-  aggregateRoutes(routeDataArray) {
-    if (CONFIG.AGGREGATION_METHOD === "lazyOverlap") {
-      return this.aggregateRoutesLazyOverlap(routeDataArray);
-    } else {
+  // ghResponses (Roh-Responses) werden nur für die "edges"-Methode gebraucht;
+  // fehlen sie oder fehlen edge_id-Details, fällt sie auf "simple" zurück.
+  aggregateRoutes(routeDataArray, ghResponses = null) {
+    if (CONFIG.AGGREGATION_METHOD === "edges") {
+      const usable = ghResponses && ghResponses.length > 0 &&
+        ghResponses.every(r => !r || API.extractEdgeIntervals(r));
+      if (usable) {
+        return this.aggregateRoutesEdges(ghResponses.filter(Boolean));
+      }
+      console.info('[Aggregation] edge_id-Details nicht für alle Routen vorhanden — Fallback auf "simple".');
       return this.aggregateRoutesSimple(routeDataArray);
     }
+    if (CONFIG.AGGREGATION_METHOD === "lazyOverlap") {
+      return this.aggregateRoutesLazyOverlap(routeDataArray);
+    }
+    return this.aggregateRoutesSimple(routeDataArray);
   }
 };
 

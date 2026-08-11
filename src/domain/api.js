@@ -12,7 +12,11 @@ export const API = {
       ],
       points_encoded: false, // Wichtig: unencoded coordinates zurückgeben
       instructions: false, // Nicht benötigt
-      elevation: false
+      elevation: false,
+      // Kanten-IDs des Straßengraphen als Path Detail: Intervalle
+      // [fromIdx, toIdx, edge_id] über das Koordinaten-Array. Grundlage der
+      // exakten Aggregation (AggregationService.aggregateRoutesEdges).
+      details: ["edge_id"]
     };
 
     const res = await fetch(CONFIG.GH_ROUTE_URL, {
@@ -53,6 +57,17 @@ export const API = {
 
     // GraphHopper gibt [lon, lat] zurück, konvertiere zu [lat, lon]
     return coords.map(([lon, lat]) => [lat, lon]);
+  },
+
+  /**
+   * Liest die edge_id-Intervalle aus der Response: [[fromIdx, toIdx, edgeId], ...]
+   * über paths[0].points.coordinates. null wenn der Server keine Details liefert.
+   * @param {Object} ghResponse - Response von POST /route
+   * @returns {Array|null}
+   */
+  extractEdgeIntervals(ghResponse) {
+    const intervals = ghResponse.paths?.[0]?.details?.edge_id;
+    return Array.isArray(intervals) && intervals.length > 0 ? intervals : null;
   },
 
   /**

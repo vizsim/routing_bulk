@@ -172,7 +172,7 @@ export const RouteService = {
   getAllRoutesForTargets() {
     const targetRoutes = State.getTargetRoutes();
     const allRouteData = [];
-    
+
     targetRoutes.forEach(routeInfo => {
       if (routeInfo && routeInfo.routeData && routeInfo.routeData.length > 0) {
         routeInfo.routeData.forEach(routeData => {
@@ -180,8 +180,28 @@ export const RouteService = {
         });
       }
     });
-    
+
     return allRouteData;
+  },
+
+  /**
+   * Sammelt die rohen GraphHopper-Responses aller gespeicherten Zielpunkte
+   * (für die exakte edge_id-Aggregation).
+   * @returns {Array} - Array von GH-Responses
+   */
+  getAllRouteResponsesForTargets() {
+    const targetRoutes = State.getTargetRoutes();
+    const allResponses = [];
+
+    targetRoutes.forEach(routeInfo => {
+      if (routeInfo && routeInfo.routeResponses && routeInfo.routeResponses.length > 0) {
+        routeInfo.routeResponses.forEach(rr => {
+          if (rr && rr.response) allResponses.push(rr.response);
+        });
+      }
+    });
+
+    return allResponses;
   },
   
   /**
