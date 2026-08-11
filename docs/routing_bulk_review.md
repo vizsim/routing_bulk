@@ -1,7 +1,40 @@
 # routing_bulk – Review & Verbesserungsvorschläge
 
 Stand: 2026-08-07 · Basis: Code-Review von `vizsim/routing_bulk` (main) und Vergleich mit `vizsim/miso`
-Aktualisiert: 2026-08-11 · Ergänzt: Overpass → PMTiles (Abschnitt 6), Vite-Erklärung (Abschnitt 7), aktualisierte Reihenfolge (Abschnitt 8)
+Aktualisiert: 2026-08-11 · Ergänzt: Overpass → PMTiles (Abschnitt 6), Vite-Erklärung (Abschnitt 7), aktualisierte Reihenfolge (Abschnitt 8), **Umsetzungsstand (Abschnitt 0)**
+
+---
+
+## 0. Umsetzungsstand (2026-08-11, Branch `feat/maplibre-rework`)
+
+| Schritt | Status | Anmerkungen |
+|---|---|---|
+| Vite/ES-Module-Migration (Abschnitt 4/7) | ✅ erledigt | 29 Script-Tags → ein Module-Entry; `npm run dev` / `npm run build` |
+| MapLibre + Single-Source-Rendering (Abschnitt 1) | ✅ erledigt | Basemap: OpenFreeMap Positron (Vector); Routen + Aggregation als je eine GeoJSON-Source, data-driven Styling; Marker nativ MapLibre |
+| Schulen: Overpass → PMTiles (Abschnitt 6) | ✅ erledigt | Layer-Toggle unter „Darstellung“; `overpass-service.searchSchools` + `school-renderer` entfernt |
+| edge_id-Aggregation (Abschnitt 2) | ✅ erledigt | `details:["edge_id"]` im Request; neue Methode „Exakt (Straßennetz-Kanten)“ als Default, `simple`/`lazyOverlap` bleiben wählbar; Export liefert Geometrien (nie edge_ids) |
+| GitHub-Pages-CI | ✅ vorbereitet | `.github/workflows/deploy.yml`; nach Merge einmalig Pages-Source auf „GitHub Actions“ umstellen |
+| ÖPNV-Routing via `/plan` (Abschnitt 5) | ⬜ offen | nächster großer Schritt |
+| platforms.pmtiles in unfallkarte-Pipeline | ⬜ offen | bis dahin Haltestellen-Suche weiter via Overpass |
+| Zensus-PMTiles aus Legacy-Bucket umziehen | ⬜ offen | `POPULATION_PMTILES_URL` zeigt noch auf `unfallkarte-data` (ohne `-v2`) |
+| Web Worker / inkrementelle Aggregation (Abschnitt 2) | ⬜ offen | Druck ist raus: Kanten-Aggregation ist O(Kanten) statt O(Segmentpaare) |
+| Gemeinsames Package mit miso (Abschnitt 4) | ⬜ offen | opportunistisch |
+
+Erkenntnisse aus der Umsetzung, die vom Plan abweichen bzw. ihn ergänzen:
+
+- **MapLibre v6 + Bundler:** v6 ist ESM-only und lädt seinen Web-Worker als
+  separate Datei über eine Laufzeit-URL. Symptom bei fehlender Konfiguration:
+  Karte lädt endlos, ohne Fehlermeldung. Lösung (offiziell): `setWorkerUrl()` +
+  Vite-Import `maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url`
+  (nicht nur `?url` — der Worker importiert einen Shared-Chunk, der sonst im
+  Build fehlt), dazu `optimizeDeps.exclude` und `worker.format: 'es'`.
+- **pbf 5:** die alte `Pbf`-Klasse ist in `PbfReader`/`PbfWriter` aufgeteilt;
+  für den MVT-Parser im population-service reicht `PbfReader` als Drop-in.
+- **edge_id in der Praxis:** ghroute.vizsim.de liefert auch für virtuelle
+  Snap-Kanten die ID der zugrundeliegenden echten Kante (ggf. partiell
+  traversiert). Der Aggregations-Schlüssel ist daher edge_id **plus**
+  richtungsnormalisierte Endpunkte des gefahrenen Stücks — volle
+  Traversierungen matchen exakt, Zubringer-Stummel bleiben getrennt (count=1).
 
 ---
 
