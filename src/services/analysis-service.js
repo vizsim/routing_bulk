@@ -46,11 +46,14 @@ export const FACILITY_TYPES = {
   }
 };
 
+// Distanzverhalten je Modus: Fußwege sind kurz (halber Radius, lognormal),
+// Auto fährt auch weit (voller Radius, gleichverteilt statt nah-lastig).
+// ÖPNV hat kein Distanzverhalten — er startet an den zielnächsten Haltestellen.
 export const MODES = [
-  { key: 'foot', label: 'Fuß', ghProfile: 'foot' },
-  { key: 'bike', label: 'Rad', ghProfile: 'bike' },
+  { key: 'foot', label: 'Fuß', ghProfile: 'foot', radiusFactor: 0.5, distType: 'lognormal' },
+  { key: 'bike', label: 'Rad', ghProfile: 'bike', radiusFactor: 1, distType: 'lognormal' },
   { key: 'transit', label: 'ÖPNV', ghProfile: 'foot' }, // Zubringer: zu Fuß ab Haltestelle
-  { key: 'car', label: 'Auto', ghProfile: 'car' }
+  { key: 'car', label: 'Auto', ghProfile: 'car', radiusFactor: 1, distType: 'uniform' }
 ];
 
 export const AnalysisService = {
@@ -126,7 +129,10 @@ export const AnalysisService = {
       const trips = Math.round(facility.trips * pct / 100);
       if (trips <= 0) continue;
       const sample = Math.min(trips, cap);
-      plan.push({ mode: mode.key, ghProfile: mode.ghProfile, sample, weight: trips / sample, trips });
+      plan.push({
+        mode: mode.key, ghProfile: mode.ghProfile, sample, weight: trips / sample, trips,
+        radiusFactor: mode.radiusFactor || 1, distType: mode.distType || 'lognormal'
+      });
     }
     return plan;
   },
@@ -150,7 +156,6 @@ export const AnalysisService = {
     this._abortController = abortController;
     const signal = abortController.signal;
 
-    const distType = document.querySelector('.dist-btn.active')?.dataset.dist || 'lognormal';
     const platformsUrl = (CONFIG.PLATFORMS_PMTILES_URL || '').trim();
 
     // Zensus-Zellen und Haltestellen EINMAL für das Gesamtgebiet laden statt
@@ -185,18 +190,24 @@ export const AnalysisService = {
       const plan = this._modePlan(facility, typeSettings);
       if (plan.length === 0) continue;
 
-      const inRadius = (lat, lon) =>
-        Geo.distanceMeters(lat, lon, target[0], target[1]) <= settings.radiusM;
-      const cells = allCells.filter(c => inRadius(c.center[0], c.center[1]));
+      const inRadius = (lat, lon, radiusM) =>
+        Geo.distanceMeters(lat, lon, target[0], target[1]) <= radiusM;
+      const cells = allCells.filter(c => inRadius(c.center[0], c.center[1], settings.radiusM));
 
       for (const p of plan) {
         let points = [];
         if (p.mode === 'transit') {
           if (allStops.length === 0) continue;
-          const stops = allStops.filter(s => inRadius(s.lat, s.lon));
+          const stops = allStops.filter(s => inRadius(s.lat, s.lon, settings.radiusM));
           points = DemandService._drawFromStops(stops, target, p.sample, CONFIG.DEMAND_TRANSIT_STOPS || 3).points;
         } else {
-          const drawn = DemandService._drawFromCells(cells, target, settings.radiusM, p.sample, distType, 'under18');
+          // Distanzverhalten je Modus: eigener Radius (Fuß halbiert) und
+          // eigene Längenverteilung (Auto gleichverteilt statt nah-lastig)
+          const modeRadius = settings.radiusM * p.radiusFactor;
+          const modeCells = p.radiusFactor < 1
+            ? cells.filter(c => inRadius(c.center[0], c.center[1], modeRadius))
+            : cells;
+          const drawn = DemandService._drawFromCells(modeCells, target, modeRadius, p.sample, p.distType, 'under18');
           points = drawn.points;
           if (drawn.points.length < p.sample) capacityLimited++;
         }
@@ -302,6 +313,9 @@ export const AnalysisService = {
         polygon: polygon ? polygon.map(([lat, lng]) => [lng, lat]) : null,
         facilities: result.facilities.map(f => ({ name: f.name, type: f.type, trips: f.trips })),
         typeSettings: result.typeSettings,
+        modeBehavior: Object.fromEntries(MODES.map(m => [m.key, m.distType
+          ? { radiusFactor: m.radiusFactor || 1, distType: m.distType }
+          : { model: 'zielnaechste-haltestellen' }])),
         sampleCap: CONFIG.ANALYSIS_MAX_SAMPLE,
         stats: result.stats
       }

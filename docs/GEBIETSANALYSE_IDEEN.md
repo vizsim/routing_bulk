@@ -57,15 +57,17 @@ Raumtyp vorschlagen (Quelle: MiD 2017, Wege von Schüler:innen nach RegioStaR7).
 - Aufwand: **klein** (Lookup-Tabelle + Zelle lesen). Die Anzeige des Raumtyps
   im Panel („Gebiet: Metropole · Berlin, Stadt“) ist nebenbei guter Kontext.
 
-## 3. Distanzverhalten je Modus
+## 3. Distanzverhalten je Modus ✅ (umgesetzt 2026-08-11)
 
-Heute ziehen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
+Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 **selben** Radius. Real: Fußwege kurz, Rad mittel, Auto/ÖPNV lang.
 
-- Einfachste Version: Radius-Faktor je Modus (Fuß 0,5 × R, Rad 1 × R,
-  Auto 1 × R aber gleichverteilt statt lognormal).
-- Aufwand: **klein**, deutlicher Realismusgewinn. Kombiniert sich gut mit
-  Idee 1 (AGS-Grenze schneidet den Auto-Radius plausibel ab).
+- Umgesetzt als Radius-Faktor + Verteilung je Modus (in `MODES`,
+  `analysis-service.js`): Fuß 0,5 × R lognormal, Rad 1 × R lognormal,
+  Auto 1 × R **gleichverteilt** statt nah-lastig; ÖPNV unverändert
+  Haltestellen-Modell. Werte stehen im Export unter `metadata.modeBehavior`.
+- Kombiniert sich gut mit Idee 1 (AGS-Grenze schneidet den Auto-Radius
+  plausibel ab).
 
 ## 4. Darstellung & Auswertung
 
@@ -116,7 +118,7 @@ Heute ziehen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | 1 | AGS-Einzugsgrenze je Typ | klein | hoch (ländlicher Raum) |
 | 2 | RegioStaR7-Split-Vorschlag | klein | hoch |
 | 4a | Modus-Filter Karte | klein | hoch |
-| 3 | Distanzverhalten je Modus | klein | mittel |
+| 3 | Distanzverhalten je Modus ✅ | klein | mittel |
 | 5b | Altersfaktor je Typ | klein | klein–mittel |
 | 4b | Unfall-Overlay | mittel | sehr hoch |
 | 6c | Analyse speichern/laden + Seed | klein–mittel | mittel |

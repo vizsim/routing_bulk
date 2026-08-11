@@ -187,7 +187,9 @@ export const AnalysisPanel = {
       </table>
       <p class="config-hint">Radius in Metern · Split-Summe je Zeile sollte 100 % sein.
       ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
-      Anfragen gehen an den eigenen Routing-Server).</p>`;
+      Anfragen gehen an den eigenen Routing-Server). Distanzverhalten je Modus:
+      Fuß startet im halben Radius (kurze Wege), Auto gleichverteilt im vollen
+      Radius, Rad dazwischen.</p>`;
 
     el.querySelectorAll('input').forEach(input => {
       input.addEventListener('change', () => {
