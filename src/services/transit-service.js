@@ -68,8 +68,10 @@ function distMeters(a, b) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-/** Sprünge größer als das gelten als Naht zwischen Teilstücken der Leg-Geometrie. */
-const SEAM_JUMP_M = 120;
+/** Sprünge größer als das gelten als Naht zwischen Teilstücken der Leg-Geometrie.
+ *  Bewusst niedrig: Über-Splitten ist unschädlich, weil der Stitcher
+ *  zusammengehörige Stücke in identischer Reihenfolge wieder verbindet. */
+const SEAM_JUMP_M = 45;
 
 /**
  * Repariert eine Leg-Geometrie. MOTIS liefert (v.a. für `direct`-Verbindungen
@@ -85,21 +87,26 @@ const SEAM_JUMP_M = 120;
 function stitchLegGeometry(coords, from) {
   if (!coords || coords.length < 2) return coords;
 
+  // Aufeinanderfolgende Duplikate entfernen (kommen in den Rohdaten vor)
+  const cleaned = coords.filter((c, i) => i === 0 || distMeters(coords[i - 1], c) > 0.5);
+  if (cleaned.length < 2) return cleaned;
+
   // An Nähten in Teilstücke schneiden
   const chunks = [];
-  let current = [coords[0]];
-  for (let i = 1; i < coords.length; i++) {
-    if (distMeters(coords[i - 1], coords[i]) > SEAM_JUMP_M) {
+  let current = [cleaned[0]];
+  for (let i = 1; i < cleaned.length; i++) {
+    if (distMeters(cleaned[i - 1], cleaned[i]) > SEAM_JUMP_M) {
       if (current.length >= 2) chunks.push(current);
-      current = [coords[i]];
+      current = [cleaned[i]];
     } else {
-      current.push(coords[i]);
+      current.push(cleaned[i]);
     }
   }
   if (current.length >= 2) chunks.push(current);
-  if (chunks.length <= 1) {
+  if (chunks.length === 0) return cleaned;
+  if (chunks.length === 1) {
     // Höchstens Orientierung korrigieren
-    const chunk = chunks[0] || coords;
+    const chunk = chunks[0];
     if (from && distMeters(chunk[chunk.length - 1], [from.lat, from.lon]) <
                 distMeters(chunk[0], [from.lat, from.lon])) {
       return [...chunk].reverse();
@@ -125,7 +132,16 @@ function stitchLegGeometry(coords, from) {
     out.push(...oriented);
     pos = oriented[oriented.length - 1];
   }
-  return out;
+
+  // Sicherheitsnetz: Stitching darf den Pfad nur kürzer/gleich machen —
+  // ein verwürfelter Pfad enthält überflüssige Sprungdistanz. Wird er
+  // länger (pathologische Topologie), lieber das Original behalten.
+  const len = (cs) => {
+    let sum = 0;
+    for (let i = 1; i < cs.length; i++) sum += distMeters(cs[i - 1], cs[i]);
+    return sum;
+  };
+  return len(out) <= len(cleaned) + 1 ? out : cleaned;
 }
 
 /** Luftlinien-Länge einer [lat,lng]-Koordinatenfolge in Metern (für fehlende Leg-Distanzen). */

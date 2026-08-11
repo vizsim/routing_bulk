@@ -11,19 +11,20 @@ import { RouteWarning } from '../ui/route-warning.js';
 import { ColormapUtils } from './colormap-utils.js';
 import { MapRenderer } from './map-renderer.js';
 
-// Farben je ÖPNV-Modus (MOTIS-Leg-Modes)
+// Farben je ÖPNV-Modus (MOTIS-Leg-Modes):
+// Bus lila, Tram rot, U-Bahn blau, S-Bahn grün, Bahn dunkelgrau
 const TRANSIT_MODE_COLORS = {
   WALK: '#9ca3af',
-  BUS: '#10b981',
+  BUS: '#9333ea',
   TRAM: '#dc2626',
   SUBWAY: '#1d4ed8',
   METRO: '#1d4ed8',
-  SUBURBAN: '#0f766e',
-  RAIL: '#7c3aed',
-  REGIONAL_RAIL: '#7c3aed',
-  REGIONAL_FAST_RAIL: '#7c3aed',
-  LONG_DISTANCE: '#7c3aed',
-  HIGHSPEED_RAIL: '#7c3aed',
+  SUBURBAN: '#15803d',
+  RAIL: '#475569',
+  REGIONAL_RAIL: '#475569',
+  REGIONAL_FAST_RAIL: '#475569',
+  LONG_DISTANCE: '#475569',
+  HIGHSPEED_RAIL: '#475569',
   FERRY: '#0891b2'
 };
 
