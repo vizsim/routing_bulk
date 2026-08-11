@@ -17,6 +17,24 @@ html, body {
   left: 10px;
 }
 
+/* Fortschrittsanzeige während der Routen-Berechnung */
+.route-progress {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 16px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  z-index: 1500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
 /* MapLibre-Popups als kompakte Tooltips (Route/Aggregation/Ziel/Einwohner) */
 .route-distance-tooltip .maplibregl-popup-content,
 .aggregated-route-tooltip .maplibregl-popup-content,

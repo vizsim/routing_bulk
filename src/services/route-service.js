@@ -10,6 +10,10 @@ import { PopulationService } from './population-service.js';
 import { TargetService } from './target-service.js';
 
 export const RouteService = {
+  // Laufende Berechnung (nur normaler Modus): neuer Klick bricht alte Requests ab,
+  // sonst können späte Responses den State der neuen Berechnung überschreiben.
+  _abortController: null,
+
   /**
    * Berechnet Routen zu einem Zielpunkt
    * @param {Array} target - [lat, lng]
@@ -76,13 +80,55 @@ export const RouteService = {
     if (!isRememberMode()) {
       State.resetRouteData();
     }
-    
-    // N Requests parallel
+
+    // Alte Berechnung abbrechen (nur normaler Modus: ein neuer Klick ersetzt alles;
+    // im "Zielpunkte merken"-Modus laufen Berechnungen mehrerer Ziele legitim parallel)
+    if (!isRememberMode() && this._abortController) {
+      this._abortController.abort();
+    }
+    const abortController = new AbortController();
+    if (!isRememberMode()) this._abortController = abortController;
+    const signal = abortController.signal;
+
+    // Requests über einen Concurrency-Pool statt alle gleichzeitig; jede fertige
+    // Route wird sofort gemeldet (progressives Zeichnen + Fortschrittsanzeige).
     try {
-      const results = await Promise.all(
-        starts.map(s => API.fetchRoute(s, target).catch(err => ({ __err: err })))
-      );
-      
+      const results = new Array(starts.length);
+      const total = starts.length;
+      let nextIndex = 0;
+      let done = 0;
+
+      const worker = async () => {
+        while (true) {
+          if (signal.aborted) return;
+          const i = nextIndex++;
+          if (i >= total) return;
+          try {
+            results[i] = await API.fetchRoute(starts[i], target, signal);
+          } catch (err) {
+            results[i] = { __err: err };
+          }
+          if (signal.aborted) return;
+          done++;
+          if (!silent) {
+            EventBus.emit(Events.ROUTES_PROGRESS, {
+              index: i,
+              response: results[i]?.__err ? null : results[i],
+              color: colors[i],
+              done,
+              total,
+              responses: results
+            });
+          }
+        }
+      };
+      const poolSize = Math.max(1, Math.min(CONFIG.ROUTE_CONCURRENCY || 12, total));
+      await Promise.all(Array.from({ length: poolSize }, worker));
+
+      // Abgebrochen (neuer Klick): nichts anfassen, keine Events
+      if (signal.aborted) return null;
+      if (this._abortController === abortController) this._abortController = null;
+
       let ok = 0, fail = 0;
       const allRouteData = [];
       const allRouteResponses = [];

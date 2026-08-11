@@ -3,7 +3,13 @@ import { CONFIG } from '../core/config.js';
 import { Geo } from './geo.js';
 
 export const API = {
-  async fetchRoute(startLatLng, endLatLng) {
+  /**
+   * Holt eine Route von GraphHopper.
+   * @param {Array} startLatLng - [lat, lng]
+   * @param {Array} endLatLng - [lat, lng]
+   * @param {AbortSignal} [signal] - bricht den Request ab (neuer Klick ersetzt alte Berechnung)
+   */
+  async fetchRoute(startLatLng, endLatLng, signal = undefined) {
     const body = {
       profile: CONFIG.PROFILE,
       points: [
@@ -23,6 +29,7 @@ export const API = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!res.ok) {

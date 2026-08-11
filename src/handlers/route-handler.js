@@ -1,7 +1,8 @@
 // ==== Route-Handler: Behandelt Route-Events ====
-import { isRememberMode } from '../core/config.js';
+import { CONFIG, isRememberMode } from '../core/config.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
+import { AggregationService } from '../services/aggregation-service.js';
 import { RouteService } from '../services/route-service.js';
 import { RouteWarning } from '../ui/route-warning.js';
 import { TargetsList } from '../ui/targets-list.js';
@@ -10,6 +11,62 @@ import { RouteRenderer } from '../visualization/route-renderer.js';
 import { Visualization } from '../visualization/visualization.js';
 
 export const RouteHandler = {
+  _lastProgressAggregation: 0,
+
+  /**
+   * Behandelt eine fertige Einzelroute während der Berechnung:
+   * sofort zeichnen (progressiv) + Fortschritt anzeigen.
+   * @param {Object} data - { index, response, color, done, total, responses }
+   */
+  handleRouteProgress(data) {
+    const { response, color, done, total, responses } = data;
+
+    // Beim ersten Fortschritt im normalen Modus: alte Routen räumen
+    // (im "Zielpunkte merken"-Modus bleiben die Routen der anderen Ziele stehen)
+    if (done === 1 && !isRememberMode()) {
+      MapRenderer.removePolylines(State.getRoutePolylines());
+      MapRenderer.clearRoutes();
+      State.setRoutePolylines([]);
+    }
+
+    this._setProgressBadge(done, total);
+
+    if (!CONFIG.AGGREGATED) {
+      if (response) {
+        RouteRenderer.drawRoute(response, color);
+      }
+    } else {
+      // Aggregation über die bisher fertigen Routen — gedrosselt, damit bei
+      // vielen Routen nicht jede Response eine Neu-Aggregation auslöst
+      const now = performance.now();
+      if (done === total || now - this._lastProgressAggregation > 300) {
+        this._lastProgressAggregation = now;
+        const partial = responses.filter(r => r && !r.__err && r.paths);
+        const base = isRememberMode() ? RouteService.getAllRouteResponsesForTargets() : [];
+        const aggregatedSegments = AggregationService.aggregateRoutes([...base, ...partial]);
+        if (aggregatedSegments.length > 0) {
+          const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
+          RouteRenderer.drawAggregatedRoutes(aggregatedSegments, maxCount);
+        }
+      }
+    }
+
+    if (done === total) {
+      this._setProgressBadge(null);
+    }
+  },
+
+  _setProgressBadge(done, total) {
+    const el = Utils.getElement('#route-progress');
+    if (!el) return;
+    if (done == null) {
+      el.style.display = 'none';
+    } else {
+      el.textContent = `Routen: ${done}/${total}`;
+      el.style.display = 'block';
+    }
+  },
+
   /**
    * Behandelt berechnete Routen
    * @param {Object} data - { target, routeInfo }

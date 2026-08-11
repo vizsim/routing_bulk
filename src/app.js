@@ -98,6 +98,11 @@ export const App = {
     EventBus.on(Events.ROUTES_CALCULATED, (data) => {
       RouteHandler.handleRoutesCalculated(data);
     });
+
+    // Einzelne Route fertig (progressives Zeichnen während der Berechnung)
+    EventBus.on(Events.ROUTES_PROGRESS, (data) => {
+      RouteHandler.handleRouteProgress(data);
+    });
     
     // Route aktualisiert
     EventBus.on(Events.ROUTE_UPDATED, (data) => {

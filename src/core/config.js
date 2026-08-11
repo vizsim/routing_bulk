@@ -13,6 +13,7 @@ export const CONFIG = {
   BASEMAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron", // MapLibre-Style (Vector-Basemap)
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen
+  ROUTE_CONCURRENCY: 12, // Max. parallele GH-Requests (schont Server; HTTP/1.1-Browserlimit liegt ähnlich)
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
   MAP_CENTER: [52.6858, 14.10078], // [lat, lon]
   MAP_ZOOM: 13,

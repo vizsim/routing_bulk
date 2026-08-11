@@ -148,9 +148,17 @@ export const MapRenderer = {
     return { type: 'FeatureCollection', features: [] };
   },
 
+  // Gebatcht: beim progressiven Zeichnen kommen viele Features kurz
+  // hintereinander an — ein setData pro ~50ms statt eines pro Feature.
+  // Der Flush liest den Live-Zustand, späte Flushes sind daher immer konsistent.
+  _routeRefreshTimer: null,
   _refreshRouteSource() {
-    const src = this._ready && this._map.getSource('routes');
-    if (src) src.setData({ type: 'FeatureCollection', features: [...this._routeFeatures.values()] });
+    if (this._routeRefreshTimer) return;
+    this._routeRefreshTimer = setTimeout(() => {
+      this._routeRefreshTimer = null;
+      const src = this._ready && this._map && this._map.getSource('routes');
+      if (src) src.setData({ type: 'FeatureCollection', features: [...this._routeFeatures.values()] });
+    }, 50);
   },
 
   _refreshAggSource() {

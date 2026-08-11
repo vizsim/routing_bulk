@@ -13,6 +13,7 @@ Aktualisiert: 2026-08-11 · Ergänzt: Overpass → PMTiles (Abschnitt 6), Vite-E
 | MapLibre + Single-Source-Rendering (Abschnitt 1) | ✅ erledigt | Basemap: OpenFreeMap Positron (Vector); Routen + Aggregation als je eine GeoJSON-Source, data-driven Styling; Marker nativ MapLibre |
 | Schulen: Overpass → PMTiles (Abschnitt 6) | ✅ erledigt | Layer-Toggle unter „Darstellung“; `overpass-service.searchSchools` + `school-renderer` entfernt |
 | edge_id-Aggregation (Abschnitt 2) | ✅ erledigt | `details:["edge_id"]` im Request; einzige Aggregationsmethode (die geometrischen Methoden `simple`/`lazyOverlap` samt Methoden-Dropdown wurden entfernt); Export liefert Geometrien (nie edge_ids) |
+| Requests & UX (Abschnitt 3) | ✅ erledigt | Concurrency-Pool (`CONFIG.ROUTE_CONCURRENCY`, Default 12) statt `Promise.all`; progressives Zeichnen mit Fortschritts-Badge „x/N“; AbortController bricht im Normalmodus alte Berechnungen bei neuem Klick ab |
 | GitHub-Pages-CI | ✅ vorbereitet | `.github/workflows/deploy.yml`; nach Merge einmalig Pages-Source auf „GitHub Actions“ umstellen |
 | ÖPNV-Routing via `/plan` (Abschnitt 5) | ⬜ offen | nächster großer Schritt |
 | platforms.pmtiles in unfallkarte-Pipeline | ⬜ offen | bis dahin Haltestellen-Suche weiter via Overpass |

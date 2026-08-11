@@ -69,6 +69,7 @@ export const Events = {
   
   // Route Events
   ROUTES_CALCULATED: 'routes:calculated',
+  ROUTES_PROGRESS: 'routes:progress', // eine Route fertig (progressives Zeichnen)
   ROUTES_UPDATED: 'routes:updated',
   ROUTE_UPDATED: 'route:updated',
   
