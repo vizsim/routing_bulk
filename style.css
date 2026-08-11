@@ -17,6 +17,58 @@ html, body {
   left: 10px;
 }
 
+/* Accordion: einklappbare Panel-Bereiche */
+.config-block-title[role="button"] {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.config-block-title[role="button"]::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  border-right: 2px solid #999;
+  border-bottom: 2px solid #999;
+  transform: rotate(45deg); /* Chevron nach unten = offen */
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.config-block.collapsed .config-block-title[role="button"]::after {
+  transform: rotate(-45deg); /* Chevron nach rechts = zu */
+}
+
+.config-block-title[role="button"]:hover {
+  color: #2563eb;
+}
+
+.config-block-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.config-block-body-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.config-block.collapsed .config-block-body {
+  grid-template-rows: 0fr;
+}
+
+/* Eingeklappt: kein Leerraum unter dem Titel */
+.config-block.collapsed .config-block-title {
+  margin-bottom: 0;
+}
+.config-block.collapsed {
+  padding-bottom: 4px;
+}
+
 /* Deaktivierter Abschnitt (z. B. Nachfrage-Optionen ohne Einwohner-Gewichtung) */
 .is-disabled {
   opacity: 0.4;

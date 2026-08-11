@@ -3,6 +3,7 @@ import { CONFIG, isRememberMode } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
+import { Accordion } from './accordion.js';
 
 export const DemandSelector = {
   /**
@@ -143,6 +144,8 @@ export const DemandSelector = {
     if (info.capacityLimited) {
       html += `<div class="demand-info-warn">Weniger Startpunkte als angefragt (${info.requested}): `
         + `mehr Routen als ${label} im Radius. Radius vergrößern oder Anzahl reduzieren.</div>`;
+      // Warnung darf nicht in einem eingeklappten Block verschwinden
+      Accordion.expand('block-nachfrage-heading');
     }
     el.innerHTML = html;
     el.style.display = 'block';

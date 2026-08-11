@@ -8,6 +8,7 @@ import { RouteHandler } from './handlers/route-handler.js';
 import { ExportService } from './services/export-service.js';
 import { RouteService } from './services/route-service.js';
 import { TargetService } from './services/target-service.js';
+import { Accordion } from './ui/accordion.js';
 import { ColormapSelector } from './ui/colormap-selector.js';
 import { toggleAggregationUI, updateConfigFromUI } from './ui/config-helpers.js';
 import { DemandSelector } from './ui/demand-selector.js';
@@ -44,6 +45,10 @@ export const App = {
    * Initialisiert UI-Komponenten
    */
   async _initUI() {
+    // Panel-Bereiche einklappbar machen (restrukturiert das DOM der Blöcke,
+    // deshalb vor allen anderen UI-Inits)
+    Accordion.init();
+
     // Targets-List initialisieren
     TargetsList.init();
     
