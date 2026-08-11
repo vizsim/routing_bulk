@@ -17,6 +17,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
 - 📤 **Export**: GeoJSON — aggregiert je Kante mit Gesamtsumme (`count`) plus Aufschlüsselung nach Verkehrsmittel (`count_foot`, …) und Quelle (`count_residential`/`count_transit`); einzeln mit `profile` und `startSource` je Route
+- 🧪 **Gebietsanalyse (experimentell)**: eigener Panel-Tab — Bereich auf der Karte zeichnen, Schulen & Kitas darin finden, Fahrten/Tag je Einrichtung und Modal Split je Typ annehmen, alle Wege als gewichtete Belastungskarte rechnen (Fahrten/Tag je Kante, GeoJSON-Export mit `trips`, `trips_<modus>` und Metadaten); Konzept in [docs/ANALYSE_MODUS_KONZEPT.md](docs/ANALYSE_MODUS_KONZEPT.md)
 
 ## Verwendung
 
@@ -45,6 +46,7 @@ und deployt über die GitHub Action (`.github/workflows/deploy.yml`).
    - **Kartenebenen**: Einwohner, Schulen & Kindergärten, ÖPNV-Haltestellen
    - **Routendarstellung**: aggregierte Darstellung, Colormap, Punkte ausblenden
    - **Export**: Routen als GeoJSON herunterladen
+4. Über den Tab **Gebietsanalyse** (oben im Panel) lässt sich alternativ ein Bereich zeichnen und für alle Schulen/Kitas darin eine Belastungskarte in Fahrten/Tag rechnen
 
 ## Projektstruktur
 

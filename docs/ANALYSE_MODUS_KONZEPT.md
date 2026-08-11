@@ -1,6 +1,9 @@
 # Konzept: Analysemodus (experimentell)
 
-Stand: 2026-08-11 · Status: Konzept, noch nicht umgesetzt
+Stand: 2026-08-11 · Status: **umgesetzt** (Beta) — eigener Panel-Tab „Gebietsanalyse";
+Abweichung vom Konzept unten: statt Accordion-Bereich ein eigener Tab, Zensus +
+Haltestellen werden einmal fürs Gesamtgebiet geladen (nicht je Einrichtung),
+OSM-Doppel (Node + Way gleicher Name im Nahbereich) werden dedupliziert
 
 ## Idee
 
