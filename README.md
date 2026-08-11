@@ -7,7 +7,10 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 🗺️ **Interaktive Karte** (MapLibre GL, OpenFreeMap Positron): Klick auf die Karte, um einen Zielpunkt zu setzen; Kartenausschnitt als Permalink (`#zoom/lat/lng`)
 - 🎯 **Nachfragemodell**: Startpunkte nach Zensus 2022 gewichtet, mit Kapazitätsgrenze je 100×100-m-Zelle (aus einer Zelle mit 10 Personen kommen höchstens 10 Starts); Basis wahlweise alle Einwohner oder nur unter 18-Jährige
 - 🚌 **ÖPNV-Anteil**: einstellbarer Prozentsatz der Startpunkte beginnt an den zielnächsten Haltestellen statt am Wohnort — Wege ab Haltestelle werden immer zu Fuß gerechnet
-- 🚴 **Profile**: Fuß, Fahrrad, Auto (GraphHopper)
+- 🚴 **Profile**: Fuß, Fahrrad, Auto (GraphHopper) sowie **ÖPNV (Beta)** via
+  [Transitous](https://transitous.org)/MOTIS — echte Bus-/Bahnverbindungen mit
+  Ankunft am nächsten Werktag 08:00; Fußwege gestrichelt, Verkehrsmittel farbig.
+  Zum Schutz der Community-API: max. 30 Routen, 2 parallele Anfragen, Session-Cache
 - 📈 **Längenverteilung**: Verteilungsfunktionen für die Wohnort-Startpunkte (lognormal, uniform, normal, …) mit Live-Histogramm (Beeline oder echte Routenlänge)
 - 📊 **Exakte Aggregation**: Zählung pro Straßengraph-Kante über GraphHopper-`edge_id` (kein Geometrie-Matching), Farbcodierung über wählbare Colormaps (viridis, plasma, inferno, magma)
 - ⚡ **Schnell**: Requests über Concurrency-Pool, progressives Zeichnen mit Fortschrittsanzeige, Abbruch laufender Berechnungen bei neuem Klick
@@ -162,8 +165,9 @@ nötigen Bausteine sind inzwischen umgesetzt:
    - ÖPNV-Haltestellen (OpenStreetMap) als deutschlandweiter PMTiles-Layer
    - Ein einstellbarer Anteil der Startpunkte beginnt an den zielnächsten
      Haltestellen; diese Wege werden immer als Fußwege gerechnet
-   - Offen: echtes ÖPNV-Routing (Bus-/Bahnfahrt selbst, Linien-Belastung)
-     via MOTIS/Transitous `/plan` — siehe `docs/routing_bulk_review.md`
+   - Echtes ÖPNV-Routing (Bus-/Bahnfahrt selbst) ist als **Beta** über das
+     ÖPNV-Profil verfügbar (Transitous/MOTIS `/plan`); die Aggregation zählt
+     dort pro Linie und Ein-/Ausstiegspaar — siehe `docs/routing_bulk_review.md`
 
 3. **Einzugsbereiche der Schulen** — offen:
    - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind

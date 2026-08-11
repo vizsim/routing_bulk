@@ -8,6 +8,7 @@ import { Distribution } from '../domain/distribution.js';
 import { Geo } from '../domain/geo.js';
 import { DemandService } from './demand-service.js';
 import { TargetService } from './target-service.js';
+import { TransitService } from './transit-service.js';
 
 export const RouteService = {
   // Laufende Berechnung (nur normaler Modus): neuer Klick bricht alte Requests ab,
@@ -25,6 +26,16 @@ export const RouteService = {
   profileForStart(index, sources) {
     const list = sources || State.getLastStartSources();
     return list && list[index] === 'transit' ? 'foot' : CONFIG.PROFILE;
+  },
+
+  /**
+   * Route für ein Profil holen: 'oepnv' geht an Transitous (/plan, Beta),
+   * alles andere an GraphHopper. Beide liefern GH-förmige Responses.
+   */
+  fetchForProfile(start, target, signal, profile) {
+    return profile === 'oepnv'
+      ? TransitService.fetchPlan(start, target, signal)
+      : API.fetchRoute(start, target, signal, profile);
   },
 
   /**
@@ -48,12 +59,30 @@ export const RouteService = {
       return null;
     }
 
+    // ÖPNV (Beta): hartes Routen-Cap, um die Community-API zu schonen
+    const transitActive = CONFIG.PROFILE === 'oepnv';
+    const maxRoutes = transitActive
+      ? Math.min(CONFIG.N, CONFIG.TRANSIT_MAX_ROUTES || 30)
+      : CONFIG.N;
+    if (transitActive && CONFIG.N > maxRoutes) {
+      Utils.showInfo(`ÖPNV (Beta): auf ${maxRoutes} Routen begrenzt, um die Transitous-API zu schonen.`, false);
+    }
+
     // Startpunkte erzeugen oder wiederverwenden
     let starts, colors, startSources;
     if (reuseStarts && State.getLastStarts() && State.getLastColors()) {
       starts = State.getLastStarts();
       colors = State.getLastColors();
       startSources = State.getLastStartSources();
+      // Cap gilt auch für wiederverwendete Starts (z.B. Profilwechsel auf ÖPNV)
+      if (transitActive && starts.length > maxRoutes) {
+        starts = starts.slice(0, maxRoutes);
+        colors = colors.slice(0, maxRoutes);
+        startSources = startSources ? startSources.slice(0, maxRoutes) : startSources;
+        State.setLastStarts(starts);
+        State.setLastColors(colors);
+        State.setLastStartSources(startSources || null);
+      }
     } else {
       // Einwohner-Gewichtung: eigene Checkbox (unabhängig von Längenverteilung)
       const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
@@ -63,7 +92,7 @@ export const RouteService = {
 
       if (usePopulationWeight && CONFIG.POPULATION_PMTILES_URL) {
         try {
-          const demand = await DemandService.generateStartPoints(target, CONFIG.N, distType);
+          const demand = await DemandService.generateStartPoints(target, maxRoutes, distType);
           starts = demand.points;
           startSources = demand.sources;
           State.setDemandInfo(demand.info);
@@ -81,10 +110,10 @@ export const RouteService = {
           return null;
         }
       } else {
-        const numBins = Math.min(15, CONFIG.N);
-        Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, CONFIG.N);
+        const numBins = Math.min(15, maxRoutes);
+        Distribution.setDistribution(distType, numBins, CONFIG.RADIUS_M, maxRoutes);
         starts = Geo.generatePointsFromDistribution(
-          target[0], target[1], CONFIG.RADIUS_M, CONFIG.N
+          target[0], target[1], CONFIG.RADIUS_M, maxRoutes
         );
       }
 
@@ -124,7 +153,8 @@ export const RouteService = {
           const i = nextIndex++;
           if (i >= total) return;
           try {
-            results[i] = await API.fetchRoute(starts[i], target, signal, RouteService.profileForStart(i, startSources));
+            const profile = RouteService.profileForStart(i, startSources);
+            results[i] = await RouteService.fetchForProfile(starts[i], target, signal, profile);
           } catch (err) {
             results[i] = { __err: err };
           }
@@ -268,7 +298,7 @@ export const RouteService = {
    */
   async updateRoute(index, newStart, target) {
     try {
-      const result = await API.fetchRoute(newStart, target, undefined, this.profileForStart(index));
+      const result = await this.fetchForProfile(newStart, target, undefined, this.profileForStart(index));
       if (result.paths?.[0]) {
         const coords = API.extractRouteCoordinates(result);
         if (coords) {

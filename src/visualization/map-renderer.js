@@ -191,11 +191,27 @@ export const MapRenderer = {
       id: 'routes-line',
       type: 'line',
       source: 'routes',
+      // Fußweg-Legs der ÖPNV-Routen zeichnet der gestrichelte Layer darunter
+      filter: ['!=', ['coalesce', ['get', 'legMode'], ''], 'WALK'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': ['get', 'color'],
         'line-width': 3,
         'line-opacity': 0.8
+      }
+    }, labelLayerId);
+    // Fußweg-Legs (ÖPNV, Beta) gestrichelt
+    map.addLayer({
+      id: 'routes-line-walk',
+      type: 'line',
+      source: 'routes',
+      filter: ['==', ['get', 'legMode'], 'WALK'],
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 3,
+        'line-opacity': 0.9,
+        'line-dasharray': [1.5, 1.5]
       }
     }, labelLayerId);
   },
@@ -251,13 +267,17 @@ export const MapRenderer = {
 
   /**
    * Entfernt Einzelrouten anhand ihrer Feature-IDs (Handles aus drawRoute).
-   * @param {Array<number>} ids
+   * ÖPNV-Routen haben ein Array von IDs (ein Feature pro Leg).
+   * @param {Array<number|Array<number>>} ids
    */
   removePolylines(ids) {
     if (!ids) return;
     let changed = false;
-    ids.forEach(id => {
-      if (id != null && this._routeFeatures.delete(id)) changed = true;
+    ids.forEach(entry => {
+      const list = Array.isArray(entry) ? entry : [entry];
+      list.forEach(id => {
+        if (id != null && this._routeFeatures.delete(id)) changed = true;
+      });
     });
     if (changed) this._refreshRouteSource();
   },
@@ -289,6 +309,8 @@ export const MapRenderer = {
     const hide = () => this._hoverPopup.remove();
     map.on('mousemove', 'routes-line', show('route-distance-tooltip'));
     map.on('mouseleave', 'routes-line', hide);
+    map.on('mousemove', 'routes-line-walk', show('route-distance-tooltip'));
+    map.on('mouseleave', 'routes-line-walk', hide);
     map.on('mousemove', 'agg-lines', show('aggregated-route-tooltip'));
     map.on('mouseleave', 'agg-lines', hide);
   },

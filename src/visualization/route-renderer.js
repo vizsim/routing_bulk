@@ -11,6 +11,28 @@ import { RouteWarning } from '../ui/route-warning.js';
 import { ColormapUtils } from './colormap-utils.js';
 import { MapRenderer } from './map-renderer.js';
 
+// Farben je ÖPNV-Modus (MOTIS-Leg-Modes)
+const TRANSIT_MODE_COLORS = {
+  WALK: '#9ca3af',
+  BUS: '#10b981',
+  TRAM: '#dc2626',
+  SUBWAY: '#1d4ed8',
+  METRO: '#1d4ed8',
+  SUBURBAN: '#0f766e',
+  RAIL: '#7c3aed',
+  REGIONAL_RAIL: '#7c3aed',
+  REGIONAL_FAST_RAIL: '#7c3aed',
+  LONG_DISTANCE: '#7c3aed',
+  HIGHSPEED_RAIL: '#7c3aed',
+  FERRY: '#0891b2'
+};
+
+const TRANSIT_MODE_NAMES = {
+  WALK: 'Fußweg', BUS: 'Bus', TRAM: 'Tram', SUBWAY: 'U-Bahn', METRO: 'U-Bahn',
+  SUBURBAN: 'S-Bahn', RAIL: 'Bahn', REGIONAL_RAIL: 'Bahn', REGIONAL_FAST_RAIL: 'Bahn',
+  LONG_DISTANCE: 'Bahn', HIGHSPEED_RAIL: 'Bahn', FERRY: 'Fähre'
+};
+
 export const RouteRenderer = {
   /**
    * Formatiert Distanz in Metern für Anzeige (z. B. "1,8 km" oder "450 m").
@@ -34,6 +56,11 @@ export const RouteRenderer = {
    * @returns {number|null} - Feature-ID (Handle) oder null
    */
   drawRoute(ghResponse, color, distanceM) {
+    // ÖPNV-Routen (Beta): pro Leg ein Feature, eingefärbt nach Verkehrsmittel
+    if (ghResponse && ghResponse.__transit) {
+      return this._drawTransitRoute(ghResponse.__transit);
+    }
+
     const latlngs = API.extractRouteCoordinates(ghResponse);
     if (!latlngs) {
       return null;
@@ -46,6 +73,31 @@ export const RouteRenderer = {
     }
 
     return MapRenderer.addRouteFeature(latlngs.map(([lat, lng]) => [lng, lat]), props);
+  },
+
+  /**
+   * Zeichnet eine ÖPNV-Verbindung als ein Feature pro Leg (Fußwege gestrichelt
+   * über den legMode-Filter der Layer; Farben je Verkehrsmittel).
+   * @returns {Array<number>} Feature-IDs (Handle-Array statt Einzel-ID)
+   */
+  _drawTransitRoute(transit) {
+    const ids = [];
+    for (const leg of transit.legs) {
+      if (!leg.coords || leg.coords.length < 2) continue;
+      const modeName = TRANSIT_MODE_NAMES[leg.mode] || leg.mode;
+      const label = leg.mode === 'WALK'
+        ? `${modeName} (${this._formatDistance(leg.distance || 0)})`
+        : `${modeName} ${leg.route || ''}${leg.headsign ? ` → ${leg.headsign}` : ''}`.trim();
+      ids.push(MapRenderer.addRouteFeature(
+        leg.coords.map(([lat, lng]) => [lng, lat]),
+        {
+          color: TRANSIT_MODE_COLORS[leg.mode] || TRANSIT_MODE_COLORS.RAIL,
+          label,
+          legMode: leg.mode
+        }
+      ));
+    }
+    return ids.length ? ids : null;
   },
 
   /**

@@ -4,6 +4,13 @@ export const CONFIG = {
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
   BASEMAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron", // MapLibre-Style (Vector-Basemap)
+
+  // ÖPNV-Routing (Beta) via Transitous/MOTIS. Community-Dienst — die Limits
+  // hier sind bewusst konservativ, um die API zu schonen:
+  TRANSIT_PLAN_URL: "https://api.transitous.org/api/v1/plan",
+  TRANSIT_MAX_ROUTES: 30, // hartes Cap im ÖPNV-Modus (unabhängig von N)
+  TRANSIT_CONCURRENCY: 2, // max. parallele Plan-Anfragen
+  TRANSIT_ARRIVE_HOUR: 8, // Ankunft nächster Werktag um diese Stunde (Schulwege)
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen
   ROUTE_CONCURRENCY: 12, // Max. parallele GH-Requests (schont Server; HTTP/1.1-Browserlimit liegt ähnlich)

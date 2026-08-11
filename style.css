@@ -17,6 +17,26 @@ html, body {
   left: 10px;
 }
 
+/* Beta-Kennzeichnung am ÖPNV-Profil-Button */
+.profile-btn {
+  position: relative;
+}
+
+.profile-beta-tag {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: #b45309;
+  pointer-events: none;
+}
+
+.profile-btn.active .profile-beta-tag {
+  color: #fde68a;
+}
+
 /* Accordion: einklappbare Panel-Bereiche */
 .config-block-title[role="button"] {
   cursor: pointer;

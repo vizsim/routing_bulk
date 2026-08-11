@@ -34,11 +34,40 @@ export const AggregationService = {
     const rnd = (v) => Math.round(v * 1e6) / 1e6; // ~10cm, robust gegen Float-Rauschen
     let skipped = 0;
 
+    const bump = (key, coordsLatLng, profile, source) => {
+      let entry = edgeMap.get(key);
+      if (!entry) {
+        entry = { count: 0, coords: coordsLatLng, byProfile: {}, bySource: {} };
+        edgeMap.set(key, entry);
+      }
+      entry.count++;
+      if (profile) entry.byProfile[profile] = (entry.byProfile[profile] || 0) + 1;
+      if (source) entry.bySource[source] = (entry.bySource[source] || 0) + 1;
+      return entry;
+    };
+
     (items || []).forEach(item => {
       // Roh-Response oder routeResponses-Eintrag normalisieren
       const resp = item && item.paths ? item : item?.response;
       const profile = (item && !item.paths && item.profile) || null;
       const source = (item && !item.paths && item.startSource) || null;
+
+      // ÖPNV-Verbindungen (Beta): Aggregation pro Leg — gleiche Linie mit
+      // gleichem Ein- und Ausstieg zählt zusammen (Fußweg-Legs über ihre
+      // Endpunkte). Gröber als die edge_id-Aggregation: Teilüberlappungen
+      // derselben Linie (früherer Ausstieg) werden nicht gesplittet.
+      if (resp && resp.__transit) {
+        for (const leg of resp.__transit.legs) {
+          if (!leg.coords || leg.coords.length < 2) continue;
+          const a = `${rnd(leg.coords[0][0])},${rnd(leg.coords[0][1])}`;
+          const b = `${rnd(leg.coords[leg.coords.length - 1][0])},${rnd(leg.coords[leg.coords.length - 1][1])}`;
+          const key = leg.mode === 'WALK'
+            ? `ptw:${a}:${b}`
+            : `pt:${leg.mode}:${leg.routeId || leg.route || ''}:${leg.fromStopId || a}:${leg.toStopId || b}`;
+          bump(key, leg.coords, profile, source);
+        }
+        return;
+      }
 
       const coords = resp?.paths?.[0]?.points?.coordinates; // [lon, lat]
       const intervals = resp ? API.extractEdgeIntervals(resp) : null;
