@@ -10,6 +10,7 @@ export const CONFIG = {
   //GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
+  BASEMAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron", // MapLibre-Style (Vector-Basemap)
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
   N: 10, // Anzahl der Routen
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
@@ -30,7 +31,12 @@ export const CONFIG = {
   POPULATION_LAYER_NAME: "rasters-polys", // Layer-Name im PMTiles (leer = erster Layer mit Features)
   POPULATION_ZOOM: 14, // Wunsch-Zoom für Tile-Abfrage; wird durch maxZoom des PMTiles-Archivs begrenzt
   POPULATION_LAYER_VISIBLE: false, // Einwohnerlayer optional auf Karte anzeigen
-  POPULATION_LAYER_MAX_NATIVE_ZOOM: 14 // Höchster Zoom im PMTiles; darüber wird überzoomed (Layer bleibt sichtbar)
+  POPULATION_LAYER_MAX_NATIVE_ZOOM: 14, // Höchster Zoom im PMTiles; darüber wird überzoomed (Layer bleibt sichtbar)
+
+  // Schulen & Kindergärten (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Suche)
+  SCHOOLS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/schools.pmtiles", // leer = Toggle ausblenden
+  SCHOOLS_LAYER_NAME: "germany_osm_schools", // Source-Layer im PMTiles
+  SCHOOLS_LAYER_VISIBLE: false // Schul-Layer initial anzeigen
 };
 
 /**

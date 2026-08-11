@@ -1,4 +1,5 @@
 // ==== Haupt-Orchestrierung (neu strukturiert) ====
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { CONFIG, isRememberMode } from './core/config.js';
 import { EventBus, Events } from './core/events.js';
 import { State } from './core/state.js';
@@ -536,24 +537,20 @@ export const App = {
   _migrateCurrentTargetToRememberMode(currentTarget) {
     const added = TargetService.addTarget(currentTarget);
     if (!added) return;
-    
+
     // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
-    // Wenn ja, entferne ihn und erstelle einen neuen mit Index
-    const layerGroup = State.getLayerGroup();
-    let oldMarker = null;
-    if (layerGroup) {
-      layerGroup.eachLayer(layer => {
-        if (layer instanceof L.Marker && 
-            layer._targetLatLng && 
-            TargetService.isEqual(layer._targetLatLng, currentTarget) &&
-            layer._targetIndex === undefined) {
-          // Alten Marker ohne Index merken und entfernen
-          oldMarker = layer;
-          layerGroup.removeLayer(layer);
-        }
-      });
+    // Wenn ja, entferne ihn und erstelle einen neuen mit Index.
+    // (Im normalen Modus ist das genau der currentTargetMarker.)
+    let oldMarker = State.getCurrentTargetMarker();
+    if (oldMarker &&
+        oldMarker._targetLatLng &&
+        TargetService.isEqual(oldMarker._targetLatLng, currentTarget) &&
+        oldMarker._targetIndex === undefined) {
+      oldMarker.remove();
+    } else {
+      oldMarker = null;
     }
-    
+
     // Neuen Marker mit Index zeichnen
     const index = State.getAllTargets().length - 1;
     const marker = Visualization.drawTargetPoint(currentTarget, index);
@@ -656,8 +653,8 @@ export const App = {
     const map = State.getMap();
     if (!map) return;
 
-    // Karte zur ausgewählten Position bewegen
-    map.setView([lat, lng], Math.max(map.getZoom(), 15));
+    // Karte zur ausgewählten Position bewegen (Zoom 14 in MapLibre ≈ Leaflet 15)
+    map.jumpTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
 
     // Zielpunkt setzen und Routen berechnen
     const target = [lat, lng];
@@ -836,7 +833,7 @@ export const App = {
 };
 
 // ==== Start ====
-// Warte bis DOM und Leaflet geladen sind
+// Warte bis DOM geladen ist
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => App.init());
 } else {

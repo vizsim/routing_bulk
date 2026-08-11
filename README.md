@@ -11,7 +11,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 🎨 **Colormaps**: Verschiedene Farbschemata für die aggregierte Darstellung (viridis, plasma, inferno, magma)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
 - 📈 **Längenverteilung**: Verschiedene Verteilungsfunktionen für Startpunkte (lognormal, uniform, normal, etc.)
-- 🏫 **Schulen anzeigen**: Suche und Visualisierung von Schulen über OpenStreetMap (Rechtsklick-Menü)
+- 🏫 **Schulen anzeigen**: Deutschlandweiter Layer mit Schulen & Kindergärten (OpenStreetMap via PMTiles, zuschaltbar unter „Darstellung“)
 - 📤 **Export**: Export von Routen als GeoJSON
 - 🎛️ **Konfigurierbar**: Anpassbare Anzahl von Routen, Radius, Aggregierungsmethode und mehr
 
@@ -32,7 +32,7 @@ Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](htt
    - **Längenverteilung**: Verteilungsfunktion für Startpunkte
    - **Aggregierte Darstellung**: Zeigt Routen mit Farbcodierung basierend auf der Anzahl
    - **Zielpunkte merken**: Speichert mehrere Zielpunkte und ihre Routen
-4. **Schulen anzeigen**: Rechtsklick auf die Karte → "Schulen suchen" um Schulen im Umkreis anzuzeigen
+4. **Schulen anzeigen**: Unter „Darstellung & Export“ den Schalter „Schulen & Kindergärten anzeigen“ aktivieren
 
 ## Projektstruktur
 

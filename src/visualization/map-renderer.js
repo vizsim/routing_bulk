@@ -1,179 +1,462 @@
-// ==== Map-Renderer: Karten-Rendering ====
+// ==== Map-Renderer: Karten-Rendering (MapLibre GL) ====
+// Koordinaten-Konvention: App-intern [lat, lng] (GraphHopper/Geo), an der
+// MapLibre-Grenze wird nach [lng, lat] konvertiert (toLngLat).
+// Zoom-Konvention: CONFIG-Zoomwerte sind Leaflet-Zoom (256px-Tiles); MapLibre
+// rechnet auf 512px-Basis, daher an der Grenze -1 (ZOOM_OFFSET).
+import { Map as MapLibreMap, NavigationControl, Popup, LngLatBounds, addProtocol, setWorkerUrl } from 'maplibre-gl';
+// MapLibre lädt seinen Web-Worker über eine zur Laufzeit gebaute URL, die weder
+// Vite-Dev noch der Rollup-Build auflösen kann. Der ?worker&url-Import lässt
+// Vite den Worker als eigenes Bundle bauen und liefert dessen fertige URL.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import { Protocol } from 'pmtiles';
+
+setWorkerUrl(maplibreWorkerUrl);
 import { CONFIG, isRememberMode } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 import { OverpassService } from '../services/overpass-service.js';
-import { PopulationService } from '../services/population-service.js';
 import { RouteService } from '../services/route-service.js';
 import { Visualization } from './visualization.js';
 
 /** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
 export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
 
+/** Attribution für OSM-Datenlayer (Schulen) aus der unfallkarte-Pipeline. */
+export const SCHOOLS_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
+
+// pmtiles://-Protokoll einmalig registrieren
+const _pmtilesProtocol = new Protocol();
+addProtocol('pmtiles', _pmtilesProtocol.tile);
+
+/** Leaflet-Zoom (CONFIG) -> MapLibre-Zoom */
+const ZOOM_OFFSET = 1;
+
+/** [lat,lng]-Array oder {lat,lng}-Objekt -> [lng,lat] für MapLibre */
+export function toLngLat(pos) {
+  if (Array.isArray(pos)) return [pos[1], pos[0]];
+  return [pos.lng, pos.lat];
+}
+
 export const MapRenderer = {
   _map: null,
-  _layerGroup: null,
-  _populationLayer: null,
-  _populationTooltip: null,
-  _populationHoverTimeout: null,
-  _populationHoverAttached: false,
+  _ready: false,
 
-  /** Stellt sicher, dass die Overlay-LayerGroup (Routen, Marker) über dem Einwohner-Layer liegt. */
-  _bringOverlayLayerToFront() {
-    if (this._layerGroup && typeof this._layerGroup.bringToFront === 'function') {
-      this._layerGroup.bringToFront();
-    }
+  // Routen als eine GeoJSON-Source (einzeln) + eine Source (aggregiert)
+  _routeFeatures: new Map(), // featureId -> GeoJSON-Feature
+  _routeIdCounter: 1,
+  _aggFeatures: [],
+
+  _hoverPopup: null,
+  _populationHoverHandlers: null,
+
+  /**
+   * Initialisiert die Karte
+   */
+  init() {
+    const map = new MapLibreMap({
+      container: 'map',
+      style: CONFIG.BASEMAP_STYLE_URL,
+      center: toLngLat(CONFIG.MAP_CENTER),
+      zoom: CONFIG.MAP_ZOOM - ZOOM_OFFSET,
+      maxZoom: 19 - ZOOM_OFFSET,
+      attributionControl: { compact: false },
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false
+    });
+    map.touchZoomRotate.disableRotation();
+
+    // Zoom-Control unten links (wie zuvor)
+    map.addControl(new NavigationControl({ showCompass: false }), 'bottom-left');
+
+    this._map = map;
+    State.setMap(map);
+    // Debug-Zugriff (Konsole/Tests)
+    window.__map = map;
+    window.__state = State;
+
+    // Wiederverwendetes Hover-Popup (Routen, Aggregation, Einwohner)
+    this._hoverPopup = new Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10
+    });
+
+    map.on('click', (e) => {
+      EventBus.emit(Events.MAP_CLICK, { latlng: { lat: e.lngLat.lat, lng: e.lngLat.lng } });
+    });
+
+    map.on('load', () => {
+      this._ready = true;
+      this._initRouteSources();
+      this._initSchoolsLayer();
+      this._initRouteHover();
+      if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
+    });
+
+    // Kontextmenü initialisieren
+    this._initContextMenu();
+
+    // Einwohner-Bereich (Startpunkte gewichten + Layer anzeigen)
+    this._initPopulationUI();
+
+    // Schul-Layer-Toggle
+    this._initSchoolsToggle();
+
+    EventBus.emit(Events.MAP_READY);
+  },
+
+  // ---- Routen-Sources: eine Source für Einzelrouten, eine für Aggregation ----
+
+  _initRouteSources() {
+    const map = this._map;
+    // Eigene Layer unter die Basemap-Beschriftungen einordnen (erster Symbol-Layer)
+    const labelLayerId = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
+    this._labelLayerId = labelLayerId;
+    map.addSource('agg-routes', { type: 'geojson', data: this._emptyFC() });
+    map.addLayer({
+      id: 'agg-lines',
+      type: 'line',
+      source: 'agg-routes',
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': ['get', 'count'] // hohe Counts oben zeichnen
+      },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['get', 'weight'],
+        'line-opacity': ['get', 'opacity']
+      }
+    }, labelLayerId);
+    map.addSource('routes', { type: 'geojson', data: this._emptyFC() });
+    map.addLayer({
+      id: 'routes-line',
+      type: 'line',
+      source: 'routes',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 3,
+        'line-opacity': 0.8
+      }
+    }, labelLayerId);
+  },
+
+  _emptyFC() {
+    return { type: 'FeatureCollection', features: [] };
+  },
+
+  _refreshRouteSource() {
+    const src = this._ready && this._map.getSource('routes');
+    if (src) src.setData({ type: 'FeatureCollection', features: [...this._routeFeatures.values()] });
+  },
+
+  _refreshAggSource() {
+    const src = this._ready && this._map.getSource('agg-routes');
+    if (src) src.setData({ type: 'FeatureCollection', features: this._aggFeatures });
   },
 
   /**
+   * Fügt eine Einzelroute als Feature hinzu.
+   * @param {Array} coordsLngLat - [[lng,lat], ...]
+   * @param {Object} props - Feature-Properties (color, label, ...)
+   * @returns {number} Feature-ID (Handle zum Entfernen)
+   */
+  addRouteFeature(coordsLngLat, props) {
+    const id = this._routeIdCounter++;
+    this._routeFeatures.set(id, {
+      type: 'Feature',
+      id,
+      properties: props,
+      geometry: { type: 'LineString', coordinates: coordsLngLat }
+    });
+    this._refreshRouteSource();
+    return id;
+  },
+
+  /**
+   * Setzt die aggregierten Segmente (ersetzt den kompletten Layer-Inhalt).
+   * @param {Array} features - GeoJSON-Features mit {color, weight, opacity, count, label}
+   */
+  setAggregatedFeatures(features) {
+    this._aggFeatures = features;
+    this._refreshAggSource();
+  },
+
+  /**
+   * Entfernt Einzelrouten anhand ihrer Feature-IDs (Handles aus drawRoute).
+   * @param {Array<number>} ids
+   */
+  removePolylines(ids) {
+    if (!ids) return;
+    let changed = false;
+    ids.forEach(id => {
+      if (id != null && this._routeFeatures.delete(id)) changed = true;
+    });
+    if (changed) this._refreshRouteSource();
+  },
+
+  /**
+   * Entfernt alle Routen (einzeln + aggregiert).
+   */
+  clearRoutes() {
+    this._routeFeatures.clear();
+    this._aggFeatures = [];
+    this._refreshRouteSource();
+    this._refreshAggSource();
+  },
+
+  // Hover-Tooltips für Routen (Routenlänge) und Aggregation (Anzahl Routen)
+  _initRouteHover() {
+    const map = this._map;
+    const show = (className) => (e) => {
+      const f = e.features && e.features[0];
+      const label = f && f.properties && f.properties.label;
+      if (!label) return;
+      const el = this._hoverPopup;
+      el.removeClassName?.('route-distance-tooltip');
+      el.removeClassName?.('aggregated-route-tooltip');
+      el.removeClassName?.('population-tooltip');
+      el.setLngLat(e.lngLat).setText(label).addTo(map);
+      el.addClassName?.(className);
+    };
+    const hide = () => this._hoverPopup.remove();
+    map.on('mousemove', 'routes-line', show('route-distance-tooltip'));
+    map.on('mouseleave', 'routes-line', hide);
+    map.on('mousemove', 'agg-lines', show('aggregated-route-tooltip'));
+    map.on('mouseleave', 'agg-lines', hide);
+  },
+
+  // ---- Schul-Layer (PMTiles aus der unfallkarte-Pipeline, ersetzt Overpass) ----
+
+  _initSchoolsLayer() {
+    const url = CONFIG.SCHOOLS_PMTILES_URL && CONFIG.SCHOOLS_PMTILES_URL.trim();
+    if (!url) return;
+    const map = this._map;
+    const srcLayer = CONFIG.SCHOOLS_LAYER_NAME || 'germany_osm_schools';
+    const visibility = CONFIG.SCHOOLS_LAYER_VISIBLE ? 'visible' : 'none';
+
+    map.addSource('schools', {
+      type: 'vector',
+      url: `pmtiles://${url}`,
+      attribution: SCHOOLS_ATTRIBUTION
+    });
+    // Polygone (Schulgelände) unter den Routen einordnen
+    map.addLayer({
+      id: 'schools-fill',
+      type: 'fill',
+      source: 'schools',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      layout: { visibility },
+      paint: { 'fill-color': '#3b82f6', 'fill-opacity': 0.18 }
+    }, 'agg-lines');
+    map.addLayer({
+      id: 'schools-outline',
+      type: 'line',
+      source: 'schools',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      layout: { visibility },
+      paint: { 'line-color': '#3b82f6', 'line-width': 1.5, 'line-opacity': 0.7 }
+    }, 'agg-lines');
+    // Punkte über den Routen (klickbar)
+    map.addLayer({
+      id: 'schools-points',
+      type: 'circle',
+      source: 'schools',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Point'],
+      layout: { visibility },
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 12, 4.5, 15, 7, 18, 10],
+        'circle-color': '#ffffff',
+        'circle-stroke-color': '#3b82f6',
+        'circle-stroke-width': 2
+      }
+    });
+
+    // Klick-Popup mit Name/Typ
+    const onClick = (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      const p = f.properties || {};
+      const typ = p.amenity === 'kindergarten' ? 'Kindergarten' : 'Schule';
+      const name = p.name || `Unbenannte ${typ === 'Kindergarten' ? 'Einrichtung' : 'Schule'}`;
+      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '250px' })
+        .setLngLat(e.lngLat)
+        .setHTML(`<strong>${Utils.escapeHtml ? Utils.escapeHtml(name) : name}</strong><br>${typ}`)
+        .addTo(this._map);
+    };
+    map.on('click', 'schools-points', onClick);
+    map.on('click', 'schools-fill', onClick);
+    ['schools-points', 'schools-fill'].forEach(layerId => {
+      map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+    });
+  },
+
+  setSchoolsLayerVisible(visible) {
+    if (!this._ready) {
+      this._map?.once('load', () => this.setSchoolsLayerVisible(visible));
+      return;
+    }
+    const value = visible ? 'visible' : 'none';
+    ['schools-fill', 'schools-outline', 'schools-points'].forEach(id => {
+      if (this._map.getLayer(id)) this._map.setLayoutProperty(id, 'visibility', value);
+    });
+  },
+
+  _initSchoolsToggle() {
+    const checkbox = Utils.getElement('#config-schools-visible');
+    if (!checkbox) return;
+    if (!(CONFIG.SCHOOLS_PMTILES_URL && CONFIG.SCHOOLS_PMTILES_URL.trim())) {
+      const group = checkbox.closest('.config-group');
+      if (group) group.style.display = 'none';
+      return;
+    }
+    checkbox.checked = !!CONFIG.SCHOOLS_LAYER_VISIBLE;
+    checkbox.addEventListener('change', () => {
+      CONFIG.SCHOOLS_LAYER_VISIBLE = checkbox.checked;
+      this.setSchoolsLayerVisible(checkbox.checked);
+    });
+  },
+
+  // ---- Einwohner-Layer (PMTiles-Vector-Source mit data-driven Einfärbung) ----
+
+  /**
    * Zeigt oder versteckt den optionalen Einwohner-PMTiles-Layer.
-   * Funktioniert nur, wenn CONFIG.POPULATION_PMTILES_URL gesetzt und protomaps-leaflet geladen ist.
    * @param {boolean} visible - true = Layer anzeigen, false = entfernen
    */
   setPopulationLayerVisible(visible) {
     if (!this._map) return;
     const url = CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim();
     if (!url) return;
+    if (!this._ready) {
+      this._map.once('load', () => {
+        const checkbox = document.getElementById('config-population-layer-visible');
+        if (!checkbox || checkbox.checked === visible) this.setPopulationLayerVisible(visible);
+      });
+      return;
+    }
+    const map = this._map;
 
     if (visible) {
       this._setPopulationLegendVisible(true);
-      if (this._map && this._map.attributionControl) {
-        this._map.attributionControl.addAttribution(POPULATION_ATTRIBUTION);
-      }
-      if (this._populationLayer) {
-        this._populationLayer.addTo(this._map);
-        this._bringOverlayLayerToFront();
-        this._attachPopulationHover();
-        return;
-      }
-      if (typeof protomapsL !== 'undefined' && protomapsL.leafletLayer) {
-        const layerName = (CONFIG.POPULATION_LAYER_NAME && CONFIG.POPULATION_LAYER_NAME.trim()) || 'default';
-        const propName = (CONFIG.POPULATION_PROPERTY && CONFIG.POPULATION_PROPERTY.trim()) || 'Einwohner';
-        // Deutlicher Kontrast: 0 = sehr hell, hohe Werte = kräftig dunkel (log-Skala, stärkere Spreizung)
-        const popToRatio = function (pop) {
-          return Math.min(1, Math.pow(Math.log(1 + Math.max(0, pop)) / Math.log(1 + 2000), 0.7));
-        };
-        // Alpha-Bereich für Layer: transparenter (0.06 … 0.5), Legende nutzt dieselbe Formel
-        const populationAlpha = function (ratio) { return 0.06 + ratio * 0.44; };
-        const fillByPopulation = function (z, f) {
-          const props = f && f.props ? f.props : {};
-          let pop = 0;
-          const v = props[propName] ?? props[propName.toLowerCase()];
-          if (typeof v === 'number') pop = v;
-          else if (typeof v === 'string') pop = parseFloat(v) || 0;
-          const ratio = popToRatio(pop);
-          const r = Math.round(255 - ratio * 245);
-          const g = Math.round(255 - ratio * 205);
-          const b = Math.round(255 - ratio * 135);
-          const a = populationAlpha(ratio);
-          return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
-        };
-        const strokeByPopulation = function (z, f) {
-          const props = f && f.props ? f.props : {};
-          let pop = 0;
-          const v = props[propName] ?? props[propName.toLowerCase()];
-          if (typeof v === 'number') pop = v;
-          else if (typeof v === 'string') pop = parseFloat(v) || 0;
-          const ratio = popToRatio(pop);
-          const r = Math.round(200 - ratio * 80);
-          const g = Math.round(220 - ratio * 100);
-          const b = Math.round(240 - ratio * 100);
-          return 'rgba(' + r + ',' + g + ',' + b + ',0.12)';
-        };
-        const addLayer = function (maxDataZoom) {
-          try {
-            const opts = {
-              url: url,
-              maxDataZoom: maxDataZoom,
-              maxZoom: 22
-            };
-            if (protomapsL.PolygonSymbolizer) {
-              opts.paintRules = [{
-                dataLayer: layerName,
-                symbolizer: new protomapsL.PolygonSymbolizer({
-                  fill: fillByPopulation,
-                  stroke: strokeByPopulation,
-                  width: 0.8,
-                  perFeature: true
-                })
-              }];
-              opts.labelRules = [];
-            } else {
-              opts.flavor = opts.flavor || 'light';
-            }
-            const layer = protomapsL.leafletLayer(opts);
-            layer.addTo(this._map);
-            this._populationLayer = layer;
-            this._bringOverlayLayerToFront();
-            this._attachPopulationHover();
-          } catch (e) {
-            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
-          }
-        }.bind(this);
-        if (typeof PopulationService !== 'undefined' && PopulationService.getPopulationPMTilesMaxZoom) {
-          PopulationService.getPopulationPMTilesMaxZoom().then(function (maxDataZoom) {
-            const stillWanted = document.getElementById('config-population-layer-visible') && document.getElementById('config-population-layer-visible').checked;
-            if (this._map && !this._populationLayer && stillWanted) addLayer(maxDataZoom);
-          }.bind(this)).catch(function () {
-            const stillWanted = document.getElementById('config-population-layer-visible') && document.getElementById('config-population-layer-visible').checked;
-            if (this._map && !this._populationLayer && stillWanted) addLayer((typeof CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM === 'number') ? CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM : 14);
-          });
-        } else {
-          addLayer((typeof CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM === 'number') ? CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM : 14);
-        }
-      } else if (typeof Utils !== 'undefined' && Utils.showError) {
-        Utils.showError('Einwohnerlayer: protomaps-leaflet nicht geladen.', true);
-      }
+      if (map.getSource('population')) return;
+
+      const propName = (CONFIG.POPULATION_PROPERTY && CONFIG.POPULATION_PROPERTY.trim()) || 'Einwohner';
+      const layerName = (CONFIG.POPULATION_LAYER_NAME && CONFIG.POPULATION_LAYER_NAME.trim()) || 'default';
+
+      // Gleiche Formel wie Legende: ratio = min(1, pow(log(1+pop)/log(2001), 0.7))
+      const pop = ['max', 0, ['to-number', ['get', propName], 0]];
+      const ratio = ['min', 1, ['^', ['/', ['ln', ['+', 1, pop]], Math.log(1 + 2000)], 0.7]];
+      const fillColor = ['let', 'r', ratio, ['rgba',
+        ['round', ['-', 255, ['*', ['var', 'r'], 245]]],
+        ['round', ['-', 255, ['*', ['var', 'r'], 205]]],
+        ['round', ['-', 255, ['*', ['var', 'r'], 135]]],
+        ['+', 0.06, ['*', ['var', 'r'], 0.44]]
+      ]];
+      const strokeColor = ['let', 'r', ratio, ['rgba',
+        ['round', ['-', 200, ['*', ['var', 'r'], 80]]],
+        ['round', ['-', 220, ['*', ['var', 'r'], 100]]],
+        ['round', ['-', 240, ['*', ['var', 'r'], 100]]],
+        0.12
+      ]];
+
+      map.addSource('population', {
+        type: 'vector',
+        url: `pmtiles://${url}`,
+        attribution: POPULATION_ATTRIBUTION
+      });
+      // Unter Routen/Schulen einordnen (erster eigener Layer über der Basemap)
+      const beforeId = map.getLayer('schools-fill') ? 'schools-fill' : (map.getLayer('agg-lines') ? 'agg-lines' : undefined);
+      map.addLayer({
+        id: 'population-fill',
+        type: 'fill',
+        source: 'population',
+        'source-layer': layerName,
+        paint: { 'fill-color': fillColor, 'fill-outline-color': strokeColor }
+      }, beforeId);
+
+      this._attachPopulationHover(propName);
     } else {
       this._setPopulationLegendVisible(false);
       this._detachPopulationHover();
-      if (this._map && this._map.attributionControl) {
-        this._map.attributionControl.removeAttribution(POPULATION_ATTRIBUTION);
-      }
-      if (this._populationLayer) {
-        this._map.removeLayer(this._populationLayer);
-      }
+      if (map.getLayer('population-fill')) map.removeLayer('population-fill');
+      if (map.getSource('population')) map.removeSource('population');
     }
   },
 
-  _attachPopulationHover() {
-    if (!this._map || this._populationHoverAttached) return;
-    this._populationHoverAttached = true;
-    const self = this;
-    const onMove = function (e) {
-      if (self._populationHoverTimeout) clearTimeout(self._populationHoverTimeout);
-      self._populationHoverTimeout = setTimeout(function () {
-        self._populationHoverTimeout = null;
-        const latlng = e.latlng;
-        if (typeof PopulationService === 'undefined' || !PopulationService.getPopulationAtPoint) return;
-        PopulationService.getPopulationAtPoint(latlng.lat, latlng.lng).then(function (result) {
-          if (!self._map || !self._populationLayer) return;
-          if (!self._populationTooltip) {
-            self._populationTooltip = L.tooltip({
-              permanent: false,
-              direction: 'top',
-              opacity: 0.95,
-              className: 'population-tooltip'
-            });
-          }
-          if (result && result.population != null) {
-            if (!self._populationTooltip._map) self._populationTooltip.addTo(self._map);
-            self._populationTooltip.setLatLng(latlng);
-            self._populationTooltip.setContent('Einwohner: ' + result.population);
-          } else {
-            if (self._populationTooltip._map) self._populationTooltip.remove();
-          }
-        }).catch(function () {});
-      }, 80);
+  _attachPopulationHover(propName) {
+    if (this._populationHoverHandlers) return;
+    const map = this._map;
+    const onMove = (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      let v = f.properties ? (f.properties[propName] ?? f.properties[propName.toLowerCase()]) : null;
+      if (typeof v === 'string') v = parseFloat(v);
+      if (v == null || Number.isNaN(v)) { this._hoverPopup.remove(); return; }
+      const el = this._hoverPopup;
+      el.removeClassName?.('route-distance-tooltip');
+      el.removeClassName?.('aggregated-route-tooltip');
+      el.setLngLat(e.lngLat).setText(`Einwohner: ${v}`).addTo(map);
+      el.addClassName?.('population-tooltip');
     };
-    const onOut = function () {
-      if (self._populationTooltip && self._populationTooltip._map) self._populationTooltip.remove();
-    };
-    this._map.on('mousemove', onMove);
-    this._map.on('mouseout', onOut);
-    this._populationHoverHandler = onMove;
-    this._populationHoverOutHandler = onOut;
+    const onLeave = () => this._hoverPopup.remove();
+    map.on('mousemove', 'population-fill', onMove);
+    map.on('mouseleave', 'population-fill', onLeave);
+    this._populationHoverHandlers = { onMove, onLeave };
+  },
+
+  _detachPopulationHover() {
+    if (!this._populationHoverHandlers || !this._map) return;
+    this._map.off('mousemove', 'population-fill', this._populationHoverHandlers.onMove);
+    this._map.off('mouseleave', 'population-fill', this._populationHoverHandlers.onLeave);
+    this._populationHoverHandlers = null;
+    this._hoverPopup.remove();
+  },
+
+  _initPopulationUI() {
+    const populationWeightGroup = Utils.getElement('#population-weight-group');
+    const populationLayerCheckbox = Utils.getElement('#config-population-layer-visible');
+    const populationWeightCheckbox = Utils.getElement('#config-population-weight-starts');
+    if (CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim()) {
+      if (populationWeightGroup) populationWeightGroup.style.display = 'block';
+      this._renderPopulationLegend();
+      this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
+      if (populationLayerCheckbox) {
+        populationLayerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
+        populationLayerCheckbox.addEventListener('change', () => {
+          CONFIG.POPULATION_LAYER_VISIBLE = populationLayerCheckbox.checked;
+          this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
+        });
+      }
+      // Beim Umschalten Einwohner-Gewichtung: Routen neu berechnen (wie bei Längenverteilung)
+      if (populationWeightCheckbox) {
+        populationWeightCheckbox.addEventListener('change', async () => {
+          const lastTarget = State.getLastTarget();
+          const lastStarts = State.getLastStarts();
+          if (!lastTarget || !lastStarts || lastStarts.length === 0 || isRememberMode()) return;
+          try {
+            MapRenderer.removePolylines(State.getRoutePolylines());
+            MapRenderer.clearRoutes();
+            State.setRoutePolylines([]);
+            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
+            if (routeInfo) {
+              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
+              EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
+            }
+          } catch (e) {
+            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
+          }
+        });
+      }
+    } else if (populationWeightGroup) {
+      populationWeightGroup.style.display = 'none';
+    }
   },
 
   _renderPopulationLegend() {
@@ -212,179 +495,39 @@ export const MapRenderer = {
     el.style.display = visible ? 'block' : 'none';
   },
 
-  _detachPopulationHover() {
-    if (this._populationHoverTimeout) {
-      clearTimeout(this._populationHoverTimeout);
-      this._populationHoverTimeout = null;
-    }
-    if (this._map) {
-      if (this._populationHoverHandler) {
-        this._map.off('mousemove', this._populationHoverHandler);
-        this._populationHoverHandler = null;
-      }
-      if (this._populationHoverOutHandler) {
-        this._map.off('mouseout', this._populationHoverOutHandler);
-        this._populationHoverOutHandler = null;
-      }
-    }
-    this._populationHoverAttached = false;
-    if (this._populationTooltip && this._populationTooltip._map) {
-      this._populationTooltip.remove();
-    }
-  },
+  // ---- Kontextmenü ----
 
-  /**
-   * Initialisiert die Karte
-   */
-  init() {
-    // Unterdrücke Leaflet Mozilla-Deprecation-Warnungen
-    const originalWarn = console.warn;
-    console.warn = function(...args) {
-      if (args[0] && typeof args[0] === 'string') {
-        const message = args[0];
-        if (message.includes('mozPressure') || message.includes('mozInputSource')) {
-          return;
-        }
-      }
-      originalWarn.apply(console, args);
-    };
-    
-    // Leaflet Setup
-    const map = L.map('map', {
-      zoomControl: false // Deaktiviere Standard-Zoom-Control
-    }).setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
-    
-    // Füge Zoom-Control unten links hinzu
-    L.control.zoom({
-      position: 'bottomleft'
-    }).addTo(map);
-    
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { 
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 19 
-    }).addTo(map);
-    
-    const layerGroup = L.layerGroup().addTo(map);
-    
-    this._map = map;
-    this._layerGroup = layerGroup;
-    
-    // State setzen
-    State.setMap(map);
-    State.setLayerGroup(layerGroup);
-    
-    // Event Listener
-    map.on("click", (e) => {
-      EventBus.emit(Events.MAP_CLICK, { latlng: e.latlng });
-    });
-    
-    // Nach Kartenbewegung/Zoom: Marker-Positionen neu berechnen (Fix für Mobile Pinch-Zoom).
-    // Günstig: nur Projektion + style setzen pro Marker, läuft nur 1× pro Geste (debounced).
-    const syncMarkerPositions = () => {
-      const startMarkers = State.getStartMarkers() || [];
-      const targetMarkers = State.getTargetMarkers() || [];
-      if (startMarkers.length === 0 && targetMarkers.length === 0 && !State.getCurrentTargetMarker()) return;
-      const update = (m) => { if (m && typeof m._updatePosition === 'function') m._updatePosition(); };
-      startMarkers.forEach(update);
-      targetMarkers.forEach(update);
-      const currentTargetMarker = State.getCurrentTargetMarker();
-      if (currentTargetMarker && !targetMarkers.includes(currentTargetMarker)) update(currentTargetMarker);
-    };
-
-    // Zoom-Event: Schul- und Haltestellen-Icons aktualisieren + Marker-Positionen synchronisieren (Debounce)
-    let zoomUpdateTimeout = null;
-    const onViewChange = () => {
-      if (zoomUpdateTimeout) clearTimeout(zoomUpdateTimeout);
-      zoomUpdateTimeout = setTimeout(() => {
-        zoomUpdateTimeout = null;
-        syncMarkerPositions();
-        Visualization.updateSchoolIcons();
-        Visualization.updatePlatformIcons();
-      }, 100);
-    };
-    map.on("zoomend", onViewChange);
-    map.on("moveend", onViewChange);
-    
-    // Kontextmenü initialisieren
-    this._initContextMenu();
-
-    // Einwohner-Bereich (Startpunkte gewichten + Layer anzeigen)
-    const populationWeightGroup = Utils.getElement('#population-weight-group');
-    const populationLayerCheckbox = Utils.getElement('#config-population-layer-visible');
-    const populationWeightCheckbox = Utils.getElement('#config-population-weight-starts');
-    if (CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim()) {
-      if (populationWeightGroup) populationWeightGroup.style.display = 'block';
-      this._renderPopulationLegend();
-      this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
-      if (populationLayerCheckbox) {
-        populationLayerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
-        populationLayerCheckbox.addEventListener('change', () => {
-          CONFIG.POPULATION_LAYER_VISIBLE = populationLayerCheckbox.checked;
-          this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
-        });
-        if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
-      }
-      // Beim Umschalten Einwohner-Gewichtung: Routen neu berechnen (wie bei Längenverteilung)
-      if (populationWeightCheckbox) {
-        populationWeightCheckbox.addEventListener('change', async () => {
-          const lastTarget = State.getLastTarget();
-          const lastStarts = State.getLastStarts();
-          if (!lastTarget || !lastStarts || lastStarts.length === 0 || isRememberMode()) return;
-          try {
-            MapRenderer.removePolylines(State.getRoutePolylines());
-            MapRenderer.clearRoutes();
-            State.setRoutePolylines([]);
-            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
-            if (routeInfo) {
-              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
-              EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
-            }
-          } catch (e) {
-            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
-          }
-        });
-      }
-    } else if (populationWeightGroup) {
-      populationWeightGroup.style.display = 'none';
-    }
-    
-    EventBus.emit(Events.MAP_READY);
-  },
-  
   /**
    * Initialisiert das Rechtsklick-Kontextmenü
    */
   _initContextMenu() {
     const contextMenu = Utils.getElement('#context-menu');
     if (!contextMenu) return;
-    
+
     let contextMenuLatLng = null;
-    
+
     // Rechtsklick auf Karte
-    this._map.on("contextmenu", (e) => {
+    this._map.on('contextmenu', (e) => {
       e.originalEvent.preventDefault();
-      
-      contextMenuLatLng = e.latlng;
-      
-      // Menü-Position an Mausposition setzen
-      const point = this._map.mouseEventToContainerPoint(e.originalEvent);
-      contextMenu.style.left = `${point.x}px`;
-      contextMenu.style.top = `${point.y}px`;
+
+      contextMenuLatLng = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+
+      // Menü-Position an Mausposition setzen (Menü ist position:fixed)
+      contextMenu.style.left = `${e.originalEvent.clientX}px`;
+      contextMenu.style.top = `${e.originalEvent.clientY}px`;
       contextMenu.style.display = 'block';
-      
+
       // Links mit aktuellen Koordinaten aktualisieren
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-      const zoom = this._map.getZoom();
-      
-      // OSM Query Link
+      const lat = contextMenuLatLng.lat;
+      const lng = contextMenuLatLng.lng;
+      // OSM-Link erwartet Leaflet-Zoomsemantik (+ZOOM_OFFSET)
+      const zoom = Math.round(this._map.getZoom()) + ZOOM_OFFSET;
       const osmQueryLink = Utils.getElement('#context-menu-osm-query');
       if (osmQueryLink) {
-        osmQueryLink.href = `https://www.openstreetmap.org/query?lat=${lat}&lon=${lng}`;
+        osmQueryLink.href = `https://www.openstreetmap.org/query?lat=${lat}&lon=${lng}#map=${zoom}/${lat}/${lng}`;
       }
     });
-    
+
     // Zielpunkt setzen
     const setEndBtn = Utils.getElement('#context-menu-set-end');
     if (setEndBtn) {
@@ -396,171 +539,60 @@ export const MapRenderer = {
         }
       });
     }
-    
-    // Schulen suchen
-    const schoolsBtn = Utils.getElement('#context-menu-schools');
-    if (schoolsBtn) {
-      schoolsBtn.addEventListener('click', async () => {
-        if (contextMenuLatLng) {
-          contextMenu.style.display = 'none';
-          
-          // Alten Radius-Kreis entfernen (falls vorhanden)
-          Visualization.clearSchoolSearchRadius();
-          
-          // Radius für Suche (500m)
-          const searchRadius = 1000;
-          
-          // Radius-Kreis anzeigen
-          Visualization.drawSchoolSearchRadius(
-            contextMenuLatLng.lat,
-            contextMenuLatLng.lng,
-            searchRadius
-          );
-          
-          // Lade-Indikator anzeigen
-          Utils.showInfo('Suche nach Schulen...', false);
-          
-          try {
-            // Schulen suchen
-            const schools = await OverpassService.searchSchools(
-              contextMenuLatLng.lat,
-              contextMenuLatLng.lng,
-              searchRadius
-            );
-            
-            if (schools.length === 0) {
-              Utils.showInfo('Keine Schulen in der Nähe gefunden.', false);
-              // Kreis nach 3 Sekunden ausblenden
-              setTimeout(() => {
-                Visualization.clearSchoolSearchRadius();
-              }, 3000);
-              return;
-            }
-            
-            // Alte Schulen holen und neue hinzufügen (nicht ersetzen)
-            const oldSchoolLayers = State.getSchoolMarkers() || [];
-            const newSchoolLayers = Visualization.drawSchools(schools);
-            
-            // Alle Schulen zusammenführen
-            const allSchoolLayers = [...oldSchoolLayers, ...newSchoolLayers];
-            State.setSchoolMarkers(allSchoolLayers);
-            
-            // Erfolgsmeldung
-            Utils.showInfo(`${schools.length} Schule${schools.length !== 1 ? 'n' : ''} gefunden.`, false);
-            
-            // Radius-Kreis nach 3 Sekunden ausblenden
-            setTimeout(() => {
-              Visualization.clearSchoolSearchRadius();
-            }, 3000);
-            
-            // Karte zu den neuen Schulen zoomen (falls mehrere gefunden)
-            if (newSchoolLayers.length > 0) {
-              const bounds = [];
-              newSchoolLayers.forEach(layer => {
-                // Marker haben getLatLng(), Polygone haben getBounds()
-                if (layer.getLatLng) {
-                  bounds.push(layer.getLatLng());
-                } else if (layer.getBounds) {
-                  bounds.push(layer.getBounds().getCenter());
-                }
-              });
-              bounds.push(contextMenuLatLng); // Auch die Klick-Position einbeziehen
-              
-              if (bounds.length > 0) {
-                const latlngs = bounds.map(b => [b.lat, b.lng]);
-                this._map.fitBounds(latlngs, { padding: [50, 50], maxZoom: 16 });
-              }
-            }
-          } catch (error) {
-            console.error('Fehler bei Schul-Suche:', error);
-            Utils.showError('Fehler beim Laden der Schulen.', true);
-          }
-        }
-      });
-    }
-    
-    // ÖPNV-Haltestellen suchen
+
+    // ÖPNV-Haltestellen suchen (weiterhin via Overpass, bis platforms.pmtiles existiert)
     const platformsBtn = Utils.getElement('#context-menu-platforms');
     if (platformsBtn) {
       platformsBtn.addEventListener('click', async () => {
-        if (contextMenuLatLng) {
-          contextMenu.style.display = 'none';
-          
-          // Alten Radius-Kreis entfernen (falls vorhanden)
-          Visualization.clearPlatformSearchRadius();
-          
-          // Radius für Suche (500m)
-          const searchRadius = 1000;
-          
-          // Radius-Kreis anzeigen
-          Visualization.drawPlatformSearchRadius(
+        if (!contextMenuLatLng) return;
+        contextMenu.style.display = 'none';
+
+        Visualization.clearPlatformSearchRadius();
+        const searchRadius = 1000;
+        Visualization.drawPlatformSearchRadius(contextMenuLatLng.lat, contextMenuLatLng.lng, searchRadius);
+        Utils.showInfo('Suche nach ÖPNV-Haltestellen...', false);
+
+        try {
+          const platforms = await OverpassService.searchPublicTransportPlatforms(
             contextMenuLatLng.lat,
             contextMenuLatLng.lng,
             searchRadius
           );
-          
-          // Lade-Indikator anzeigen
-          Utils.showInfo('Suche nach ÖPNV-Haltestellen...', false);
-          
-          try {
-            // Haltestellen suchen
-            const platforms = await OverpassService.searchPublicTransportPlatforms(
-              contextMenuLatLng.lat,
-              contextMenuLatLng.lng,
-              searchRadius
-            );
-            
-            if (platforms.length === 0) {
-              Utils.showInfo('Keine ÖPNV-Haltestellen in der Nähe gefunden.', false);
-              // Kreis nach 3 Sekunden ausblenden
-              setTimeout(() => {
-                Visualization.clearPlatformSearchRadius();
-              }, 3000);
-              return;
-            }
-            
-            // Alte Haltestellen holen und neue hinzufügen (nicht ersetzen)
-            const oldPlatformLayers = State.getPlatformMarkers() || [];
-            const newPlatformLayers = Visualization.drawPlatforms(platforms);
-            
-            // Alle Haltestellen zusammenführen
-            const allPlatformLayers = [...oldPlatformLayers, ...newPlatformLayers];
-            State.setPlatformMarkers(allPlatformLayers);
-            
-            // Erfolgsmeldung
-            Utils.showInfo(`${platforms.length} Haltestelle${platforms.length !== 1 ? 'n' : ''} gefunden.`, false);
-            
-            // Radius-Kreis nach 3 Sekunden ausblenden
-            setTimeout(() => {
-              Visualization.clearPlatformSearchRadius();
-            }, 3000);
-            
-            // Karte zu den neuen Haltestellen zoomen (falls mehrere gefunden)
-            if (newPlatformLayers.length > 0) {
-              const bounds = [];
-              newPlatformLayers.forEach(layer => {
-                // Marker haben getLatLng(), Polygone haben getBounds()
-                if (layer.getLatLng) {
-                  bounds.push(layer.getLatLng());
-                } else if (layer.getBounds) {
-                  bounds.push(layer.getBounds().getCenter());
-                }
-              });
-              bounds.push(contextMenuLatLng); // Auch die Klick-Position einbeziehen
-              
-              if (bounds.length > 0) {
-                const latlngs = bounds.map(b => [b.lat, b.lng]);
-                this._map.fitBounds(latlngs, { padding: [50, 50], maxZoom: 16 });
-              }
-            }
-          } catch (error) {
-            console.error('Fehler bei Haltestellen-Suche:', error);
-            Utils.showError('Fehler beim Laden der ÖPNV-Haltestellen.', true);
+
+          if (platforms.length === 0) {
+            Utils.showInfo('Keine ÖPNV-Haltestellen in der Nähe gefunden.', false);
+            setTimeout(() => Visualization.clearPlatformSearchRadius(), 3000);
+            return;
           }
+
+          // Alte Haltestellen behalten und neue hinzufügen (nicht ersetzen)
+          const oldPlatforms = State.getPlatformMarkers() || [];
+          const drawn = Visualization.drawPlatforms(platforms);
+          State.setPlatformMarkers([...oldPlatforms, ...drawn]);
+
+          Utils.showInfo(`${platforms.length} Haltestelle${platforms.length !== 1 ? 'n' : ''} gefunden.`, false);
+          setTimeout(() => Visualization.clearPlatformSearchRadius(), 3000);
+
+          // Karte zu den neuen Haltestellen zoomen
+          const bounds = new LngLatBounds();
+          drawn.forEach(p => {
+            if (p.type === 'way' && p.coordinates) {
+              p.coordinates.forEach(c => bounds.extend([c[1], c[0]]));
+            } else if (p.lat != null && p.lng != null) {
+              bounds.extend([p.lng, p.lat]);
+            }
+          });
+          bounds.extend([contextMenuLatLng.lng, contextMenuLatLng.lat]);
+          if (!bounds.isEmpty()) {
+            this._map.fitBounds(bounds, { padding: 50, maxZoom: 16 - ZOOM_OFFSET });
+          }
+        } catch (error) {
+          console.error('Fehler bei Haltestellen-Suche:', error);
+          Utils.showError('Fehler beim Laden der ÖPNV-Haltestellen.', true);
         }
       });
     }
-    
+
     // Menü schließen bei Klick außerhalb
     document.addEventListener('click', (e) => {
       if (contextMenu && !contextMenu.contains(e.target)) {
@@ -572,7 +604,7 @@ export const MapRenderer = {
         targetContextMenu.style.display = 'none';
       }
     });
-    
+
     // Menü schließen bei ESC
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -586,84 +618,29 @@ export const MapRenderer = {
       }
     });
   },
-  
+
   /**
    * Gibt die Karte zurück
    */
   getMap() {
     return this._map;
   },
-  
+
   /**
-   * Gibt die Layer-Gruppe zurück
-   */
-  getLayerGroup() {
-    return this._layerGroup;
-  },
-  
-  /**
-   * Löscht alle Layer außer Schul- und Haltestellen-Markern und Radius-Kreisen
-   * Verwendet selektive Entfernung statt clearLayers() für bessere Performance
+   * Löscht Routen und Start-/Zielpunkt-Marker; Haltestellen und Schul-Layer bleiben.
+   * (Name aus der Leaflet-Zeit beibehalten — Aufrufer erwarten diese Semantik.)
    */
   clearLayersExceptSchools() {
-    // Aktuellen Zielpunkt-Marker zurücksetzen, da er gelöscht wird
+    this.clearRoutes();
+
+    (State.getStartMarkers() || []).forEach(m => m && m.remove());
+    State.setStartMarkers([]);
+
+    (State.getTargetMarkers() || []).forEach(m => m && m.remove());
+    State.setTargetMarkers([]);
+
+    const current = State.getCurrentTargetMarker();
+    if (current) current.remove();
     State.setCurrentTargetMarker(null);
-    if (!this._layerGroup) return;
-    
-    // Schul- und Haltestellen-Marker und Radius-Kreise behalten
-    const schoolLayers = State.getSchoolMarkers() || [];
-    const schoolSearchRadiusCircle = State.getSchoolSearchRadiusCircle();
-    const platformLayers = State.getPlatformMarkers() || [];
-    const platformSearchRadiusCircle = State.getPlatformSearchRadiusCircle();
-    
-    // Erstelle Set von Schul- und Haltestellen-Layer-Referenzen für schnellen Lookup
-    const schoolLayerSet = new Set(schoolLayers);
-    const platformLayerSet = new Set(platformLayers);
-    
-    // Alle anderen Layer entfernen
-    const layersToRemove = [];
-    this._layerGroup.eachLayer(layer => {
-      // Prüfe auf mehrere Arten, ob es ein Schul- oder Haltestellen-Layer ist:
-      // 1. Direkte Referenz im Set
-      // 2. Custom-Property _isSchoolLayer oder _isPlatformLayer
-      const isSchoolLayer = schoolLayerSet.has(layer) || layer._isSchoolLayer === true;
-      const isPlatformLayer = platformLayerSet.has(layer) || layer._isPlatformLayer === true;
-      const isRadiusCircle = layer === schoolSearchRadiusCircle || layer === platformSearchRadiusCircle;
-      if (!isSchoolLayer && !isPlatformLayer && !isRadiusCircle) {
-        layersToRemove.push(layer);
-      }
-    });
-    
-    layersToRemove.forEach(layer => this._layerGroup.removeLayer(layer));
-  },
-  
-  /**
-   * Löscht nur Routen (Polylines), aber nicht Schul- oder Haltestellen-Polygone
-   * Wichtig: L.Polygon erweitert L.Polyline, daher müssen wir _isSchoolLayer und _isPlatformLayer prüfen
-   */
-  clearRoutes() {
-    if (!this._layerGroup) return;
-    
-    const polylinesToRemove = [];
-    this._layerGroup.eachLayer(layer => {
-      if (layer instanceof L.Polyline && !layer._isSchoolLayer && !layer._isPlatformLayer) {
-        polylinesToRemove.push(layer);
-      }
-    });
-    polylinesToRemove.forEach(layer => this._layerGroup.removeLayer(layer));
-  },
-  
-  /**
-   * Entfernt eine Liste von Polylines aus dem LayerGroup
-   * @param {Array} polylines - Array von Polyline-Objekten
-   */
-  removePolylines(polylines) {
-    if (!this._layerGroup || !polylines) return;
-    polylines.forEach(polyline => {
-      if (polyline) {
-        this._layerGroup.removeLayer(polyline);
-      }
-    });
   }
 };
-

@@ -1,4 +1,7 @@
-// ==== Route-Renderer: Route-Visualisierung ====
+// ==== Route-Renderer: Route-Visualisierung (MapLibre, Single-Source) ====
+// Routen werden als Features in eine GeoJSON-Source geschrieben (MapRenderer),
+// nicht mehr als einzelne Layer. drawRoute liefert eine Feature-ID als Handle;
+// die bestehenden "routePolylines"-Arrays im State speichern diese IDs.
 import { CONFIG } from '../core/config.js';
 import { State } from '../core/state.js';
 import { API } from '../domain/api.js';
@@ -28,7 +31,7 @@ export const RouteRenderer = {
    * @param {Object} ghResponse - GraphHopper Response
    * @param {string} color - Farbe
    * @param {number} [distanceM] - Routenlänge in m (aus paths[].distance), optional
-   * @returns {L.Polyline|null} - Polyline oder null
+   * @returns {number|null} - Feature-ID (Handle) oder null
    */
   drawRoute(ghResponse, color, distanceM) {
     const latlngs = API.extractRouteCoordinates(ghResponse);
@@ -36,103 +39,69 @@ export const RouteRenderer = {
       return null;
     }
 
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) {
-      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
-      return null;
-    }
-
     const distance = distanceM ?? API.extractRouteDistance(ghResponse);
-
-    const polyline = L.polyline(latlngs, {
-      weight: 3,
-      opacity: 0.8,
-      color: color
-    }).addTo(layerGroup);
-
+    const props = { color };
     if (distance != null && distance > 0) {
-      polyline.bindTooltip(this._formatDistance(distance), {
-        permanent: false,
-        direction: 'top',
-        className: 'route-distance-tooltip'
-      });
+      props.label = this._formatDistance(distance);
     }
 
-    return polyline;
+    return MapRenderer.addRouteFeature(latlngs.map(([lat, lng]) => [lng, lat]), props);
   },
-  
+
   /**
-   * Zeichnet aggregierte Routen
+   * Zeichnet aggregierte Routen (ersetzt den Inhalt des Aggregations-Layers).
    * @param {Array} aggregatedSegments - Aggregierte Segmente
    * @param {number} maxCount - Maximale Anzahl für Skalierung
    */
   drawAggregatedRoutes(aggregatedSegments, maxCount) {
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) {
-      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
-      return;
-    }
-    
     // Berechne Min/Max und alle Counts für gewichtete Verteilung
     const counts = aggregatedSegments.map(seg => seg.count);
     const minCount = Math.min(...counts);
     const maxCountValue = Math.max(...counts);
-    
-    aggregatedSegments.forEach(seg => {
+
+    const features = aggregatedSegments.map(seg => {
       // Gewichtete Verteilung: 15% Quantil, 85% linear
       const weightedLevel = ColormapUtils.calculateWeightedLevel(
-        seg.count, 
-        minCount, 
-        maxCountValue, 
-        counts, 
+        seg.count,
+        minCount,
+        maxCountValue,
+        counts,
         0.15
       );
-      
-      // Gewicht und Opacity basierend auf gewichtetem Level
-      const weight = 2 + (weightedLevel * 10); // 2-12px
-      const opacity = 0.7 + (weightedLevel * 0.7); // 0.3-1.0
-      
-      // Farbe basierend auf gewichtetem Level
-      const color = ColormapUtils.getColorForCount(seg.count, weightedLevel);
-      
-      const polyline = L.polyline([seg.start, seg.end], {
-        weight: weight,
-        opacity: opacity,
-        color: color
-      });
-      
-      // Tooltip mit Anzahl hinzufügen
-      polyline.bindTooltip(`${seg.count} Route${seg.count !== 1 ? 'n' : ''}`, {
-        permanent: false,
-        direction: 'top',
-        className: 'aggregated-route-tooltip'
-      });
-      
-      polyline.addTo(layerGroup);
+
+      return {
+        type: 'Feature',
+        properties: {
+          count: seg.count,
+          weight: 2 + (weightedLevel * 10),   // 2-12px
+          opacity: 0.7 + (weightedLevel * 0.7),
+          color: ColormapUtils.getColorForCount(seg.count, weightedLevel),
+          label: `${seg.count} Route${seg.count !== 1 ? 'n' : ''}`
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [[seg.start[1], seg.start[0]], [seg.end[1], seg.end[0]]]
+        }
+      };
     });
+
+    MapRenderer.setAggregatedFeatures(features);
   },
-  
+
   /**
    * Zeichnet alle Routen zu allen gespeicherten Zielpunkten
    */
   drawAllTargetRoutes() {
     const targetRoutes = State.getTargetRoutes();
-    const layerGroup = State.getLayerGroup();
-    
-    if (!layerGroup) {
-      console.warn('[RouteRenderer] LayerGroup nicht verfügbar');
-      return;
-    }
-    
     if (!targetRoutes || targetRoutes.length === 0) return;
-    
-    // Alle bestehenden Polylines entfernen (nur Routen, nicht Marker)
+
+    // Alle bestehenden Routen entfernen (nur Routen, nicht Marker)
     MapRenderer.clearRoutes();
-    
+
     if (CONFIG.AGGREGATED) {
       // Aggregierte Darstellung: Alle Routen aller Zielpunkte zusammen aggregieren
       const allRouteData = RouteService.getAllRoutesForTargets();
-      
+
       if (allRouteData.length > 0) {
         // Alle Routen zusammen aggregieren (egal von welchem Zielpunkt)
         const aggregatedSegments = AggregationService.aggregateRoutes(allRouteData);
@@ -145,30 +114,30 @@ export const RouteRenderer = {
       // Einzelne Routen: Alle Routen zu allen Zielpunkten zeichnen
       targetRoutes.forEach(routeInfo => {
         if (!routeInfo || !routeInfo.routeResponses) return;
-        
+
         // routePolylines Array initialisieren falls nicht vorhanden
         if (!routeInfo.routePolylines) {
           routeInfo.routePolylines = [];
         }
-        
+
         routeInfo.routeResponses.forEach((routeResponse, index) => {
           if (routeResponse && routeResponse.response) {
-            const polyline = this.drawRoute(routeResponse.response, routeResponse.color, routeResponse.distance ?? undefined);
-            if (polyline) {
-              routeInfo.routePolylines[index] = polyline;
+            const featureId = this.drawRoute(routeResponse.response, routeResponse.color, routeResponse.distance ?? undefined);
+            if (featureId) {
+              routeInfo.routePolylines[index] = featureId;
             }
           }
         });
       });
-      
+
       // State aktualisieren
       State.setTargetRoutes(targetRoutes);
     }
-    
+
     // Warnung bei vielen Routen anzeigen
     RouteWarning.checkAndShow();
   },
-  
+
   /**
    * Zeichnet Routen für einen einzelnen Zielpunkt
    * @param {Array} routeData - Route-Daten
@@ -188,12 +157,11 @@ export const RouteRenderer = {
       const routePolylines = [];
       routeResponses.forEach((routeInfo, index) => {
         if (routeInfo && routeInfo.response) {
-          const polyline = this.drawRoute(routeInfo.response, routeInfo.color || colors[index], routeInfo.distance ?? undefined);
-          routePolylines[index] = polyline;
+          const featureId = this.drawRoute(routeInfo.response, routeInfo.color || colors[index], routeInfo.distance ?? undefined);
+          routePolylines[index] = featureId;
         }
       });
       State.setRoutePolylines(routePolylines);
     }
   }
 };
-

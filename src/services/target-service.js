@@ -74,8 +74,7 @@ export const TargetService = {
     
     // Marker entfernen und neu indizieren
     const targetMarkers = State.getTargetMarkers();
-    const layerGroup = State.getLayerGroup();
-    
+
     // Marker von der Karte entfernen (falls vorhanden)
     // Prüfe sowohl über Index als auch über Koordinaten-Vergleich
     let markerToRemove = null;
@@ -83,14 +82,14 @@ export const TargetService = {
       markerToRemove = targetMarkers[index];
     } else {
       // Fallback: Marker über Koordinaten finden
-      markerToRemove = targetMarkers.find(m => 
+      markerToRemove = targetMarkers.find(m =>
         m && m._targetLatLng && this.isEqual(m._targetLatLng, target)
       );
     }
-    
-    if (markerToRemove && layerGroup) {
+
+    if (markerToRemove) {
       try {
-        layerGroup.removeLayer(markerToRemove);
+        markerToRemove.remove();
       } catch (error) {
         console.warn('Fehler beim Entfernen des Markers:', error);
       }
@@ -126,15 +125,14 @@ export const TargetService = {
   clearAll() {
     const allTargets = State.getAllTargets();
     const targetMarkers = State.getTargetMarkers();
-    const layerGroup = State.getLayerGroup();
-    
+
     // Alle Marker entfernen
-    if (layerGroup && targetMarkers) {
+    if (targetMarkers) {
       targetMarkers.forEach(marker => {
-        if (marker) layerGroup.removeLayer(marker);
+        if (marker) marker.remove();
       });
     }
-    
+
     State.setAllTargets([]);
     State.setTargetMarkers([]);
     State.setTargetRoutes([]);

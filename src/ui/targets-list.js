@@ -187,10 +187,9 @@ export const TargetsList = {
         
         // Startpunkte entfernen
         const startMarkers = State.getStartMarkers();
-        const layerGroup = State.getLayerGroup();
-        if (layerGroup && startMarkers) {
+        if (startMarkers) {
           startMarkers.forEach(marker => {
-            if (marker) layerGroup.removeLayer(marker);
+            if (marker) marker.remove();
           });
         }
         State.setStartMarkers([]);

@@ -10,5 +10,10 @@
   },
   "devDependencies": {
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.3.0",
+    "pbf": "^5.1.2",
+    "pmtiles": "^4.5.0"
   }
 }

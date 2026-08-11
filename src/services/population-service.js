@@ -1,5 +1,8 @@
 // ==== Population-Service: Einwohnergewichtung via PMTiles ====
 // Lädt 100×100 m Polygone aus PMTiles, filtert nach Radius, gewichtet Startpunkte nach Einwohnerzahl.
+// pbf v5 hat die alte Pbf-Klasse in PbfReader/PbfWriter aufgeteilt; hier wird nur gelesen.
+import { PbfReader as Pbf } from 'pbf';
+import { PMTiles } from 'pmtiles';
 import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
 import { Distribution } from '../domain/distribution.js';
@@ -16,10 +19,6 @@ import { Geo } from '../domain/geo.js';
    * Nutzt globales Pbf (pbf.js). Liefert für jeden Layer: { name, extent, features: [{ type, properties, loadGeometry }] }.
    */
   function parseMVT(buffer) {
-    const Pbf = typeof window !== "undefined" && window.Pbf;
-    if (!Pbf) {
-      throw new Error("Population-Service: Pbf nicht geladen. Bitte pbf.js vor population-service.js einbinden.");
-    }
     const pbf = new Pbf(buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer);
     const layers = {};
     pbf.readFields(readTile, layers, undefined);
@@ -281,11 +280,6 @@ import { Geo } from '../domain/geo.js';
     const url = (typeof CONFIG !== "undefined" && CONFIG.POPULATION_PMTILES_URL) || "";
     if (!url) return null;
     if (_pmtilesInstance && _pmtilesUrl === url) return _pmtilesInstance;
-    const PMTiles = typeof window !== "undefined" && window.pmtiles && window.pmtiles.PMTiles;
-    if (!PMTiles) {
-      Utils && Utils.logError && Utils.logError("PopulationService", "pmtiles nicht geladen.");
-      return null;
-    }
     _pmtilesUrl = url;
     _pmtilesInstance = new PMTiles(url);
     return _pmtilesInstance;

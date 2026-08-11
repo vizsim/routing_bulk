@@ -1,4 +1,5 @@
 // ==== Visualisierung ====
+import { Marker, Popup } from 'maplibre-gl';
 import { CONFIG, isRememberMode } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
@@ -10,11 +11,10 @@ import { TargetService } from '../services/target-service.js';
 import { TargetsList } from '../ui/targets-list.js';
 import { ColormapUtils } from './colormap-utils.js';
 import { HistogramRenderer } from './histogram-renderer.js';
-import { MapRenderer } from './map-renderer.js';
+import { MapRenderer, toLngLat } from './map-renderer.js';
 import { MarkerManager } from './marker-manager.js';
 import { PublicTransportRenderer } from './public-transport-renderer.js';
 import { RouteRenderer } from './route-renderer.js';
-import { SchoolRenderer } from './school-renderer.js';
 
 export const Visualization = {
   /**
@@ -69,7 +69,7 @@ export const Visualization = {
   
   /**
    * Hilfsfunktion: Findet den Index eines Zielpunkts für einen Marker
-   * @param {L.Marker} marker - Der Marker
+   * @param {maplibregl.Marker} marker - Der Marker
    * @returns {number} - Index oder -1
    */
   _getTargetIndexForMarker(marker) {
@@ -91,26 +91,27 @@ export const Visualization = {
    */
   _clearStartMarkers() {
     const startMarkers = State.getStartMarkers();
-    const layerGroup = State.getLayerGroup();
-    if (layerGroup && startMarkers) {
+    if (startMarkers) {
       startMarkers.forEach(marker => {
-        if (marker) layerGroup.removeLayer(marker);
+        if (marker) marker.remove();
       });
     }
     State.setStartMarkers([]);
   },
-  
+
   drawTargetPoint(latlng, index = null, targetId = null) {
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) {
-      console.warn('[Visualization] LayerGroup nicht verfügbar');
+    const map = State.getMap();
+    if (!map) {
+      console.warn('[Visualization] Karte nicht verfügbar');
       return null;
     }
-    
-    // SVG-Icon für Zielpunkt
-    const targetIcon = L.divIcon({
-      className: 'target-point-icon',
-      html: `
+
+    // SVG-Icon für Zielpunkt (DOM-Element für maplibregl.Marker)
+    const el = document.createElement('div');
+    el.className = 'target-point-icon';
+    el.style.zIndex = '200'; // Höher als Startpunkte, damit Zielpunkte immer vorne sind
+    el.style.cursor = 'pointer';
+    el.innerHTML = `
         <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
           <g transform="translate(12, 10) scale(0.4) translate(-16, -16)">
@@ -122,70 +123,67 @@ export const Visualization = {
             </svg>
           </g>
         </svg>
-      `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-    
-    const marker = L.marker(latlng, { 
-      icon: targetIcon,
-      draggable: true,
-      zIndexOffset: 200 // Höher als Startpunkte, damit Zielpunkte immer vorne sind
-    }).addTo(layerGroup);
-    
+      `;
+
+    const marker = new Marker({ element: el, anchor: 'center', draggable: true })
+      .setLngLat(toLngLat(latlng))
+      .addTo(map);
+
     // Opacity basierend auf CONFIG.HIDE_TARGET_POINTS setzen
     if (CONFIG.HIDE_TARGET_POINTS) {
-      marker.setOpacity(0);
+      el.style.opacity = '0';
     }
-    
+
     // Koordinaten im Marker speichern für Vergleich
     marker._targetLatLng = latlng;
-    
+
     // Index speichern für Kontextmenü
     if (index !== null) {
       marker._targetIndex = index;
     }
-    
+
     // Event Listener für Drag-Ende (funktioniert sowohl im normalen Modus als auch im "Zielpunkte merken" Modus)
-    marker.on('dragend', async (e) => {
-      await this._handleTargetDrag(marker, e);
+    marker.on('dragend', async () => {
+      await this._handleTargetDrag(marker);
     });
-    
+
     // Tooltip nur im "Zielpunkte merken" Modus aktivieren
     if (isRememberMode()) {
       this._setupTargetTooltip(marker);
     }
-    
+
     // Klick-Event: Startpunkte dieses Zielpunkts anzeigen
-    marker.on('click', () => {
+    // (stopPropagation, damit der Klick nicht als Karten-Klick ein neues Ziel setzt)
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
       const currentIndex = this._getTargetIndexForMarker(marker);
       if (currentIndex >= 0) {
         this._showStartPointsForTarget(currentIndex);
       }
     });
-    
+
     // Rechtsklick-Event für Kontextmenü
-    marker.on('contextmenu', (e) => {
-      e.originalEvent.preventDefault();
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const currentIndex = this._getTargetIndexForMarker(marker);
       if (currentIndex >= 0) {
         this._showTargetContextMenu(e, currentIndex);
       }
     });
-    
+
     return marker; // Marker zurückgeben für State-Verwaltung
   },
   
   /**
    * Behandelt das Draggen eines Zielpunkt-Markers
-   * @param {L.Marker} marker - Der Marker
-   * @param {Object} e - Leaflet Drag-Event
+   * @param {maplibregl.Marker} marker - Der Marker
    */
-  async _handleTargetDrag(marker, e) {
+  async _handleTargetDrag(marker) {
     try {
-      const newPosition = e.target.getLatLng();
+      const newPosition = marker.getLngLat();
       if (!newPosition) return;
-      
+
       const newTarget = [newPosition.lat, newPosition.lng];
       const oldTarget = marker._targetLatLng;
       
@@ -336,63 +334,66 @@ export const Visualization = {
   },
   
   /**
-   * Richtet Tooltip für Zielpunkt-Marker ein
+   * Richtet Tooltip für Zielpunkt-Marker ein (Hover-Popup mit stabiler ID)
    */
   _setupTargetTooltip(marker) {
-      // Tooltip mit ID beim Hover (verwendet stabile ID)
-      marker.on('mouseover', () => {
-        const currentIndex = this._getTargetIndexForMarker(marker);
-        if (currentIndex >= 0) {
-          // Verwende stabile ID aus Marker oder aus targetRoutes
-          let targetIdStr = null;
-          if (marker._targetId) {
-            targetIdStr = `z${marker._targetId}`;
-          } else {
-            // Fallback: ID aus targetRoutes holen
-            const targetRoutes = State.getTargetRoutes();
-            const routeInfo = targetRoutes.find(tr => 
-              TargetService.isEqual(tr.target, marker._targetLatLng)
-            );
-            if (routeInfo && routeInfo.targetId) {
-              targetIdStr = `z${routeInfo.targetId}`;
-            } else {
-              // Letzter Fallback: Index verwenden
-              targetIdStr = `z${currentIndex + 1}`;
-            }
-          }
-          marker.setTooltipContent(targetIdStr);
-          // Event für Panel-Highlighting emittieren
-          EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
-        }
-      });
-    
-    // Unhover-Event
-    marker.on('mouseout', () => {
-      EventBus.emit(Events.TARGET_UNHOVER);
-    });
-    
-    marker.bindTooltip('', {
-      permanent: false,
-      direction: 'top',
+    const popup = new Popup({
+      closeButton: false,
+      closeOnClick: false,
       className: 'target-tooltip',
-      offset: [0, -10]
+      offset: 14
+    });
+    const el = marker.getElement();
+
+    // Tooltip mit ID beim Hover (verwendet stabile ID)
+    el.addEventListener('mouseenter', () => {
+      const currentIndex = this._getTargetIndexForMarker(marker);
+      if (currentIndex >= 0) {
+        // Verwende stabile ID aus Marker oder aus targetRoutes
+        let targetIdStr = null;
+        if (marker._targetId) {
+          targetIdStr = `z${marker._targetId}`;
+        } else {
+          // Fallback: ID aus targetRoutes holen
+          const targetRoutes = State.getTargetRoutes();
+          const routeInfo = targetRoutes.find(tr =>
+            TargetService.isEqual(tr.target, marker._targetLatLng)
+          );
+          if (routeInfo && routeInfo.targetId) {
+            targetIdStr = `z${routeInfo.targetId}`;
+          } else {
+            // Letzter Fallback: Index verwenden
+            targetIdStr = `z${currentIndex + 1}`;
+          }
+        }
+        const map = State.getMap();
+        if (map) {
+          popup.setLngLat(marker.getLngLat()).setText(targetIdStr).addTo(map);
+        }
+        // Event für Panel-Highlighting emittieren
+        EventBus.emit(Events.TARGET_HOVER, { index: currentIndex, target: marker._targetLatLng });
+      }
+    });
+
+    // Unhover-Event
+    el.addEventListener('mouseleave', () => {
+      popup.remove();
+      EventBus.emit(Events.TARGET_UNHOVER);
     });
   },
   
   /**
    * Zeigt das Kontextmenü für einen Zielpunkt
-   * @param {Object} e - Leaflet Event
+   * @param {MouseEvent} e - DOM-Kontextmenü-Event des Marker-Elements
    * @param {number} index - Index des Zielpunkts
    */
   _showTargetContextMenu(e, index) {
     const contextMenu = Utils.getElement('#target-context-menu');
     if (!contextMenu) return;
-    
-    // Menü-Position setzen
-    const map = State.getMap();
-    const point = map.mouseEventToContainerPoint(e.originalEvent);
-    contextMenu.style.left = `${point.x}px`;
-    contextMenu.style.top = `${point.y}px`;
+
+    // Menü-Position setzen (Menü ist position:fixed)
+    contextMenu.style.left = `${e.clientX}px`;
+    contextMenu.style.top = `${e.clientY}px`;
     contextMenu.style.display = 'block';
     contextMenu._targetIndex = index;
     
@@ -417,16 +418,9 @@ export const Visualization = {
           if (lastTarget && TargetService.isEqual(lastTarget, target)) {
             State.setLastTarget(null);
             State.resetRouteData();
-            
+
             // Startpunkte entfernen
-            const startMarkers = State.getStartMarkers();
-            const layerGroup = State.getLayerGroup();
-            if (layerGroup && startMarkers) {
-              startMarkers.forEach(marker => {
-                if (marker) layerGroup.removeLayer(marker);
-              });
-            }
-            State.setStartMarkers([]);
+            this._clearStartMarkers();
           }
           
           // Alle verbleibenden Routen neu zeichnen
@@ -449,79 +443,63 @@ export const Visualization = {
   toggleStartPointsVisibility() {
     const startMarkers = State.getStartMarkers();
     const isHidden = CONFIG.HIDE_START_POINTS;
-    
+
     // Startpunkte im normalen State verwalten
     startMarkers.forEach(marker => {
       if (marker) {
-        if (isHidden) {
-          marker.setOpacity(0);
-        } else {
-          marker.setOpacity(1);
-        }
+        marker.getElement().style.opacity = isHidden ? '0' : '1';
       }
     });
-    
+
     // Im "Zielpunkte merken" Modus: Startpunkte auch für alle gespeicherten Zielpunkte verwalten
     // (Die Startpunkte werden aktuell nur für den letzten Zielpunkt gezeichnet,
     //  daher reicht es, die Startpunkte im normalen State zu verwalten)
   },
-  
+
   /**
    * Blendet Zielpunkte ein/aus basierend auf CONFIG.HIDE_TARGET_POINTS
-   * Robuste Implementierung: Sucht alle Zielpunkt-Marker direkt auf der Karte
    */
   toggleTargetPointsVisibility() {
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) return;
-    
     const isHidden = CONFIG.HIDE_TARGET_POINTS;
-    
-    // Durchsuche alle Layer auf der Karte nach Zielpunkt-Markern
-    // Wichtig: Startpunkte haben auch _targetLatLng, daher müssen wir prüfen ob es KEIN Startpunkt ist
-    layerGroup.eachLayer(layer => {
-      // Prüfe ob es ein Marker ist und ob er ein Zielpunkt-Marker ist (nicht ein Startpunkt)
-      if (layer instanceof L.Marker && 
-          layer._targetLatLng && 
-          layer._startIndex === undefined) { // Startpunkte haben _startIndex, Zielpunkte nicht
-        // Prüfe ob Marker noch auf der Karte ist
-        if (layer._map) {
-          if (isHidden) {
-            layer.setOpacity(0);
-          } else {
-            layer.setOpacity(1);
-          }
-        }
-      }
+    const opacity = isHidden ? '0' : '1';
+
+    (State.getTargetMarkers() || []).forEach(marker => {
+      if (marker) marker.getElement().style.opacity = opacity;
     });
+    const currentTargetMarker = State.getCurrentTargetMarker();
+    if (currentTargetMarker) {
+      currentTargetMarker.getElement().style.opacity = opacity;
+    }
   },
   
   drawStartPoints(starts, colors, target = null) {
     // Alte Marker entfernen
     this._clearStartMarkers();
-    
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) {
-      console.warn('[Visualization] LayerGroup nicht verfügbar');
+
+    const map = State.getMap();
+    if (!map) {
+      console.warn('[Visualization] Karte nicht verfügbar');
       return;
     }
-    
+
     // Zielpunkt bestimmen: Wenn nicht übergeben, lastTarget verwenden
     const targetForStarts = target || State.getLastTarget();
-    
+
     // Größe basierend auf Modus (kleiner gemacht)
     const size = CONFIG.AGGREGATED ? 4 : 8;
     const borderWidth = CONFIG.AGGREGATED ? 1 : 1.5;
     const shadowWidth = CONFIG.AGGREGATED ? 1 : 1.5;
-    
+
     const newMarkers = [];
-    
+
     starts.forEach((s, index) => {
       const color = colors[index] || '#0066ff'; // Fallback falls keine Farbe vorhanden
-      
-      // Erstelle ein Circle-Icon für den Marker
-      const icon = L.divIcon({
-        className: 'start-point-marker',
-        html: `<div style="
+
+      // Circle-Icon als DOM-Element
+      const el = document.createElement('div');
+      el.className = 'start-point-marker';
+      el.style.zIndex = '100'; // Niedriger als Zielpunkte (die haben 200)
+      el.innerHTML = `<div style="
           width: ${size}px;
           height: ${size}px;
           border-radius: 50%;
@@ -529,36 +507,30 @@ export const Visualization = {
           border: ${borderWidth}px solid white;
           box-shadow: 0 0 0 ${shadowWidth}px ${color};
           cursor: move;
-        "></div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2]
-      });
-      
-      // Erstelle einen draggable Marker
-      // zIndexOffset niedriger als Zielpunkte, damit Startpunkte dahinter sind
-      const marker = L.marker(s, {
-        icon: icon,
-        draggable: true,
-        zIndexOffset: 100 // Niedriger als Zielpunkte (die haben default 200)
-      }).addTo(layerGroup);
-      
+        "></div>`;
+      el.addEventListener('click', (e) => e.stopPropagation());
+
+      const marker = new Marker({ element: el, anchor: 'center', draggable: true })
+        .setLngLat(toLngLat(s))
+        .addTo(map);
+
       // Zielpunkt im Marker speichern (für Drag-Event)
       if (targetForStarts) {
         marker._targetLatLng = targetForStarts;
       }
       marker._startIndex = index;
-      
+
       // Opacity basierend auf CONFIG.HIDE_START_POINTS setzen
       if (CONFIG.HIDE_START_POINTS) {
-        marker.setOpacity(0);
+        el.style.opacity = '0';
       }
-      
+
       // Event Listener für Drag-Ende
-      marker.on('dragend', async (e) => {
+      marker.on('dragend', async () => {
         try {
-          const newPosition = e.target.getLatLng();
+          const newPosition = marker.getLngLat();
           if (!newPosition) return;
-          
+
           const newStart = [newPosition.lat, newPosition.lng];
           
           // Zielpunkt aus Marker verwenden (falls vorhanden), sonst lastTarget
@@ -731,40 +703,7 @@ export const Visualization = {
     });
   },
   
-  // Delegiert an SchoolRenderer
-  createSchoolIcon(zoom) {
-    return SchoolRenderer.createSchoolIcon(zoom);
-  },
-  
-  updateSchoolIcons() {
-    return SchoolRenderer.updateSchoolIcons();
-  },
-  
-  drawSchools(schools) {
-    return SchoolRenderer.drawSchools(schools);
-  },
-  
-  clearSchools(schoolLayers) {
-    return SchoolRenderer.clearSchools(schoolLayers);
-  },
-  
-  drawSchoolSearchRadius(lat, lng, radiusMeters) {
-    return SchoolRenderer.drawSchoolSearchRadius(lat, lng, radiusMeters);
-  },
-  
-  clearSchoolSearchRadius() {
-    return SchoolRenderer.clearSchoolSearchRadius();
-  },
-  
   // Delegiert an PublicTransportRenderer
-  createPlatformIcon(zoom) {
-    return PublicTransportRenderer.createPlatformIcon(zoom);
-  },
-  
-  updatePlatformIcons() {
-    return PublicTransportRenderer.updatePlatformIcons();
-  },
-  
   drawPlatforms(platforms) {
     return PublicTransportRenderer.drawPlatforms(platforms);
   },

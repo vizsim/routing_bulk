@@ -26,12 +26,11 @@ export const RouteService = {
       return null;
     }
     
-    const layerGroup = State.getLayerGroup();
-    if (!layerGroup) {
-      Utils.logError('RouteService', 'LayerGroup nicht initialisiert');
+    if (!State.getMap()) {
+      Utils.logError('RouteService', 'Karte nicht initialisiert');
       return null;
     }
-    
+
     // Startpunkte erzeugen oder wiederverwenden
     let starts, colors;
     if (reuseStarts && State.getLastStarts() && State.getLastColors()) {

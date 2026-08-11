@@ -1,9 +1,8 @@
 // ==== State-Management ====
 export const State = {
-  // Map & Layer
+  // Map
   map: null,
-  layerGroup: null,
-  
+
   // Route State
   lastTarget: null,
   allTargets: [], // Array für mehrere Zielpunkte
@@ -17,17 +16,13 @@ export const State = {
   allRouteData: [],
   allRouteResponses: [],
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
-  schoolMarkers: [], // Marker für gefundene Schulen
-  schoolSearchRadiusCircle: null, // Kreis für Suchradius-Visualisierung
-  platformMarkers: [], // Marker für gefundene ÖPNV-Haltestellen
-  platformSearchRadiusCircle: null, // Kreis für Haltestellen-Suchradius-Visualisierung
+  platformMarkers: [], // Gefundene ÖPNV-Haltestellen (Datenobjekte, gerendert via PublicTransportRenderer)
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
   targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
   
   // Getter
   getMap() { return this.map; },
-  getLayerGroup() { return this.layerGroup; },
   getLastTarget() { return this.lastTarget; },
   getAllTargets() { return this.allTargets; },
   getTargetMarkers() { return this.targetMarkers; },
@@ -40,10 +35,7 @@ export const State = {
   getAllRouteData() { return this.allRouteData; },
   getAllRouteResponses() { return this.allRouteResponses; },
   getExpectedDistribution() { return this.expectedDistribution; },
-  getSchoolMarkers() { return this.schoolMarkers; },
-  getSchoolSearchRadiusCircle() { return this.schoolSearchRadiusCircle; },
   getPlatformMarkers() { return this.platformMarkers; },
-  getPlatformSearchRadiusCircle() { return this.platformSearchRadiusCircle; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
   getNextTargetId() { return this.nextTargetId; },
   getTargetId(target) { 
@@ -53,7 +45,6 @@ export const State = {
   
   // Setter
   setMap(map) { this.map = map; },
-  setLayerGroup(layerGroup) { this.layerGroup = layerGroup; },
   setLastTarget(target) { this.lastTarget = target; },
   setAllTargets(targets) { this.allTargets = targets; },
   setTargetMarkers(markers) { this.targetMarkers = markers; },
@@ -66,10 +57,7 @@ export const State = {
   setAllRouteData(data) { this.allRouteData = data; },
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
-  setSchoolMarkers(markers) { this.schoolMarkers = markers; },
-  setSchoolSearchRadiusCircle(circle) { this.schoolSearchRadiusCircle = circle; },
   setPlatformMarkers(markers) { this.platformMarkers = markers; },
-  setPlatformSearchRadiusCircle(circle) { this.platformSearchRadiusCircle = circle; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   setNextTargetId(id) { this.nextTargetId = id; },
   incrementNextTargetId() { this.nextTargetId++; },
