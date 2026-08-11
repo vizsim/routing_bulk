@@ -16,6 +16,7 @@ export const State = {
   allRouteData: [],
   allRouteResponses: [],
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
+  demandInfo: null, // Ergebnis der letzten Startpunkt-Erzeugung (Kapazität, Quellen-Mix)
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
   targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
@@ -34,6 +35,7 @@ export const State = {
   getAllRouteData() { return this.allRouteData; },
   getAllRouteResponses() { return this.allRouteResponses; },
   getExpectedDistribution() { return this.expectedDistribution; },
+  getDemandInfo() { return this.demandInfo; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
   getNextTargetId() { return this.nextTargetId; },
   getTargetId(target) { 
@@ -55,6 +57,7 @@ export const State = {
   setAllRouteData(data) { this.allRouteData = data; },
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
+  setDemandInfo(info) { this.demandInfo = info; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   setNextTargetId(id) { this.nextTargetId = id; },
   incrementNextTargetId() { this.nextTargetId++; },

@@ -67,6 +67,9 @@ export const Events = {
   TARGET_HOVER: 'target:hover',
   TARGET_UNHOVER: 'target:unhover',
   
+  // Nachfrage-Events
+  DEMAND_UPDATED: 'demand:updated', // Startpunkte erzeugt (Kapazität/Quellen-Mix)
+
   // Route Events
   ROUTES_CALCULATED: 'routes:calculated',
   ROUTES_PROGRESS: 'routes:progress', // eine Route fertig (progressives Zeichnen)

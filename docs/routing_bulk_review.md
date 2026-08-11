@@ -14,6 +14,7 @@ Aktualisiert: 2026-08-11 · Ergänzt: Overpass → PMTiles (Abschnitt 6), Vite-E
 | Schulen: Overpass → PMTiles (Abschnitt 6) | ✅ erledigt | Layer-Toggle unter „Darstellung“; `overpass-service.searchSchools` + `school-renderer` entfernt |
 | edge_id-Aggregation (Abschnitt 2) | ✅ erledigt | `details:["edge_id"]` im Request; einzige Aggregationsmethode (die geometrischen Methoden `simple`/`lazyOverlap` samt Methoden-Dropdown wurden entfernt); Export liefert Geometrien (nie edge_ids) |
 | Requests & UX (Abschnitt 3) | ✅ erledigt | Concurrency-Pool (`CONFIG.ROUTE_CONCURRENCY`, Default 12) statt `Promise.all`; progressives Zeichnen mit Fortschritts-Badge „x/N“; AbortController bricht im Normalmodus alte Berechnungen bei neuem Klick ab |
+| Nachfragemodell (neu, nicht im ursprünglichen Review) | ✅ erledigt | Panel-Bereich „Nachfragedetails“: Kapazitätsgrenze je Zensus-Zelle (fix), Basis wahlweise alle Einwohner oder `Unter18`, ÖPNV-Haltestellen als Startpunkte mit Mischregler 0–100 % |
 | Permalink (Abschnitt 3) | 🟡 teilweise | Kartenausschnitt via MapLibre-`hash: true` (`#zoom/lat/lng`, gleiches Format wie svz/unfallkarte); Ziel/N/Radius/Profil noch nicht in der URL |
 | GitHub-Pages-CI | ✅ vorbereitet | `.github/workflows/deploy.yml`; nach Merge einmalig Pages-Source auf „GitHub Actions“ umstellen |
 | ÖPNV-Routing via `/plan` (Abschnitt 5) | ⬜ offen | nächster großer Schritt |
@@ -319,3 +320,39 @@ im Diff Umzug und Umbau. Risiko: gering; Rückweg: Branch verwerfen.
 Später / unabhängig: platforms-Layer in der unfallkarte-Pipeline ergänzen
 (ersetzt dann den letzten Overpass-Rest), Zensus-PMTiles aus dem Legacy-Bucket
 umziehen, Extraktion des mit miso geteilten Codes.
+
+---
+
+## 9. Nachfragemodell: wer startet wo? *(Ergänzung 2026-08-11)*
+
+Der Panel-Bereich **„Nachfragedetails“** steuert, wie die Startpunkte gezogen
+werden. Drei Bausteine, in dieser Reihenfolge angewandt:
+
+1. **Längenverteilung (Beeline)** — wie viele Startpunkte in welchem
+   Entfernungsring um das Ziel liegen (unverändert).
+2. **Wohnorte mit Kapazität (fix)** — innerhalb eines Rings werden
+   Zensus-Zellen nach Personenzahl gewichtet gezogen, aber **ohne Zurücklegen
+   auf Personenebene**: aus einer Zelle mit 10 Personen können höchstens 10
+   Startpunkte kommen. Reicht die Bevölkerung nicht für die gewünschte
+   Routenzahl, entstehen entsprechend weniger Startpunkte und das Panel sagt
+   das explizit („Weniger Startpunkte als angefragt“).
+3. **ÖPNV-Anteil (optional)** — ein einstellbarer Prozentsatz der Startpunkte
+   beginnt statt am Wohnort an einer Haltestelle (Zubringer mit Bus/Bahn).
+   Beispiel: 30 % → 30 % der Startpunkte an Haltestellen, 70 % an Wohnorten.
+   Haltestellen haben bewusst **keine** Kapazitätsgrenze (von einer Haltestelle
+   können viele Fahrgäste kommen).
+
+**Datenbasis:** Das Zensus-2022-PMTiles enthält neben `Einwohner` auch
+`Unter18` als **absolute Zahl** je 100×100-m-Zelle (plus `AnteilUnter18` als
+Prozentwert, der als Fallback dient). Damit ist „nur Kinder/Jugendliche“ eine
+echte Auswahl, keine Schätzung. Weitere ungenutzte Felder für spätere Ideen:
+`a18bis29`, `a30bis49`, `a50bis64`, `a65undaelter`, `Durchschnittsalter`,
+`DurchschnHHGroesse`.
+
+**Haltestellen-Dedup:** Ein Stop, der in OSM sowohl als `highway=bus_stop`-Node
+als auch als `public_transport=platform`-Fläche gemappt ist, taucht doppelt auf.
+Vor der Gewichtung werden Haltestellen unter 30 m Abstand zu einer
+zusammengefasst, sonst wären solche Stops doppelt so wahrscheinlich.
+
+**Code:** `services/demand-service.js` (Modell), `services/population-service.js`
+(Zensus- und generischer PMTiles-Punkt-Reader), `ui/demand-selector.js` (Panel).

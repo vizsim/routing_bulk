@@ -17,6 +17,70 @@ html, body {
   left: 10px;
 }
 
+/* Nachfragedetails: Basis-Auswahl, ÖPNV-Anteil, Info-Zeile */
+.demand-basis-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.demand-basis-btn {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #444;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.demand-basis-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.demand-basis-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+#config-transit-share {
+  width: 100%;
+  margin: 6px 0 2px;
+}
+
+.config-hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #777;
+}
+
+.demand-info {
+  margin-top: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #333;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.demand-info-sub {
+  color: #666;
+  font-size: 11px;
+}
+
+.demand-info-warn {
+  margin-top: 4px;
+  color: #b45309;
+  font-size: 11px;
+}
+
 /* Legende der Datenlayer (Schulen, Haltestellen) — nur sichtbar wenn Layer aktiv */
 .layer-legend {
   margin: 2px 0 8px 40px;

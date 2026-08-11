@@ -10,6 +10,7 @@ import { RouteService } from './services/route-service.js';
 import { TargetService } from './services/target-service.js';
 import { ColormapSelector } from './ui/colormap-selector.js';
 import { toggleAggregationUI, updateConfigFromUI } from './ui/config-helpers.js';
+import { DemandSelector } from './ui/demand-selector.js';
 import { DistributionSelector } from './ui/distribution-selector.js';
 import { RouteWarning } from './ui/route-warning.js';
 import { TargetsList } from './ui/targets-list.js';
@@ -204,6 +205,9 @@ export const App = {
     // Längenverteilungs-Buttons
     DistributionSelector.init();
 
+    // Nachfragedetails (Basis der Startpunkte, ÖPNV-Anteil)
+    DemandSelector.init(() => this._recalculateWithNewStarts());
+
     // Histogramm-Modus: Beeline vs. Echte Routenlänge
     this._setupHistogramModeButtons();
     
@@ -376,6 +380,20 @@ export const App = {
     }
   },
   
+  /**
+   * Berechnet Routen mit frisch gezogenen Startpunkten neu (z. B. wenn sich die
+   * Nachfragedetails geändert haben) und aktualisiert Karte und Histogramm.
+   */
+  async _recalculateWithNewStarts() {
+    const lastTarget = State.getLastTarget();
+    if (!lastTarget) return;
+    this._clearRoutesInNormalMode();
+    const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
+    if (routeInfo && isRememberMode()) {
+      RouteRenderer.drawAllTargetRoutes();
+    }
+  },
+
   /**
    * Helper: Berechnet Routen neu, wenn Zielpunkt vorhanden
    */

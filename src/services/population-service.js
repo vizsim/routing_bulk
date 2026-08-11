@@ -5,8 +5,6 @@ import { PbfReader as Pbf } from 'pbf';
 import { PMTiles } from 'pmtiles';
 import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
-import { Distribution } from '../domain/distribution.js';
-import { Geo } from '../domain/geo.js';
 
 
 (function () {
@@ -273,16 +271,88 @@ import { Geo } from '../domain/geo.js';
     return inside;
   }
 
-  let _pmtilesInstance = null;
-  let _pmtilesUrl = null;
+  // PMTiles-Instanzen pro URL (Header/Directory-Cache steckt in der Instanz)
+  const _pmtilesByUrl = new Map();
+
+  function pmtilesFor(url) {
+    if (!url) return null;
+    let inst = _pmtilesByUrl.get(url);
+    if (!inst) {
+      inst = new PMTiles(url);
+      _pmtilesByUrl.set(url, inst);
+    }
+    return inst;
+  }
 
   function getPMTiles() {
-    const url = (typeof CONFIG !== "undefined" && CONFIG.POPULATION_PMTILES_URL) || "";
-    if (!url) return null;
-    if (_pmtilesInstance && _pmtilesUrl === url) return _pmtilesInstance;
-    _pmtilesUrl = url;
-    _pmtilesInstance = new PMTiles(url);
-    return _pmtilesInstance;
+    return pmtilesFor((typeof CONFIG !== "undefined" && CONFIG.POPULATION_PMTILES_URL) || "");
+  }
+
+  /** Zahl aus einer MVT-Property lesen (Tippecanoe legt Zahlen oft als String ab). */
+  function numericProp(properties, key) {
+    if (!properties) return null;
+    const v = properties[key];
+    if (typeof v === "number" && !isNaN(v)) return v;
+    if (typeof v === "string") {
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  }
+
+  /**
+   * Liest Punkt-Features eines beliebigen PMTiles-Archivs im Radius (z. B.
+   * ÖPNV-Haltestellen). Generisch, damit nicht jede Quelle ihren eigenen
+   * Tile-/MVT-Code braucht.
+   * @param {string} url - PMTiles-URL
+   * @param {string} layerName - Source-Layer (leer = alle Layer im Tile)
+   * @param {number} lat - Mittelpunkt
+   * @param {number} lon - Mittelpunkt
+   * @param {number} radiusM - Radius in Metern
+   * @param {number} [desiredZoom] - Wunsch-Zoom (wird auf maxZoom des Archivs begrenzt)
+   * @returns {Promise<Array<{ lat: number, lon: number, properties: Object }>>}
+   */
+  async function readPointFeaturesInRadius(url, layerName, lat, lon, radiusM, desiredZoom) {
+    const pm = pmtilesFor(url);
+    if (!pm) return [];
+
+    let header = null;
+    try {
+      header = await pm.getHeader();
+    } catch (e) {
+      if (typeof Utils !== "undefined" && Utils.logError) Utils.logError("PopulationService", "getHeader (Punkte) fehlgeschlagen: " + e);
+      return [];
+    }
+    const maxZoom = header && typeof header.maxZoom === "number" ? header.maxZoom : 14;
+    const zoom = Math.min(desiredZoom != null ? desiredZoom : maxZoom, maxZoom);
+
+    const tiles = bboxToTileRange(circleToBBox(lat, lon, radiusM), zoom);
+    const out = [];
+    for (const [z, tileX, tileY] of tiles) {
+      try {
+        const resp = await pm.getZxy(z, tileX, tileY);
+        const data = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        if (!data) continue;
+        const layers = parseMVT(data);
+        for (const lname of getLayerKeysForTile(layers, layerName)) {
+          const layer = layers[lname];
+          if (!layer) continue;
+          const extent = layer.extent || DEFAULT_EXTENT;
+          for (const f of layer.features) {
+            if (f.type !== 1) continue; // 1 = Point
+            const geom = f.loadGeometry();
+            const pt = geom && geom[0] && geom[0][0];
+            if (!pt) continue;
+            const [plat, plon] = tileCoordToWgs84(pt.x, pt.y, z, tileX, tileY, extent);
+            if (!pointInCircle(plat, plon, lat, lon, radiusM)) continue;
+            out.push({ lat: plat, lon: plon, properties: f.properties || {} });
+          }
+        }
+      } catch (e) {
+        if (typeof Utils !== "undefined" && Utils.logError) Utils.logError("PopulationService", e);
+      }
+    }
+    return out;
   }
 
   /**
@@ -377,10 +447,18 @@ import { Geo } from '../domain/geo.js';
             const wgs84 = polygonRingsToWgs84AndTest(rings, z, tileX, tileY, extent, lat, lon, radiusM);
             if (!wgs84) continue;
             const pop = getPopulationFromFeature(f.properties, propName);
+            // Unter18: absolute Zahl der unter 18-Jährigen (Zensus 2022). Fallback:
+            // aus AnteilUnter18 (%) × Einwohner rekonstruieren.
+            let under18 = numericProp(f.properties, "Unter18");
+            if (under18 == null) {
+              const share = numericProp(f.properties, "AnteilUnter18");
+              under18 = share != null ? (pop * share) / 100 : 0;
+            }
             results.push({
               geometry: { rings, z, tileX, tileY, extent },
               center: [wgs84.lat, wgs84.lon],
-              population: Math.max(0, pop)
+              population: Math.max(0, pop),
+              under18: Math.max(0, under18)
             });
           }
         }
@@ -390,119 +468,6 @@ import { Geo } from '../domain/geo.js';
     }
 
     return results;
-  }
-
-  /**
-   * Wählt ein Polygon per gewichteter Zufallsauswahl (Mit Zurücklegen).
-   * @param {Array} features - Liste { center, population, geometry }
-   * @param {number} totalWeight - Summe der population
-   * @returns {Object} - gewähltes Feature
-   */
-  function sampleOneByPopulation(features, totalWeight) {
-    let r = Math.random() * totalWeight;
-    for (let j = 0; j < features.length; j++) {
-      r -= features[j].population;
-      if (r <= 0) return features[j];
-    }
-    return features[features.length - 1];
-  }
-
-  /**
-   * Startpunkte: Zuerst Längenverteilung (stark), dann innerhalb jedes Distanz-Bereichs nach Einwohner gewichten.
-   * 1. Verteilung legt fest, wie viele Startpunkte in welchem Distanz-Bin liegen.
-   * 2. Pro Bin werden die Polygone nur nach Einwohnerzahl gewichtet ausgewählt.
-   * @param {number} lat - Ziel-Lat
-   * @param {number} lon - Ziel-Lon
-   * @param {number} radiusM - Radius in m
-   * @param {number} numPoints - Anzahl Startpunkte
-   * @param {string} [distType] - 'lognormal' | 'uniform' | 'near' | 'far' | 'normal'
-   * @returns {Promise<Array<[number, number]>>} [lat, lon][]
-   */
-  async function getWeightedStartPoints(lat, lon, radiusM, numPoints, distType) {
-    const allFeatures = await getPopulationFeaturesInRadius(lat, lon, radiusM);
-    const features = allFeatures.filter(f => f.population > 0);
-    if (features.length === 0) return [];
-
-    const type = (distType && typeof distType === "string") ? distType : "lognormal";
-    const numBins = Math.min(15, Math.max(1, numPoints));
-    const binSize = radiusM / numBins;
-    const distanceMeters = (typeof Geo !== "undefined" && Geo.distanceMeters)
-      ? function (lat1, lon1, lat2, lon2) { return Geo.distanceMeters.call(Geo, lat1, lon1, lat2, lon2); }
-      : function () { return 0; };
-
-    const featuresByBin = Array.from({ length: numBins }, function () { return []; });
-    for (let i = 0; i < features.length; i++) {
-      const d = distanceMeters(features[i].center[0], features[i].center[1], lat, lon);
-      const binIndex = Math.min(Math.floor(d / binSize), numBins - 1);
-      if (binIndex >= 0) featuresByBin[binIndex].push(features[i]);
-    }
-
-    const targetCount = [];
-    if (typeof Distribution !== "undefined" && Distribution.calculateDistribution) {
-      const expectedBins = Distribution.calculateDistribution(type, numBins, radiusM, numPoints);
-      let sum = 0;
-      for (let b = 0; b < numBins; b++) {
-        targetCount[b] = Math.max(0, Math.round(expectedBins[b] || 0));
-        sum += targetCount[b];
-      }
-      let diff = numPoints - sum;
-      let idx = 0;
-      while (diff !== 0 && idx < numBins * 2) {
-        const binIdx = idx % numBins;
-        if (diff > 0 && (expectedBins[binIdx] || 0) > 0) {
-          targetCount[binIdx]++;
-          diff--;
-        } else if (diff < 0 && targetCount[binIdx] > 0) {
-          targetCount[binIdx]--;
-          diff++;
-        }
-        idx++;
-      }
-    } else {
-      for (let b = 0; b < numBins; b++) targetCount[b] = Math.floor(numPoints / numBins);
-      targetCount[0] += numPoints - targetCount.reduce(function (s, c) { return s + c; }, 0);
-    }
-
-    // Bins ohne Polygone: Soll-Anzahl umverteilen auf Bins mit Polygonen
-    let pool = 0;
-    for (let b = 0; b < numBins; b++) {
-      if (targetCount[b] > 0 && featuresByBin[b].length === 0) {
-        pool += targetCount[b];
-        targetCount[b] = 0;
-      }
-    }
-    while (pool > 0) {
-      let moved = false;
-      for (let b = 0; b < numBins && pool > 0; b++) {
-        if (featuresByBin[b].length > 0) {
-          targetCount[b]++;
-          pool--;
-          moved = true;
-        }
-      }
-      if (!moved) break;
-    }
-
-    const points = [];
-    for (let b = 0; b < numBins; b++) {
-      const list = featuresByBin[b];
-      const n = targetCount[b] || 0;
-      if (n <= 0 || list.length === 0) continue;
-      const totalPop = list.reduce(function (s, f) { return s + f.population; }, 0);
-      if (totalPop <= 0) continue;
-      for (let i = 0; i < n; i++) {
-        const chosen = sampleOneByPopulation(list, totalPop);
-        points.push(randomPointInPolygon(toWgs84Feature(chosen)));
-      }
-    }
-    if (points.length < numPoints && features.length > 0) {
-      const totalPop = features.reduce(function (s, f) { return s + f.population; }, 0);
-      for (let i = points.length; i < numPoints && totalPop > 0; i++) {
-        const chosen = sampleOneByPopulation(features, totalPop);
-        points.push(randomPointInPolygon(toWgs84Feature(chosen)));
-      }
-    }
-    return points;
   }
 
   function toWgs84Feature(chosen) {
@@ -551,13 +516,19 @@ import { Geo } from '../domain/geo.js';
     return null;
   }
 
+  /** Zufälliger Punkt innerhalb eines Zensus-Polygons ([lat, lon]). */
+  function randomPointInFeature(feature) {
+    return randomPointInPolygon(toWgs84Feature(feature));
+  }
+
   window.PopulationService = {
     getPopulationFeaturesInRadius,
-    getWeightedStartPoints,
     getPopulationAtPoint,
     getPMTiles,
     getPopulationPMTilesMaxZoom,
-    parseMVT
+    parseMVT,
+    readPointFeaturesInRadius,
+    randomPointInFeature
   };
 })();
 

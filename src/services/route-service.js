@@ -6,7 +6,7 @@ import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
 import { Distribution } from '../domain/distribution.js';
 import { Geo } from '../domain/geo.js';
-import { PopulationService } from './population-service.js';
+import { DemandService } from './demand-service.js';
 import { TargetService } from './target-service.js';
 
 export const RouteService = {
@@ -49,11 +49,15 @@ export const RouteService = {
 
       if (usePopulationWeight && CONFIG.POPULATION_PMTILES_URL) {
         try {
-          starts = await (typeof PopulationService !== 'undefined' && PopulationService.getWeightedStartPoints
-            ? PopulationService.getWeightedStartPoints(target[0], target[1], CONFIG.RADIUS_M, CONFIG.N, distType)
-            : Promise.resolve([]));
+          const demand = await DemandService.generateStartPoints(target, CONFIG.N, distType);
+          starts = demand.points;
+          State.setDemandInfo(demand.info);
+          EventBus.emit(Events.DEMAND_UPDATED, demand.info);
           if (!starts || starts.length === 0) {
-            Utils.showError('Keine Flächen mit Einwohnern im Radius. Bitte anderen Kartenbereich oder größeren Radius wählen.', true);
+            const hint = demand.info.basis === 'under18'
+              ? 'Keine Flächen mit unter 18-Jährigen im Radius. Bitte anderen Kartenbereich, größeren Radius oder Basis „Alle Einwohner“ wählen.'
+              : 'Keine Flächen mit Einwohnern im Radius. Bitte anderen Kartenbereich oder größeren Radius wählen.';
+            Utils.showError(hint, true);
             return null;
           }
         } catch (e) {
@@ -70,7 +74,7 @@ export const RouteService = {
       }
 
       State.setLastStarts(starts);
-      colors = Array.from({ length: CONFIG.N }, () =>
+      colors = Array.from({ length: starts.length }, () =>
         `hsl(${Math.random() * 360}, 70%, 50%)`
       );
       State.setLastColors(colors);

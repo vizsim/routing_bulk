@@ -131,6 +131,34 @@
         </div>
       </section>
 
+      <section class="config-block" id="demand-block" aria-labelledby="block-nachfrage-heading">
+        <h4 id="block-nachfrage-heading" class="config-block-title">Nachfragedetails</h4>
+        <div class="config-group">
+          <span class="config-group-label-row">
+            <label class="config-group-label">Wer startet? (Zensus 2022)</label>
+            <span class="info-hint" role="img" aria-label="Quellenangabe">
+              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-text">Startpunkte werden nach Einwohnerzahl der 100×100-m-Zellen gezogen. Aus einer Zelle können höchstens so viele Startpunkte kommen, wie dort Personen wohnen. Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
+            </span>
+          </span>
+          <div class="demand-basis-buttons">
+            <button type="button" class="demand-basis-btn active" data-basis="population">Alle Einwohner</button>
+            <button type="button" class="demand-basis-btn" data-basis="under18">Nur unter 18</button>
+          </div>
+        </div>
+        <div class="config-group" id="transit-share-group">
+          <label for="config-transit-share">
+            Start an ÖPNV-Haltestelle: <strong id="transit-share-value">0 %</strong>
+          </label>
+          <input type="range" id="config-transit-share" min="0" max="100" step="5" value="0" />
+          <p class="config-hint">
+            Anteil der Startpunkte, die statt am Wohnort an einer Haltestelle beginnen
+            (Zubringer mit Bus/Bahn). 0 % = alle vom Wohnort.
+          </p>
+        </div>
+        <div id="demand-info" class="demand-info" style="display: none;"></div>
+      </section>
+
       <section class="config-block" aria-labelledby="block-darstellung-heading">
         <h4 id="block-darstellung-heading" class="config-block-title">Darstellung & Export</h4>
         <div class="config-group" id="population-weight-group" style="display: none;">

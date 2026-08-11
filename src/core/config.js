@@ -20,6 +20,12 @@ export const CONFIG = {
   POPULATION_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data/Zensus2022_100m_poly_GER_wPLZ_wRS_ew_10.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
 
   
+  // Nachfragedetails: wer startet wo?
+  // Kapazität ist fix: aus einer Zensus-Zelle können höchstens so viele
+  // Startpunkte kommen, wie dort Personen der gewählten Basis wohnen.
+  DEMAND_BASIS: "population", // "population" (alle Einwohner) oder "under18" (unter 18-Jährige)
+  DEMAND_TRANSIT_SHARE: 0, // % der Startpunkte an ÖPNV-Haltestellen statt an Wohnorten (0-100)
+
   POPULATION_PROPERTY: "Einwohner", // Attributname für Einwohnerzahl im PMTiles-Layer
   POPULATION_LAYER_NAME: "rasters-polys", // Layer-Name im PMTiles (leer = erster Layer mit Features)
   POPULATION_ZOOM: 14, // Wunsch-Zoom für Tile-Abfrage; wird durch maxZoom des PMTiles-Archivs begrenzt
