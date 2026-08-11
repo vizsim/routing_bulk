@@ -169,7 +169,15 @@ export const RouteService = {
         const distance = API.extractRouteDistance(r);
         if (coords) {
           allRouteData.push(coords);
-          allRouteResponses.push({ response: r, color: colors[i], index: i, distance: distance ?? null });
+          allRouteResponses.push({
+            response: r,
+            color: colors[i],
+            index: i,
+            distance: distance ?? null,
+            // tatsächlich geroutetes Profil + Quelle (für Export/Aggregation nach Verkehrsmittel)
+            profile: this.profileForStart(i, startSources),
+            startSource: (startSources && startSources[i]) || 'residential'
+          });
         } else {
           allRouteResponses.push(null);
         }
@@ -243,7 +251,7 @@ export const RouteService = {
     targetRoutes.forEach(routeInfo => {
       if (routeInfo && routeInfo.routeResponses && routeInfo.routeResponses.length > 0) {
         routeInfo.routeResponses.forEach(rr => {
-          if (rr && rr.response) allResponses.push(rr.response);
+          if (rr && rr.response) allResponses.push(rr);
         });
       }
     });
@@ -273,7 +281,7 @@ export const RouteService = {
           }
           if (allRouteResponses[index] !== undefined) {
             const distance = API.extractRouteDistance(result);
-            allRouteResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null };
+            allRouteResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null, profile: this.profileForStart(index), startSource: (State.getLastStartSources() || [])[index] || 'residential' };
           }
           
           State.setAllRouteData(allRouteData);
@@ -293,7 +301,7 @@ export const RouteService = {
               }
               if (routeInfo.routeResponses && routeInfo.routeResponses[index] !== undefined) {
                 const distance = API.extractRouteDistance(result);
-                routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null };
+                routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index, distance: distance ?? null, profile: this.profileForStart(index), startSource: (State.getLastStartSources() || [])[index] || 'residential' };
               }
               State.setTargetRoutes(targetRoutes);
             }

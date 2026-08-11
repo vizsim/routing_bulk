@@ -22,15 +22,24 @@ export const AggregationService = {
    * volle Traversierungen matchen exakt, unterschiedliche Teilstücke bleiben
    * getrennt (Zubringer-Stummel mit count=1).
    *
-   * @param {Array} ghResponses - Roh-Responses von POST /route
-   * @returns {Array} - [{coords: [[lat,lng],...], count}]
+   * Akzeptiert Roh-Responses ODER Einträge {response, profile, startSource}
+   * (aus routeResponses) — mit Einträgen wird zusätzlich pro Verkehrsmittel
+   * (byProfile) und Quelle (bySource: residential/transit) gezählt.
+   *
+   * @param {Array} items - GH-Responses oder {response, profile?, startSource?}
+   * @returns {Array} - [{coords, count, byProfile, bySource}]
    */
-  aggregateRoutes(ghResponses) {
-    const edgeMap = new Map(); // key -> {count, coords}
+  aggregateRoutes(items) {
+    const edgeMap = new Map(); // key -> {count, coords, byProfile, bySource}
     const rnd = (v) => Math.round(v * 1e6) / 1e6; // ~10cm, robust gegen Float-Rauschen
     let skipped = 0;
 
-    (ghResponses || []).forEach(resp => {
+    (items || []).forEach(item => {
+      // Roh-Response oder routeResponses-Eintrag normalisieren
+      const resp = item && item.paths ? item : item?.response;
+      const profile = (item && !item.paths && item.profile) || null;
+      const source = (item && !item.paths && item.startSource) || null;
+
       const coords = resp?.paths?.[0]?.points?.coordinates; // [lon, lat]
       const intervals = resp ? API.extractEdgeIntervals(resp) : null;
       if (!coords || !intervals) {
@@ -47,10 +56,12 @@ export const AggregationService = {
 
         let entry = edgeMap.get(key);
         if (!entry) {
-          entry = { count: 0, coords: slice.map(([lon, lat]) => [lat, lon]) };
+          entry = { count: 0, coords: slice.map(([lon, lat]) => [lat, lon]), byProfile: {}, bySource: {} };
           edgeMap.set(key, entry);
         }
         entry.count++;
+        if (profile) entry.byProfile[profile] = (entry.byProfile[profile] || 0) + 1;
+        if (source) entry.bySource[source] = (entry.bySource[source] || 0) + 1;
       }
     });
 
@@ -60,7 +71,7 @@ export const AggregationService = {
 
     const aggregatedSegments = [];
     edgeMap.forEach(entry => {
-      aggregatedSegments.push({ coords: entry.coords, count: entry.count });
+      aggregatedSegments.push(entry);
     });
     return aggregatedSegments;
   }

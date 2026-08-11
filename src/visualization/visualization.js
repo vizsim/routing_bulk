@@ -600,7 +600,7 @@ export const Visualization = {
                     routeInfo.routeData[index] = coords;
                   }
                   if (routeInfo.routeResponses && routeInfo.routeResponses[index] !== undefined) {
-                    routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index };
+                    routeInfo.routeResponses[index] = { response: result, color: colors[index], index: index, profile: RouteService.profileForStart(index), startSource: (State.getLastStartSources() || [])[index] || 'residential' };
                   }
                   State.setTargetRoutes(targetRoutes);
                 }
@@ -613,7 +613,7 @@ export const Visualization = {
                   allRouteData[index] = coords;
                 }
                 if (allRouteResponses[index] !== undefined) {
-                  allRouteResponses[index] = { response: result, color: colors[index], index: index };
+                  allRouteResponses[index] = { response: result, color: colors[index], index: index, profile: RouteService.profileForStart(index), startSource: (State.getLastStartSources() || [])[index] || 'residential' };
                 }
                 
                 State.setAllRouteData(allRouteData);
@@ -626,8 +626,7 @@ export const Visualization = {
                 RouteRenderer.drawAllTargetRoutes();
               } else if (CONFIG.AGGREGATED) {
                 // Aggregierte Darstellung neu berechnen (nur aktueller Zielpunkt)
-                const rawResponses = (State.getAllRouteResponses() || []).map(r => r?.response);
-                const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
+                const aggregatedSegments = AggregationService.aggregateRoutes((State.getAllRouteResponses() || []).filter(Boolean));
                 if (aggregatedSegments.length > 0) {
                   const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
                   RouteRenderer.drawAggregatedRoutes(aggregatedSegments, maxCount);

@@ -146,9 +146,8 @@ export const RouteRenderer = {
    */
   drawRoutesForTarget(routeData, routeResponses, colors) {
     if (CONFIG.AGGREGATED && routeData.length > 0) {
-      // Aggregierte Darstellung
-      const rawResponses = (routeResponses || []).map(r => r?.response);
-      const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
+      // Aggregierte Darstellung (volle Einträge: enthalten Profil/Quelle)
+      const aggregatedSegments = AggregationService.aggregateRoutes((routeResponses || []).filter(Boolean));
       if (aggregatedSegments.length > 0) {
         const maxCount = Math.max(...aggregatedSegments.map(s => s.count));
         this.drawAggregatedRoutes(aggregatedSegments, maxCount);

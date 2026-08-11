@@ -41,23 +41,34 @@ export const ExportService = {
     const features = [];
 
     if (CONFIG.AGGREGATED) {
-      const rawResponses = rememberMode
+      const responseEntries = rememberMode
         ? RouteService.getAllRouteResponsesForTargets()
-        : (allRouteResponses || []).map(r => r?.response);
-      const aggregatedSegments = AggregationService.aggregateRoutes(rawResponses);
+        : (allRouteResponses || []).filter(Boolean);
+      const aggregatedSegments = AggregationService.aggregateRoutes(responseEntries);
       aggregatedSegments.forEach((segment, index) => {
         // Export immer als Geometrie — edge_ids sind nach einem
         // Graph-Rebuild nicht mehr stabil.
+        // count = Summe; dazu je Verkehrsmittel (count_<profil>) und
+        // Quelle (count_residential/count_transit) eine eigene Spalte.
+        const properties = {
+          count: segment.count,
+          segmentIndex: index
+        };
+        Object.entries(segment.byProfile || {}).forEach(([profile, c]) => {
+          properties[`count_${profile}`] = c;
+        });
+        const bySource = segment.bySource || {};
+        if (bySource.residential != null || bySource.transit != null) {
+          properties.count_residential = bySource.residential || 0;
+          properties.count_transit = bySource.transit || 0;
+        }
         features.push({
           type: 'Feature',
           geometry: {
             type: 'LineString',
             coordinates: segment.coords.map(([lat, lng]) => [lng, lat])
           },
-          properties: {
-            count: segment.count,
-            segmentIndex: index
-          }
+          properties
         });
       });
     } else {
@@ -78,7 +89,9 @@ export const ExportService = {
                     targetIndex,
                     targetId: targetId != null ? targetId : undefined,
                     routeIndex: routeIndex,
-                    color: routeInfo.color || null
+                    color: routeInfo.color || null,
+                    profile: routeInfo.profile || null,
+                    startSource: routeInfo.startSource || null
                   }
                 });
               }
@@ -96,7 +109,9 @@ export const ExportService = {
                 geometry: { type: 'LineString', coordinates: geoJsonCoords },
                 properties: {
                   routeIndex: index,
-                  color: routeInfo.color || null
+                  color: routeInfo.color || null,
+                  profile: routeInfo.profile || null,
+                  startSource: routeInfo.startSource || null
                 }
               });
             }
