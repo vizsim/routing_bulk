@@ -129,9 +129,10 @@ export const Visualization = {
       .setLngLat(toLngLat(latlng))
       .addTo(map);
 
-    // Opacity basierend auf CONFIG.HIDE_TARGET_POINTS setzen
+    // Opacity über die Marker-API setzen — MapLibre überschreibt die
+    // Element-Opacity bei jedem Karten-Update (Zoom/Pan) selbst
     if (CONFIG.HIDE_TARGET_POINTS) {
-      el.style.opacity = '0';
+      marker.setOpacity('0');
     }
 
     // Koordinaten im Marker speichern für Vergleich
@@ -444,10 +445,11 @@ export const Visualization = {
     const startMarkers = State.getStartMarkers();
     const isHidden = CONFIG.HIDE_START_POINTS;
 
-    // Startpunkte im normalen State verwalten
+    // Startpunkte im normalen State verwalten (setOpacity statt Element-Style,
+    // sonst setzt MapLibre die Opacity beim nächsten Zoom/Pan zurück)
     startMarkers.forEach(marker => {
       if (marker) {
-        marker.getElement().style.opacity = isHidden ? '0' : '1';
+        marker.setOpacity(isHidden ? '0' : '1');
       }
     });
 
@@ -464,11 +466,11 @@ export const Visualization = {
     const opacity = isHidden ? '0' : '1';
 
     (State.getTargetMarkers() || []).forEach(marker => {
-      if (marker) marker.getElement().style.opacity = opacity;
+      if (marker) marker.setOpacity(opacity);
     });
     const currentTargetMarker = State.getCurrentTargetMarker();
     if (currentTargetMarker) {
-      currentTargetMarker.getElement().style.opacity = opacity;
+      currentTargetMarker.setOpacity(opacity);
     }
   },
   
@@ -520,9 +522,9 @@ export const Visualization = {
       }
       marker._startIndex = index;
 
-      // Opacity basierend auf CONFIG.HIDE_START_POINTS setzen
+      // Opacity über die Marker-API setzen (siehe toggleStartPointsVisibility)
       if (CONFIG.HIDE_START_POINTS) {
-        el.style.opacity = '0';
+        marker.setOpacity('0');
       }
 
       // Event Listener für Drag-Ende
