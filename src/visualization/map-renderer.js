@@ -11,12 +11,10 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import { Protocol } from 'pmtiles';
 
 setWorkerUrl(maplibreWorkerUrl);
-import { CONFIG, isRememberMode } from '../core/config.js';
+import { CONFIG } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
-import { RouteService } from '../services/route-service.js';
-import { Visualization } from './visualization.js';
 
 /** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
 export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
@@ -658,43 +656,27 @@ export const MapRenderer = {
     this._hoverPopup.remove();
   },
 
+  // Einwohner-Layer (Kartenebene). Die Gewichtung der Startpunkte gehört zum
+  // Nachfragemodell und wird im DemandSelector behandelt.
   _initPopulationUI() {
-    const populationWeightGroup = Utils.getElement('#population-weight-group');
-    const populationLayerCheckbox = Utils.getElement('#config-population-layer-visible');
-    const populationWeightCheckbox = Utils.getElement('#config-population-weight-starts');
-    if (CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim()) {
-      if (populationWeightGroup) populationWeightGroup.style.display = 'block';
-      this._renderPopulationLegend();
-      this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
-      if (populationLayerCheckbox) {
-        populationLayerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
-        populationLayerCheckbox.addEventListener('change', () => {
-          CONFIG.POPULATION_LAYER_VISIBLE = populationLayerCheckbox.checked;
-          this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
-        });
-      }
-      // Beim Umschalten Einwohner-Gewichtung: Routen neu berechnen (wie bei Längenverteilung)
-      if (populationWeightCheckbox) {
-        populationWeightCheckbox.addEventListener('change', async () => {
-          const lastTarget = State.getLastTarget();
-          const lastStarts = State.getLastStarts();
-          if (!lastTarget || !lastStarts || lastStarts.length === 0 || isRememberMode()) return;
-          try {
-            MapRenderer.removePolylines(State.getRoutePolylines());
-            MapRenderer.clearRoutes();
-            State.setRoutePolylines([]);
-            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
-            if (routeInfo) {
-              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
-              EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
-            }
-          } catch (e) {
-            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
-          }
-        });
-      }
-    } else if (populationWeightGroup) {
-      populationWeightGroup.style.display = 'none';
+    const layerGroup = Utils.getElement('#population-layer-group');
+    const weightGroup = Utils.getElement('#population-weight-group');
+    const layerCheckbox = Utils.getElement('#config-population-layer-visible');
+
+    if (!(CONFIG.POPULATION_PMTILES_URL && CONFIG.POPULATION_PMTILES_URL.trim())) {
+      if (layerGroup) layerGroup.style.display = 'none';
+      if (weightGroup) weightGroup.style.display = 'none';
+      return;
+    }
+
+    this._renderPopulationLegend();
+    this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
+    if (layerCheckbox) {
+      layerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
+      layerCheckbox.addEventListener('change', () => {
+        CONFIG.POPULATION_LAYER_VISIBLE = layerCheckbox.checked;
+        this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
+      });
     }
   },
 

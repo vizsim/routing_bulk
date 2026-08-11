@@ -10,6 +10,7 @@ export const DemandSelector = {
    */
   init(onChange) {
     this._onChange = onChange;
+    this._initWeightToggle();
     this._initBasisButtons();
     this._initTransitSlider();
 
@@ -26,6 +27,29 @@ export const DemandSelector = {
       const group = Utils.getElement('#transit-share-group');
       if (group) group.style.display = 'none';
     }
+  },
+
+  /**
+   * Grundschalter des Nachfragemodells: ohne Einwohner-Gewichtung werden
+   * Startpunkte rein geometrisch verteilt — dann wirken Basis und ÖPNV-Anteil
+   * nicht, also werden sie sichtbar deaktiviert.
+   */
+  _initWeightToggle() {
+    const checkbox = Utils.getElement('#config-population-weight-starts');
+    if (!checkbox) return;
+
+    const sync = () => {
+      const options = Utils.getElement('#demand-options');
+      const hint = Utils.getElement('#demand-disabled-hint');
+      if (options) options.classList.toggle('is-disabled', !checkbox.checked);
+      if (hint) hint.style.display = checkbox.checked ? 'none' : 'block';
+    };
+    sync();
+
+    checkbox.addEventListener('change', () => {
+      sync();
+      this._recalculate();
+    });
   },
 
   _initBasisButtons() {

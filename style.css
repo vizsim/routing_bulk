@@ -17,6 +17,12 @@ html, body {
   left: 10px;
 }
 
+/* Deaktivierter Abschnitt (z. B. Nachfrage-Optionen ohne Einwohner-Gewichtung) */
+.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* Nachfragedetails: Basis-Auswahl, ÖPNV-Anteil, Info-Zeile */
 .demand-basis-buttons {
   display: flex;

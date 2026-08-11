@@ -28,7 +28,7 @@
           <strong>Zielpunkt setzen</strong> Klick in die Karte → Es werden automatisch Startpunkte gewählt und Routen zum Ziel erstellt.
         </p>
         <p class="panel-hint-secondary">
-          Schulen &amp; Kindergärten sowie ÖPNV-Haltestellen lassen sich unter „Darstellung“ einblenden.
+          Schulen &amp; Kindergärten sowie ÖPNV-Haltestellen lassen sich unter „Kartenebenen“ einblenden.
         </p>
       </div>
     </div>
@@ -133,12 +133,33 @@
 
       <section class="config-block" id="demand-block" aria-labelledby="block-nachfrage-heading">
         <h4 id="block-nachfrage-heading" class="config-block-title">Nachfragedetails</h4>
-        <div class="config-group">
+        <div class="config-group" id="population-weight-group">
           <span class="config-group-label-row">
-            <label class="config-group-label">Wer startet? (Zensus 2022)</label>
+            <label class="config-group-label">Datenbasis (Zensus 2022)</label>
             <span class="info-hint" role="img" aria-label="Quellenangabe">
               <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
-              <span class="info-hint-text">Startpunkte werden nach Einwohnerzahl der 100×100-m-Zellen gezogen. Aus einer Zelle können höchstens so viele Startpunkte kommen, wie dort Personen wohnen. Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
+              <span class="info-hint-text">Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
+            </span>
+          </span>
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-population-weight-starts">
+              <input type="checkbox" id="config-population-weight-starts" checked />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
+            </label>
+          </div>
+          <p class="config-hint" id="demand-disabled-hint" style="display: none;">
+            Aus: Startpunkte werden rein geometrisch im Radius verteilt — die
+            Einstellungen unten wirken dann nicht.
+          </p>
+        </div>
+        <div id="demand-options">
+        <div class="config-group">
+          <span class="config-group-label-row">
+            <label class="config-group-label">Wer startet?</label>
+            <span class="info-hint" role="img" aria-label="Quellenangabe">
+              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-text">Startpunkte werden nach Einwohnerzahl der 100×100-m-Zellen gezogen. Aus einer Zelle können höchstens so viele Startpunkte kommen, wie dort Personen wohnen.</span>
             </span>
           </span>
           <div class="demand-basis-buttons">
@@ -168,40 +189,27 @@
           </p>
         </div>
         <div id="demand-info" class="demand-info" style="display: none;"></div>
+        </div>
       </section>
 
-      <section class="config-block" aria-labelledby="block-darstellung-heading">
-        <h4 id="block-darstellung-heading" class="config-block-title">Darstellung & Export</h4>
-        <div class="config-group" id="population-weight-group" style="display: none;">
-        <span class="config-group-label-row">
-          <label class="config-group-label">Einwohner (Zensus 2022)</label>
-          <span class="info-hint" role="img" aria-label="Quellenangabe">
-            <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
-            <span class="info-hint-text">Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
-          </span>
-        </span>
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-population-weight-starts">
-            <input type="checkbox" id="config-population-weight-starts" checked />
-            <span class="switch-slider"></span>
-            <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
-          </label>
-        </div>
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-population-layer-visible">
-            <input type="checkbox" id="config-population-layer-visible" />
-            <span class="switch-slider"></span>
-            <span class="switch-text">Einwohnerlayer anzeigen</span>
-          </label>
-        </div>
-        <div id="population-legend" class="population-legend" aria-hidden="true"></div>
+      <section class="config-block" aria-labelledby="block-ebenen-heading">
+        <h4 id="block-ebenen-heading" class="config-block-title">Kartenebenen</h4>
+        <div class="config-group" id="population-layer-group">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-population-layer-visible">
+              <input type="checkbox" id="config-population-layer-visible" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Einwohner (Zensus 2022)</span>
+            </label>
+          </div>
+          <div id="population-legend" class="population-legend" aria-hidden="true"></div>
         </div>
         <div class="config-group">
           <div class="switch-toggle switch-toggle-small">
             <label for="config-schools-visible">
               <input type="checkbox" id="config-schools-visible" />
               <span class="switch-slider"></span>
-              <span class="switch-text">Schulen &amp; Kindergärten anzeigen</span>
+              <span class="switch-text">Schulen &amp; Kindergärten</span>
             </label>
           </div>
           <div id="schools-legend" class="layer-legend" style="display: none;"></div>
@@ -209,11 +217,15 @@
             <label for="config-platforms-visible">
               <input type="checkbox" id="config-platforms-visible" />
               <span class="switch-slider"></span>
-              <span class="switch-text">ÖPNV-Haltestellen anzeigen</span>
+              <span class="switch-text">ÖPNV-Haltestellen</span>
             </label>
           </div>
           <div id="platforms-legend" class="layer-legend" style="display: none;"></div>
         </div>
+      </section>
+
+      <section class="config-block" aria-labelledby="block-routen-heading">
+        <h4 id="block-routen-heading" class="config-block-title">Routendarstellung</h4>
         <div class="config-group config-group-with-border">
           <div class="switch-toggle">
             <label for="config-aggregated">
@@ -288,6 +300,10 @@
           </div>
         </div>
         </div>
+      </section>
+
+      <section class="config-block" aria-labelledby="block-export-heading">
+        <h4 id="block-export-heading" class="config-block-title">Export</h4>
         <div class="config-group config-group-export">
           <button id="export-btn" class="export-button" disabled>Routen als GeoJSON exportieren</button>
         </div>
