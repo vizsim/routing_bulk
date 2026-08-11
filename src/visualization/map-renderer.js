@@ -295,7 +295,7 @@ export const MapRenderer = {
       const name = p.name || `Unbenannte ${typ === 'Kindergarten' ? 'Einrichtung' : 'Schule'}`;
       new Popup({ closeButton: true, className: 'school-popup', maxWidth: '250px' })
         .setLngLat(e.lngLat)
-        .setHTML(`<strong>${Utils.escapeHtml ? Utils.escapeHtml(name) : name}</strong><br>${typ}`)
+        .setHTML(`<strong>${Utils.escapeHtml(name)}</strong><br>${typ}`)
         .addTo(this._map);
     };
     map.on('click', 'schools-points', onClick);

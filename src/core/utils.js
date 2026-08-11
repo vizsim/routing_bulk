@@ -73,6 +73,20 @@ export const Utils = {
       console.error(message);
     }
   },
+
+  /**
+   * Escaped HTML-Sonderzeichen für Popup-Inhalte (z.B. OSM-Namen mit & oder <)
+   * @param {string} text
+   * @returns {string}
+   */
+  escapeHtml(text) {
+    return String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  },
   
   /**
    * Zeigt eine Info-Nachricht für den Benutzer

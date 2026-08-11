@@ -4,6 +4,7 @@
 // zoomabhängiger Icon-Größe. Popups über Klick auf die Layer.
 import { Popup } from 'maplibre-gl';
 import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
 
 const PLATFORM_COLOR = '#10b981';
 
@@ -119,20 +120,21 @@ export const PublicTransportRenderer = {
    * Baut den Popup-Inhalt für eine Haltestelle (wie zuvor).
    */
   _createPopupContent(platform) {
-    let popupContent = `<strong>${platform.name}</strong>`;
+    const esc = Utils.escapeHtml;
+    let popupContent = `<strong>${esc(platform.name)}</strong>`;
 
     if (platform.tags) {
       if (platform.tags['addr:street'] && platform.tags['addr:housenumber']) {
-        popupContent += `<br>${platform.tags['addr:street']} ${platform.tags['addr:housenumber']}`;
+        popupContent += `<br>${esc(platform.tags['addr:street'])} ${esc(platform.tags['addr:housenumber'])}`;
       }
       if (platform.tags['addr:postcode'] && platform.tags['addr:city']) {
-        popupContent += `<br>${platform.tags['addr:postcode']} ${platform.tags['addr:city']}`;
+        popupContent += `<br>${esc(platform.tags['addr:postcode'])} ${esc(platform.tags['addr:city'])}`;
       }
       if (platform.tags.network) {
-        popupContent += `<br>Netzwerk: ${platform.tags.network}`;
+        popupContent += `<br>Netzwerk: ${esc(platform.tags.network)}`;
       }
       if (platform.tags.operator) {
-        popupContent += `<br>Betreiber: ${platform.tags.operator}`;
+        popupContent += `<br>Betreiber: ${esc(platform.tags.operator)}`;
       }
       if (platform.tags.tram) {
         popupContent += `<br>Straßenbahn: ${platform.tags.tram === 'yes' ? 'Ja' : 'Nein'}`;

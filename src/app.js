@@ -494,40 +494,23 @@ export const App = {
    * Migriert aktuellen Zielpunkt zum "Zielpunkte merken" Modus
    */
   _migrateCurrentTargetToRememberMode(currentTarget) {
-    const added = TargetService.addTarget(currentTarget);
-    if (!added) return;
-
-    // Prüfe ob bereits ein Marker für diesen Zielpunkt existiert (ohne Index)
-    // Wenn ja, entferne ihn und erstelle einen neuen mit Index.
-    // (Im normalen Modus ist das genau der currentTargetMarker.)
-    let oldMarker = State.getCurrentTargetMarker();
+    // Alten Normal-Modus-Marker entfernen, BEVOR addTarget den TARGET_ADDED-
+    // Handler auslöst — der zeichnet den neuen indizierten Marker und nullt
+    // currentTargetMarker (danach wäre der alte Marker nicht mehr auffindbar).
+    const oldMarker = State.getCurrentTargetMarker();
     if (oldMarker &&
         oldMarker._targetLatLng &&
         TargetService.isEqual(oldMarker._targetLatLng, currentTarget) &&
         oldMarker._targetIndex === undefined) {
       oldMarker.remove();
-    } else {
-      oldMarker = null;
-    }
-
-    // Neuen Marker mit Index zeichnen
-    const index = State.getAllTargets().length - 1;
-    const marker = Visualization.drawTargetPoint(currentTarget, index);
-    
-    const targetMarkers = State.getTargetMarkers();
-    // Stelle sicher, dass das Array groß genug ist
-    while (targetMarkers.length <= index) {
-      targetMarkers.push(null);
-    }
-    targetMarkers[index] = marker;
-    State.setTargetMarkers(targetMarkers);
-    
-    // currentTargetMarker zurücksetzen, da der Marker jetzt in targetMarkers ist
-    // Auch wenn es der alte Marker war, sollte er jetzt null sein
-    if (oldMarker === State.getCurrentTargetMarker()) {
       State.setCurrentTargetMarker(null);
     }
-    
+
+    const added = TargetService.addTarget(currentTarget);
+    if (!added) return;
+    // Der indizierte Marker wurde bereits vom TARGET_ADDED-Handler gezeichnet —
+    // hier NICHT erneut zeichnen (früher entstanden dadurch Marker-Duplikate).
+
     // Routen zum aktuellen Zielpunkt speichern (falls vorhanden)
     const allRouteData = State.getAllRouteData();
     const allRouteResponses = State.getAllRouteResponses();
