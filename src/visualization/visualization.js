@@ -9,6 +9,7 @@ import { AggregationService } from '../services/aggregation-service.js';
 import { RouteService } from '../services/route-service.js';
 import { TargetService } from '../services/target-service.js';
 import { TargetsList } from '../ui/targets-list.js';
+import { updateBetaHint } from '../ui/config-helpers.js';
 import { ColormapUtils } from './colormap-utils.js';
 import { HistogramRenderer } from './histogram-renderer.js';
 import { MapRenderer, toLngLat } from './map-renderer.js';
@@ -62,6 +63,7 @@ export const Visualization = {
             btn.classList.remove('active');
           }
         });
+        updateBetaHint();
       }
     }
   },

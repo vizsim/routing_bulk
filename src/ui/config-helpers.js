@@ -60,6 +60,14 @@ export function updateConfigFromUI() {
 }
 
 /**
+ * Zeigt den festen Beta-Hinweis, solange das ÖPNV-Profil aktiv ist.
+ */
+export function updateBetaHint() {
+  const hint = Utils.getElement('#oepnv-beta-hint');
+  if (hint) hint.style.display = CONFIG.PROFILE === 'oepnv' ? 'block' : 'none';
+}
+
+/**
  * Zeigt/versteckt die Aggregation-UI-Elemente
  */
 export function toggleAggregationUI() {

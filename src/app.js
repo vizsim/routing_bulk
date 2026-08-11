@@ -10,7 +10,7 @@ import { RouteService } from './services/route-service.js';
 import { TargetService } from './services/target-service.js';
 import { Accordion } from './ui/accordion.js';
 import { ColormapSelector } from './ui/colormap-selector.js';
-import { toggleAggregationUI, updateConfigFromUI } from './ui/config-helpers.js';
+import { toggleAggregationUI, updateBetaHint, updateConfigFromUI } from './ui/config-helpers.js';
 import { DemandSelector } from './ui/demand-selector.js';
 import { DistributionSelector } from './ui/distribution-selector.js';
 import { initInfoHints } from './ui/info-hints.js';
@@ -64,6 +64,9 @@ export const App = {
     if (typeof toggleAggregationUI === 'function') {
       toggleAggregationUI();
     }
+
+    // Beta-Hinweis (ÖPNV) initial setzen
+    updateBetaHint();
     
     // Export-Button Handler
     const exportBtn = Utils.getElement('#export-btn');
@@ -267,9 +270,13 @@ export const App = {
         const selectedIndex = State.getSelectedTargetIndex();
         if (selectedIndex !== null && isRememberMode()) {
           // Nichts tun - Benutzer muss auf Stift-Icon klicken, um Änderungen zu übernehmen
+          updateBetaHint();
           return;
         }
         
+        // Beta-Hinweis ein-/ausblenden (fest sichtbar, solange ÖPNV aktiv)
+        updateBetaHint();
+
         // Nur wenn kein Zielpunkt ausgewählt ist, sofort umsetzen
         EventBus.emit(Events.CONFIG_PROFILE_CHANGED, { profile: CONFIG.PROFILE });
       });

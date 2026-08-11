@@ -17,6 +17,22 @@ html, body {
   left: 10px;
 }
 
+/* Fester Beta-Hinweis, solange das ÖPNV-Profil aktiv ist */
+.beta-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #78350f;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+}
+
+.beta-hint a {
+  color: #92400e;
+}
+
 /* Beta-Kennzeichnung am ÖPNV-Profil-Button */
 .profile-btn {
   position: relative;
