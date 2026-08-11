@@ -16,7 +16,6 @@ export const State = {
   allRouteData: [],
   allRouteResponses: [],
   expectedDistribution: null, // Manuell angepasste erwartete Verteilung
-  platformMarkers: [], // Gefundene ÖPNV-Haltestellen (Datenobjekte, gerendert via PublicTransportRenderer)
   selectedTargetIndex: null, // Index des ausgewählten Zielpunkts
   nextTargetId: 1, // Nächste eindeutige ID für Zielpunkte (z1, z2, z3, ...)
   targetIdMap: new Map(), // Map: target string -> targetId (für schnellen Zugriff)
@@ -35,7 +34,6 @@ export const State = {
   getAllRouteData() { return this.allRouteData; },
   getAllRouteResponses() { return this.allRouteResponses; },
   getExpectedDistribution() { return this.expectedDistribution; },
-  getPlatformMarkers() { return this.platformMarkers; },
   getSelectedTargetIndex() { return this.selectedTargetIndex; },
   getNextTargetId() { return this.nextTargetId; },
   getTargetId(target) { 
@@ -57,7 +55,6 @@ export const State = {
   setAllRouteData(data) { this.allRouteData = data; },
   setAllRouteResponses(responses) { this.allRouteResponses = responses; },
   setExpectedDistribution(dist) { this.expectedDistribution = dist; },
-  setPlatformMarkers(markers) { this.platformMarkers = markers; },
   setSelectedTargetIndex(index) { this.selectedTargetIndex = index; },
   setNextTargetId(id) { this.nextTargetId = id; },
   incrementNextTargetId() { this.nextTargetId++; },

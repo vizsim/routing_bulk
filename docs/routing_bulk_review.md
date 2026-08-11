@@ -16,7 +16,7 @@ Aktualisiert: 2026-08-11 · Ergänzt: Overpass → PMTiles (Abschnitt 6), Vite-E
 | Requests & UX (Abschnitt 3) | ✅ erledigt | Concurrency-Pool (`CONFIG.ROUTE_CONCURRENCY`, Default 12) statt `Promise.all`; progressives Zeichnen mit Fortschritts-Badge „x/N“; AbortController bricht im Normalmodus alte Berechnungen bei neuem Klick ab |
 | GitHub-Pages-CI | ✅ vorbereitet | `.github/workflows/deploy.yml`; nach Merge einmalig Pages-Source auf „GitHub Actions“ umstellen |
 | ÖPNV-Routing via `/plan` (Abschnitt 5) | ⬜ offen | nächster großer Schritt |
-| platforms.pmtiles in unfallkarte-Pipeline | ⬜ offen | bis dahin Haltestellen-Suche weiter via Overpass |
+| platforms.pmtiles in unfallkarte-Pipeline | ✅ erledigt | 503.939 Haltestellen (public_transport=platform + highway=bus_stop), Layer `germany_osm_platforms`, deployt nach `unfallkarte-data-v2`; Overpass ist damit komplett aus routing_bulk entfernt (Layer-Toggle statt Radius-Suche) |
 | Zensus-PMTiles aus Legacy-Bucket umziehen | ⬜ offen | `POPULATION_PMTILES_URL` zeigt noch auf `unfallkarte-data` (ohne `-v2`) |
 | Web Worker / inkrementelle Aggregation (Abschnitt 2) | ⬜ offen | Druck ist raus: Kanten-Aggregation ist O(Kanten) statt O(Segmentpaare) |
 | Gemeinsames Package mit miso (Abschnitt 4) | ⬜ offen | opportunistisch |

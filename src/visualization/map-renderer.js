@@ -3,7 +3,7 @@
 // MapLibre-Grenze wird nach [lng, lat] konvertiert (toLngLat).
 // Zoom-Konvention: CONFIG-Zoomwerte sind Leaflet-Zoom (256px-Tiles); MapLibre
 // rechnet auf 512px-Basis, daher an der Grenze -1 (ZOOM_OFFSET).
-import { Map as MapLibreMap, NavigationControl, Popup, LngLatBounds, addProtocol, setWorkerUrl } from 'maplibre-gl';
+import { Map as MapLibreMap, NavigationControl, Popup, addProtocol, setWorkerUrl } from 'maplibre-gl';
 // MapLibre lädt seinen Web-Worker über eine zur Laufzeit gebaute URL, die weder
 // Vite-Dev noch der Rollup-Build auflösen kann. Der ?worker&url-Import lässt
 // Vite den Worker als eigenes Bundle bauen und liefert dessen fertige URL.
@@ -15,15 +15,26 @@ import { CONFIG, isRememberMode } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
-import { OverpassService } from '../services/overpass-service.js';
 import { RouteService } from '../services/route-service.js';
 import { Visualization } from './visualization.js';
 
 /** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
 export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
 
-/** Attribution für OSM-Datenlayer (Schulen) aus der unfallkarte-Pipeline. */
-export const SCHOOLS_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
+/** Attribution für OSM-Datenlayer (Schulen, Haltestellen) aus der unfallkarte-Pipeline. */
+export const OSM_LAYER_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
+
+const PLATFORM_COLOR = '#10b981';
+
+// Bus-Icon als eigenständiges Badge (weißer Kreis, grüner Rand, Bus-Symbol) —
+// wird als Rasterbild in die Map geladen und per icon-size zoomskaliert.
+const PLATFORM_ICON_SVG = `
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="29" fill="white" stroke="${PLATFORM_COLOR}" stroke-width="5"/>
+  <g transform="translate(14, 14) scale(1.5)">
+    <path fill="${PLATFORM_COLOR}" d="M4 16c0 .88.39 1.67 1 2.22V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+  </g>
+</svg>`;
 
 // pmtiles://-Protokoll einmalig registrieren
 const _pmtilesProtocol = new Protocol();
@@ -91,6 +102,7 @@ export const MapRenderer = {
       this._ready = true;
       this._initRouteSources();
       this._initSchoolsLayer();
+      this._initPlatformsLayer();
       this._initRouteHover();
       if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
     });
@@ -101,8 +113,9 @@ export const MapRenderer = {
     // Einwohner-Bereich (Startpunkte gewichten + Layer anzeigen)
     this._initPopulationUI();
 
-    // Schul-Layer-Toggle
+    // Layer-Toggles (Schulen, Haltestellen)
     this._initSchoolsToggle();
+    this._initPlatformsToggle();
 
     EventBus.emit(Events.MAP_READY);
   },
@@ -249,7 +262,7 @@ export const MapRenderer = {
     map.addSource('schools', {
       type: 'vector',
       url: `pmtiles://${url}`,
-      attribution: SCHOOLS_ATTRIBUTION
+      attribution: OSM_LAYER_ATTRIBUTION
     });
     // Polygone (Schulgelände) unter den Routen einordnen
     map.addLayer({
@@ -329,6 +342,122 @@ export const MapRenderer = {
     checkbox.addEventListener('change', () => {
       CONFIG.SCHOOLS_LAYER_VISIBLE = checkbox.checked;
       this.setSchoolsLayerVisible(checkbox.checked);
+    });
+  },
+
+  // ---- ÖPNV-Haltestellen (PMTiles aus der unfallkarte-Pipeline, ersetzt Overpass) ----
+
+  _initPlatformsLayer() {
+    const url = CONFIG.PLATFORMS_PMTILES_URL && CONFIG.PLATFORMS_PMTILES_URL.trim();
+    if (!url) return;
+    const map = this._map;
+    const srcLayer = CONFIG.PLATFORMS_LAYER_NAME || 'germany_osm_platforms';
+    const visibility = CONFIG.PLATFORMS_LAYER_VISIBLE ? 'visible' : 'none';
+
+    map.addSource('platforms', {
+      type: 'vector',
+      url: `pmtiles://${url}`,
+      attribution: OSM_LAYER_ATTRIBUTION
+    });
+
+    // Bus-Icon einmalig als Rasterbild laden
+    const img = new Image(64, 64);
+    img.onload = () => {
+      if (!map.hasImage('platform-icon')) map.addImage('platform-icon', img);
+    };
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PLATFORM_ICON_SVG)}`;
+
+    // Bahnsteig-Flächen und lineare Bahnsteige unter den Routen
+    map.addLayer({
+      id: 'platforms-fill',
+      type: 'fill',
+      source: 'platforms',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      layout: { visibility },
+      paint: { 'fill-color': PLATFORM_COLOR, 'fill-opacity': 0.3 }
+    }, 'agg-lines');
+    map.addLayer({
+      id: 'platforms-outline',
+      type: 'line',
+      source: 'platforms',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      layout: { visibility },
+      paint: { 'line-color': PLATFORM_COLOR, 'line-width': 1.5, 'line-opacity': 0.8 }
+    }, 'agg-lines');
+    map.addLayer({
+      id: 'platforms-line',
+      type: 'line',
+      source: 'platforms',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'LineString'],
+      layout: { visibility, 'line-cap': 'round' },
+      paint: { 'line-color': PLATFORM_COLOR, 'line-width': 3, 'line-opacity': 0.8 }
+    }, 'agg-lines');
+    // Punkte (Haltestellen-Badges) über den Routen; MapLibre blendet
+    // kollidierende Icons bei niedrigen Zooms automatisch aus
+    map.addLayer({
+      id: 'platforms-points',
+      type: 'symbol',
+      source: 'platforms',
+      'source-layer': srcLayer,
+      filter: ['==', ['geometry-type'], 'Point'],
+      layout: {
+        visibility,
+        'icon-image': 'platform-icon',
+        // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64]
+      }
+    });
+
+    // Klick-Popup mit Name/Netzwerk/Betreiber
+    const esc = (v) => Utils.escapeHtml(v);
+    const onClick = (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      const p = f.properties || {};
+      let html = `<strong>${esc(p.name || 'Unbenannte Haltestelle')}</strong>`;
+      if (p.network) html += `<br>Netzwerk: ${esc(p.network)}`;
+      if (p.operator) html += `<br>Betreiber: ${esc(p.operator)}`;
+      if (p.tram === 'yes') html += '<br>Straßenbahn: Ja';
+      if (p.bus === 'yes' || p.highway === 'bus_stop') html += '<br>Bus: Ja';
+      if (p.train === 'yes' || p.railway) html += '<br>Bahn: Ja';
+      new Popup({ closeButton: true, className: 'platform-popup', maxWidth: '250px' })
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(this._map);
+    };
+    ['platforms-points', 'platforms-fill', 'platforms-line'].forEach(layerId => {
+      map.on('click', layerId, onClick);
+      map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+    });
+  },
+
+  setPlatformsLayerVisible(visible) {
+    if (!this._ready) {
+      this._map?.once('load', () => this.setPlatformsLayerVisible(visible));
+      return;
+    }
+    const value = visible ? 'visible' : 'none';
+    ['platforms-fill', 'platforms-outline', 'platforms-line', 'platforms-points'].forEach(id => {
+      if (this._map.getLayer(id)) this._map.setLayoutProperty(id, 'visibility', value);
+    });
+  },
+
+  _initPlatformsToggle() {
+    const checkbox = Utils.getElement('#config-platforms-visible');
+    if (!checkbox) return;
+    if (!(CONFIG.PLATFORMS_PMTILES_URL && CONFIG.PLATFORMS_PMTILES_URL.trim())) {
+      const group = checkbox.closest('.config-group');
+      if (group) group.style.display = 'none';
+      return;
+    }
+    checkbox.checked = !!CONFIG.PLATFORMS_LAYER_VISIBLE;
+    checkbox.addEventListener('change', () => {
+      CONFIG.PLATFORMS_LAYER_VISIBLE = checkbox.checked;
+      this.setPlatformsLayerVisible(checkbox.checked);
     });
   },
 
@@ -544,59 +673,6 @@ export const MapRenderer = {
           contextMenu.style.display = 'none';
           // Zielpunkt setzen (wie normaler Klick)
           EventBus.emit(Events.MAP_CLICK, { latlng: contextMenuLatLng });
-        }
-      });
-    }
-
-    // ÖPNV-Haltestellen suchen (weiterhin via Overpass, bis platforms.pmtiles existiert)
-    const platformsBtn = Utils.getElement('#context-menu-platforms');
-    if (platformsBtn) {
-      platformsBtn.addEventListener('click', async () => {
-        if (!contextMenuLatLng) return;
-        contextMenu.style.display = 'none';
-
-        Visualization.clearPlatformSearchRadius();
-        const searchRadius = 1000;
-        Visualization.drawPlatformSearchRadius(contextMenuLatLng.lat, contextMenuLatLng.lng, searchRadius);
-        Utils.showInfo('Suche nach ÖPNV-Haltestellen...', false);
-
-        try {
-          const platforms = await OverpassService.searchPublicTransportPlatforms(
-            contextMenuLatLng.lat,
-            contextMenuLatLng.lng,
-            searchRadius
-          );
-
-          if (platforms.length === 0) {
-            Utils.showInfo('Keine ÖPNV-Haltestellen in der Nähe gefunden.', false);
-            setTimeout(() => Visualization.clearPlatformSearchRadius(), 3000);
-            return;
-          }
-
-          // Alte Haltestellen behalten und neue hinzufügen (nicht ersetzen)
-          const oldPlatforms = State.getPlatformMarkers() || [];
-          const drawn = Visualization.drawPlatforms(platforms);
-          State.setPlatformMarkers([...oldPlatforms, ...drawn]);
-
-          Utils.showInfo(`${platforms.length} Haltestelle${platforms.length !== 1 ? 'n' : ''} gefunden.`, false);
-          setTimeout(() => Visualization.clearPlatformSearchRadius(), 3000);
-
-          // Karte zu den neuen Haltestellen zoomen
-          const bounds = new LngLatBounds();
-          drawn.forEach(p => {
-            if (p.type === 'way' && p.coordinates) {
-              p.coordinates.forEach(c => bounds.extend([c[1], c[0]]));
-            } else if (p.lat != null && p.lng != null) {
-              bounds.extend([p.lng, p.lat]);
-            }
-          });
-          bounds.extend([contextMenuLatLng.lng, contextMenuLatLng.lat]);
-          if (!bounds.isEmpty()) {
-            this._map.fitBounds(bounds, { padding: 50, maxZoom: 16 - ZOOM_OFFSET });
-          }
-        } catch (error) {
-          console.error('Fehler bei Haltestellen-Suche:', error);
-          Utils.showError('Fehler beim Laden der ÖPNV-Haltestellen.', true);
         }
       });
     }

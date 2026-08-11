@@ -13,7 +13,6 @@ import { ColormapUtils } from './colormap-utils.js';
 import { HistogramRenderer } from './histogram-renderer.js';
 import { MapRenderer, toLngLat } from './map-renderer.js';
 import { MarkerManager } from './marker-manager.js';
-import { PublicTransportRenderer } from './public-transport-renderer.js';
 import { RouteRenderer } from './route-renderer.js';
 
 export const Visualization = {
@@ -703,23 +702,6 @@ export const Visualization = {
         previewBar.style.background = ColormapUtils.generateGradientForColormap(colormap, 20);
       }
     });
-  },
-  
-  // Delegiert an PublicTransportRenderer
-  drawPlatforms(platforms) {
-    return PublicTransportRenderer.drawPlatforms(platforms);
-  },
-  
-  clearPlatforms(platformLayers) {
-    return PublicTransportRenderer.clearPlatforms(platformLayers);
-  },
-  
-  drawPlatformSearchRadius(lat, lng, radiusMeters) {
-    return PublicTransportRenderer.drawPlatformSearchRadius(lat, lng, radiusMeters);
-  },
-  
-  clearPlatformSearchRadius() {
-    return PublicTransportRenderer.clearPlatformSearchRadius();
   },
   
   // Delegiert an MarkerManager

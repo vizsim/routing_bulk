@@ -61,8 +61,7 @@ routing_bulk/
     │   ├── route-service.js        # Route-Berechnung
     │   ├── target-service.js       # Zielpunkt-Verwaltung
     │   ├── export-service.js       # Export-Funktionalität
-    │   ├── aggregation-service.js  # Routen-Aggregierung
-    │   └── overpass-service.js     # Overpass API (OSM-Daten)
+    │   └── aggregation-service.js  # Routen-Aggregierung
     │
     ├── domain/            # Domain-Modelle & Utilities
     │   ├── geo.js         # Geo-Funktionen
@@ -165,7 +164,7 @@ Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. H
    - Bushaltestellen in der Nähe von Schulen können als zusätzliche Startpunkte für Fußwege dienen
    - Von diesen Haltestellen aus können Fußwege zu den Schulen modelliert werden
    - Dies ermöglicht eine realistischere Darstellung von Schulwegen, die auch öffentliche Verkehrsmittel einbezieht
-   - **Datenquelle**: Bushaltestellen sind in OpenStreetMap (OSM) verfügbar und können ähnlich wie Schulen über die Overpass API abgerufen werden
+   - **Datenquelle**: ÖPNV-Haltestellen aus OpenStreetMap sind als deutschlandweiter PMTiles-Layer eingebunden (zuschaltbar unter „Darstellung“)
 
 3. **Einzugsbereiche der Schulen**:
    - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind

@@ -1,12 +1,5 @@
 // ==== Konfiguration ====
 export const CONFIG = {
-  // Overpass API: Reihenfolge = Fallback bei Fehlern (erster nicht erreichbar → nächster)
-  OVERPASS_SERVERS: [
-    "https://overpass-api.de/api/",
-    "https://overpass.kumi.systems/api/",
-    "https://maps.mail.ru/osm/tools/overpass/api/",
-    "https://overpass.openstreetmap.ru/api/"
-  ],
   //GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
@@ -36,7 +29,12 @@ export const CONFIG = {
   // Schulen & Kindergärten (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Suche)
   SCHOOLS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/schools.pmtiles", // leer = Toggle ausblenden
   SCHOOLS_LAYER_NAME: "germany_osm_schools", // Source-Layer im PMTiles
-  SCHOOLS_LAYER_VISIBLE: false // Schul-Layer initial anzeigen
+  SCHOOLS_LAYER_VISIBLE: false, // Schul-Layer initial anzeigen
+
+  // ÖPNV-Haltestellen (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Livesuche)
+  PLATFORMS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/platforms.pmtiles", // leer = Toggle ausblenden
+  PLATFORMS_LAYER_NAME: "germany_osm_platforms", // Source-Layer im PMTiles
+  PLATFORMS_LAYER_VISIBLE: false // Haltestellen-Layer initial anzeigen
 };
 
 /**
