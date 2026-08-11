@@ -81,6 +81,9 @@ addProtocol('pmtiles', _pmtilesProtocol.tile);
 /** Leaflet-Zoom (CONFIG) -> MapLibre-Zoom */
 const ZOOM_OFFSET = 1;
 
+/** Ab diesem MapLibre-Zoom tragen auch Flächen (Gelände, Bahnsteige) ein Badge. */
+const POLYGON_ICON_MINZOOM = 13;
+
 /** [lat,lng]-Array oder {lat,lng}-Objekt -> [lng,lat] für MapLibre */
 export function toLngLat(pos) {
   if (Array.isArray(pos)) return [pos[1], pos[0]];
@@ -360,6 +363,10 @@ export const MapRenderer = {
       layout: { visibility },
       paint: { 'line-color': colorByType, 'line-width': 1.5, 'line-opacity': 0.7 }
     }, 'agg-lines');
+    const iconByType = ['match', ['get', 'amenity'], 'kindergarten', 'kindergarten-icon', 'school-icon'];
+    // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
+    const iconSize = ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64];
+
     // Punkte über den Routen (klickbar), Badge-Icon nach Typ
     map.addLayer({
       id: 'schools-points',
@@ -367,12 +374,19 @@ export const MapRenderer = {
       source: 'schools',
       'source-layer': srcLayer,
       filter: ['==', ['geometry-type'], 'Point'],
-      layout: {
-        visibility,
-        'icon-image': ['match', ['get', 'amenity'], 'kindergarten', 'kindergarten-icon', 'school-icon'],
-        // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64]
-      }
+      layout: { visibility, 'icon-image': iconByType, 'icon-size': iconSize }
+    });
+    // Gelände-Polygone bekommen ab hohem Zoom dasselbe Badge im Flächen-Schwerpunkt.
+    // Ohne icon-allow-overlap verdrängen sich Punkt- und Polygon-Badge gegenseitig —
+    // gewünscht, wenn eine Einrichtung als Node UND als Fläche gemappt ist.
+    map.addLayer({
+      id: 'schools-polygon-icons',
+      type: 'symbol',
+      source: 'schools',
+      'source-layer': srcLayer,
+      minzoom: POLYGON_ICON_MINZOOM,
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      layout: { visibility, 'icon-image': iconByType, 'icon-size': iconSize }
     });
 
     // Klick-Popup mit Name/Typ
@@ -387,9 +401,8 @@ export const MapRenderer = {
         .setHTML(`<strong>${Utils.escapeHtml(name)}</strong><br>${typ}`)
         .addTo(this._map);
     };
-    map.on('click', 'schools-points', onClick);
-    map.on('click', 'schools-fill', onClick);
-    ['schools-points', 'schools-fill'].forEach(layerId => {
+    ['schools-points', 'schools-polygon-icons', 'schools-fill'].forEach(layerId => {
+      map.on('click', layerId, onClick);
       map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -402,7 +415,7 @@ export const MapRenderer = {
       return;
     }
     const value = visible ? 'visible' : 'none';
-    ['schools-fill', 'schools-outline', 'schools-points'].forEach(id => {
+    ['schools-fill', 'schools-outline', 'schools-points', 'schools-polygon-icons'].forEach(id => {
       if (this._map.getLayer(id)) this._map.setLayoutProperty(id, 'visibility', value);
     });
   },
@@ -469,6 +482,9 @@ export const MapRenderer = {
       layout: { visibility, 'line-cap': 'round' },
       paint: { 'line-color': PLATFORM_COLOR, 'line-width': 3, 'line-opacity': 0.8 }
     }, 'agg-lines');
+    // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
+    const iconSize = ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64];
+
     // Punkte (Haltestellen-Badges) über den Routen; MapLibre blendet
     // kollidierende Icons bei niedrigen Zooms automatisch aus
     map.addLayer({
@@ -477,12 +493,18 @@ export const MapRenderer = {
       source: 'platforms',
       'source-layer': srcLayer,
       filter: ['==', ['geometry-type'], 'Point'],
-      layout: {
-        visibility,
-        'icon-image': 'platform-icon',
-        // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64]
-      }
+      layout: { visibility, 'icon-image': 'platform-icon', 'icon-size': iconSize }
+    });
+    // Bahnsteig-Flächen und -Linien bekommen ab hohem Zoom dasselbe Badge
+    // (Schwerpunkt der Fläche bzw. Mitte der Linie)
+    map.addLayer({
+      id: 'platforms-polygon-icons',
+      type: 'symbol',
+      source: 'platforms',
+      'source-layer': srcLayer,
+      minzoom: POLYGON_ICON_MINZOOM,
+      filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'LineString']],
+      layout: { visibility, 'icon-image': 'platform-icon', 'icon-size': iconSize }
     });
 
     // Klick-Popup mit Name/Netzwerk/Betreiber
@@ -502,7 +524,7 @@ export const MapRenderer = {
         .setHTML(html)
         .addTo(this._map);
     };
-    ['platforms-points', 'platforms-fill', 'platforms-line'].forEach(layerId => {
+    ['platforms-points', 'platforms-polygon-icons', 'platforms-fill', 'platforms-line'].forEach(layerId => {
       map.on('click', layerId, onClick);
       map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
@@ -516,7 +538,7 @@ export const MapRenderer = {
       return;
     }
     const value = visible ? 'visible' : 'none';
-    ['platforms-fill', 'platforms-outline', 'platforms-line', 'platforms-points'].forEach(id => {
+    ['platforms-fill', 'platforms-outline', 'platforms-line', 'platforms-points', 'platforms-polygon-icons'].forEach(id => {
       if (this._map.getLayer(id)) this._map.setLayoutProperty(id, 'visibility', value);
     });
   },
