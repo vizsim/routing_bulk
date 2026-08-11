@@ -25,6 +25,22 @@ export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/"
 export const OSM_LAYER_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
 
 const PLATFORM_COLOR = '#10b981';
+const SCHOOL_COLOR = '#3b82f6';       // Schulen: kräftiges Blau
+const KINDERGARTEN_COLOR = '#7db4fa'; // Kindergärten: helleres Blau
+
+// Schul-Glyphe (gekreuzte Stifte, aus der alten Overpass-Darstellung übernommen)
+const SCHOOL_GLYPH_PATH = 'M463.313,346.29c-0.758-2.274-2.224-4.747-4.085-6.608l-83.683-83.682l131.503-131.502c6.603-6.603,6.603-17.307,0-23.909 L411.411,4.952C408.241,1.782,403.941,0,399.456,0s-8.785,1.782-11.954,4.952 c-4.677,4.677-123.793,123.793-131.502,131.502l-71.724-71.725c-0.001-0.001-0.002-0.002-0.003-0.005 c-0.001-0.002-0.002-0.002-0.005-0.003l-47.815-47.815c-19.819-19.821-51.904-19.826-71.727,0L16.908,64.726 c-19.776,19.775-19.776,51.952,0,71.727l119.547,119.547C134.263,258.19,16.761,375.691,4.952,387.5 c-6.603,6.603-6.603,17.307,0,23.909l95.637,95.639c3.171,3.17,7.47,4.952,11.954,4.952s8.785-1.782,11.954-4.952 l131.502-131.502l83.682,83.682c1.853,1.853,4.317,3.322,6.608,4.085l143.456,47.818c6.058,2.02,12.762,0.455,17.301-4.085 c4.529-4.528,6.11-11.226,4.085-17.301L463.313,346.29z M303.82,136.453l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952 s8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909l-23.909-23.909l23.909-23.909l23.91,23.909 c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952c6.603-6.603,6.603-17.307,0-23.909l-23.909-23.909 l23.909-23.909l71.728,71.728L351.638,232.09l-71.728-71.728L303.82,136.453z M423.366,351.637l-23.91,23.91L148.408,124.499 l23.909-23.909L423.366,351.637z M76.681,148.408l-35.864-35.864c-6.591-6.592-6.591-17.318,0-23.909l47.819-47.819 c6.607-6.606,17.301-6.609,23.909,0l35.864,35.864C145.133,79.956,79.944,145.145,76.681,148.408z M112.545,471.183l-71.728-71.728 l23.91-23.909l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909 l-23.908-23.91l23.909-23.909l23.91,23.909c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952 c6.603-6.603,6.603-17.307,0-23.909l-23.91-23.909l23.909-23.909l71.728,71.728L112.545,471.183z M351.637,423.366L100.59,172.317 l23.909-23.909l251.048,251.048L351.637,423.366z M382.935,439.886l56.952-56.952l28.475,85.427L382.935,439.886z';
+
+/** Badge-Icon (weißer Kreis, farbiger Rand + Glyphe) als SVG-String, 64px. */
+function schoolBadgeSvg(color) {
+  return `
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="29" fill="white" stroke="${color}" stroke-width="5"/>
+  <g transform="translate(17, 17) scale(0.0586)">
+    <path fill="${color}" d="${SCHOOL_GLYPH_PATH}"/>
+  </g>
+</svg>`;
+}
 
 // Bus-Icon als eigenständiges Badge (weißer Kreis, grüner Rand, Bus-Symbol) —
 // wird als Rasterbild in die Map geladen und per icon-size zoomskaliert.
@@ -264,6 +280,19 @@ export const MapRenderer = {
       url: `pmtiles://${url}`,
       attribution: OSM_LAYER_ATTRIBUTION
     });
+
+    // Badge-Icons laden (Schule kräftig, Kindergarten heller)
+    [['school-icon', SCHOOL_COLOR], ['kindergarten-icon', KINDERGARTEN_COLOR]].forEach(([name, color]) => {
+      const img = new Image(64, 64);
+      img.onload = () => {
+        if (!map.hasImage(name)) map.addImage(name, img);
+      };
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(schoolBadgeSvg(color))}`;
+    });
+
+    // Farbe nach Typ (amenity=school | kindergarten)
+    const colorByType = ['match', ['get', 'amenity'], 'kindergarten', KINDERGARTEN_COLOR, SCHOOL_COLOR];
+
     // Polygone (Schulgelände) unter den Routen einordnen
     map.addLayer({
       id: 'schools-fill',
@@ -272,7 +301,7 @@ export const MapRenderer = {
       'source-layer': srcLayer,
       filter: ['==', ['geometry-type'], 'Polygon'],
       layout: { visibility },
-      paint: { 'fill-color': '#3b82f6', 'fill-opacity': 0.18 }
+      paint: { 'fill-color': colorByType, 'fill-opacity': 0.18 }
     }, 'agg-lines');
     map.addLayer({
       id: 'schools-outline',
@@ -281,21 +310,20 @@ export const MapRenderer = {
       'source-layer': srcLayer,
       filter: ['==', ['geometry-type'], 'Polygon'],
       layout: { visibility },
-      paint: { 'line-color': '#3b82f6', 'line-width': 1.5, 'line-opacity': 0.7 }
+      paint: { 'line-color': colorByType, 'line-width': 1.5, 'line-opacity': 0.7 }
     }, 'agg-lines');
-    // Punkte über den Routen (klickbar)
+    // Punkte über den Routen (klickbar), Badge-Icon nach Typ
     map.addLayer({
       id: 'schools-points',
-      type: 'circle',
+      type: 'symbol',
       source: 'schools',
       'source-layer': srcLayer,
       filter: ['==', ['geometry-type'], 'Point'],
-      layout: { visibility },
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 12, 4.5, 15, 7, 18, 10],
-        'circle-color': '#ffffff',
-        'circle-stroke-color': '#3b82f6',
-        'circle-stroke-width': 2
+      layout: {
+        visibility,
+        'icon-image': ['match', ['get', 'amenity'], 'kindergarten', 'kindergarten-icon', 'school-icon'],
+        // Icon-Bild ist 64px; Zielgröße ~10px (Zoom 9) bis ~36px (Zoom 17)
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 10 / 64, 13, 24 / 64, 17, 36 / 64]
       }
     });
 
