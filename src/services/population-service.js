@@ -1,5 +1,10 @@
 // ==== Population-Service: Einwohnergewichtung via PMTiles ====
 // Lädt 100×100 m Polygone aus PMTiles, filtert nach Radius, gewichtet Startpunkte nach Einwohnerzahl.
+import { CONFIG } from '../core/config.js';
+import { Utils } from '../core/utils.js';
+import { Distribution } from '../domain/distribution.js';
+import { Geo } from '../domain/geo.js';
+
 
 (function () {
   "use strict";
@@ -561,3 +566,6 @@
     parseMVT
   };
 })();
+
+// ESM-Export: Objekt hängt weiterhin am window (IIFE oben), hier nur die Modul-Referenz darauf.
+export const PopulationService = window.PopulationService;

@@ -1,5 +1,7 @@
 // ==== Aggregation-Service: Routen-Aggregierung ====
-const AggregationService = {
+import { CONFIG } from '../core/config.js';
+
+export const AggregationService = {
   // Einfache Aggregierungsmethode (schnell, stabil)
   aggregateRoutesSimple(routeDataArray) {
     const GRID_SIZE = 0.0001; // ~10m in Grad für Grid-Normalisierung (nur für Matching)

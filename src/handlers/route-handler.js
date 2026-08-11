@@ -1,5 +1,15 @@
 // ==== Route-Handler: Behandelt Route-Events ====
-const RouteHandler = {
+import { isRememberMode } from '../core/config.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { RouteService } from '../services/route-service.js';
+import { RouteWarning } from '../ui/route-warning.js';
+import { TargetsList } from '../ui/targets-list.js';
+import { MapRenderer } from '../visualization/map-renderer.js';
+import { RouteRenderer } from '../visualization/route-renderer.js';
+import { Visualization } from '../visualization/visualization.js';
+
+export const RouteHandler = {
   /**
    * Behandelt berechnete Routen
    * @param {Object} data - { target, routeInfo }

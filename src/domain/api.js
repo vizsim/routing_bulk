@@ -1,5 +1,8 @@
 // ==== API-Funktionen ====
-const API = {
+import { CONFIG } from '../core/config.js';
+import { Geo } from './geo.js';
+
+export const API = {
   async fetchRoute(startLatLng, endLatLng) {
     const body = {
       profile: CONFIG.PROFILE,

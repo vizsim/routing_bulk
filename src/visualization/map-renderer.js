@@ -1,8 +1,17 @@
 // ==== Map-Renderer: Karten-Rendering ====
-/** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
-const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
+import { CONFIG, isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { OverpassService } from '../services/overpass-service.js';
+import { PopulationService } from '../services/population-service.js';
+import { RouteService } from '../services/route-service.js';
+import { Visualization } from './visualization.js';
 
-const MapRenderer = {
+/** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
+export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
+
+export const MapRenderer = {
   _map: null,
   _layerGroup: null,
   _populationLayer: null,

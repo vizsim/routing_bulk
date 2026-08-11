@@ -1,10 +1,14 @@
 // ==== Config-UI Helper-Funktionen ====
 // Diese Funktionen werden noch als Fallback/Helper verwendet
+import { CONFIG } from '../core/config.js';
+import { Utils } from '../core/utils.js';
+import { Visualization } from '../visualization/visualization.js';
+
 
 /**
  * Aktualisiert CONFIG aus UI-Elementen
  */
-function updateConfigFromUI() {
+export function updateConfigFromUI() {
   // Profil vom aktiven Button
   const activeProfileBtn = Utils.getElement('.profile-btn.active');
   if (activeProfileBtn) {
@@ -64,7 +68,7 @@ function updateConfigFromUI() {
 /**
  * Zeigt/versteckt die Aggregation-UI-Elemente
  */
-function toggleAggregationUI() {
+export function toggleAggregationUI() {
   const legend = Utils.getElement('#legend');
   const methodGroup = Utils.getElement('#aggregation-method-group');
   const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');

@@ -1,5 +1,11 @@
 // ==== Colormap-Selector: Colormap-Auswahl ====
-const ColormapSelector = {
+import { CONFIG, isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { Utils } from '../core/utils.js';
+import { RouteRenderer } from '../visualization/route-renderer.js';
+import { Visualization } from '../visualization/visualization.js';
+
+export const ColormapSelector = {
   /**
    * Initialisiert den Colormap-Selector
    */

@@ -1,5 +1,13 @@
 // ==== Targets-List: UI-Komponente für Zielpunkte-Liste ====
-const TargetsList = {
+import { App } from '../app.js';
+import { isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { TargetService } from '../services/target-service.js';
+import { Visualization } from '../visualization/visualization.js';
+
+export const TargetsList = {
   _container: null,
   
   /**

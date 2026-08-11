@@ -1,5 +1,7 @@
 // ==== Public Transport Renderer: ÖPNV-Haltestellen-Visualisierung ====
-const PublicTransportRenderer = {
+import { State } from '../core/state.js';
+
+export const PublicTransportRenderer = {
   /**
    * Erstellt ein Haltestellen-Icon basierend auf dem aktuellen Zoom-Level
    * @param {number} zoom - Aktueller Zoom-Level

@@ -1,5 +1,12 @@
 // ==== Export-Service: Export-Funktionalität ====
-const ExportService = {
+import { CONFIG, isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { API } from '../domain/api.js';
+import { AggregationService } from './aggregation-service.js';
+
+export const ExportService = {
   /**
    * Exportiert Routen als GeoJSON.
    * Im Modus "Zielpunkte merken" werden Routen aller Zielpunkte exportiert (mit targetId/targetIndex pro Route).

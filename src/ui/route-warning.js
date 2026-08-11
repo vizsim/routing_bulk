@@ -1,5 +1,9 @@
 // ==== Route-Warning: Warnung bei vielen Routen ====
-const RouteWarning = {
+import { isRememberMode } from '../core/config.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+
+export const RouteWarning = {
   // Flag, um zu verhindern, dass die Warnung mehrfach angezeigt wird
   _warningShown: false,
   _userDismissed: false,

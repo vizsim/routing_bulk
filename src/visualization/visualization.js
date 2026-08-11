@@ -1,5 +1,22 @@
 // ==== Visualisierung ====
-const Visualization = {
+import { CONFIG, isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { API } from '../domain/api.js';
+import { AggregationService } from '../services/aggregation-service.js';
+import { RouteService } from '../services/route-service.js';
+import { TargetService } from '../services/target-service.js';
+import { TargetsList } from '../ui/targets-list.js';
+import { ColormapUtils } from './colormap-utils.js';
+import { HistogramRenderer } from './histogram-renderer.js';
+import { MapRenderer } from './map-renderer.js';
+import { MarkerManager } from './marker-manager.js';
+import { PublicTransportRenderer } from './public-transport-renderer.js';
+import { RouteRenderer } from './route-renderer.js';
+import { SchoolRenderer } from './school-renderer.js';
+
+export const Visualization = {
   /**
    * Stellt Config-Werte eines Zielpunkts wieder her
    * @param {Object} routeInfo - Route-Info mit config und distributionType

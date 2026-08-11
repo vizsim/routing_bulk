@@ -20,12 +20,11 @@ Desktop.ini
 *.sublime-project
 *.sublime-workspace
 
-# Node modules (falls npm verwendet wird)
+# Node modules
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
 yarn.lock
 
 # Build artifacts

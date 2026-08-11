@@ -1,5 +1,7 @@
 // ==== School-Renderer: Schul-Visualisierung ====
-const SchoolRenderer = {
+import { State } from '../core/state.js';
+
+export const SchoolRenderer = {
   /**
    * Erstellt ein Schul-Icon basierend auf dem aktuellen Zoom-Level
    * @param {number} zoom - Aktueller Zoom-Level

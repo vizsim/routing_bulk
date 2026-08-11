@@ -1,5 +1,13 @@
 // ==== Distribution-Selector: Längenverteilungs-Auswahl ====
-const DistributionSelector = {
+import { isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { RouteService } from '../services/route-service.js';
+import { MapRenderer } from '../visualization/map-renderer.js';
+import { Visualization } from '../visualization/visualization.js';
+
+export const DistributionSelector = {
   /**
    * Initialisiert den Distribution-Selector
    */

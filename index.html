@@ -358,55 +358,15 @@
     </div>
   </div>
 
+  <!-- Externe Libraries als Globals (L, Pbf, pmtiles, protomapsL) — klassische Scripts
+       laufen vor dem Module-Script unten -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/pbf@3.2.1/dist/pbf.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/protomaps-leaflet@2/dist/protomaps-leaflet.js"></script>
-  
-  <!-- Core -->
-  <script src="src/core/utils.js"></script>
-  <script src="src/core/state.js"></script>
-  <script src="src/core/config.js"></script>
-  <script src="src/core/events.js"></script>
-  
-  <!-- Domain -->
-  <script src="src/domain/geo.js"></script>
-  <script src="src/domain/api.js"></script>
-  <script src="src/domain/distribution.js"></script>
-  
-  <!-- Services -->
-  <script src="src/services/aggregation-service.js"></script>
-  <script src="src/services/target-service.js"></script>
-  <script src="src/services/route-service.js"></script>
-  <script src="src/services/population-service.js"></script>
-  <script src="src/services/export-service.js"></script>
-  <script src="src/services/overpass-service.js"></script>
-  
-  <!-- Visualization -->
-  <script src="src/visualization/colormap-utils.js"></script>
-  <script src="src/visualization/histogram-renderer.js"></script>
-  <script src="src/visualization/marker-manager.js"></script>
-  <script src="src/visualization/school-renderer.js"></script>
-  <script src="src/visualization/public-transport-renderer.js"></script>
-  <script src="src/visualization/visualization.js"></script>
-  <script src="src/visualization/map-renderer.js"></script>
-  <script src="src/visualization/route-renderer.js"></script>
-  
-  <!-- Utils -->
-  <script src="src/utils/geocoder.js"></script>
-  
-  <!-- UI -->
-  <script src="src/ui/targets-list.js"></script>
-  <script src="src/ui/config-helpers.js"></script>
-  <script src="src/ui/distribution-selector.js"></script>
-  <script src="src/ui/colormap-selector.js"></script>
-  <script src="src/ui/route-warning.js"></script>
-  
-  <!-- Handlers -->
-  <script src="src/handlers/route-handler.js"></script>
-  
-  <!-- App -->
-  <script src="src/app.js"></script>
+
+  <!-- App als ES-Module: alle weiteren Dateien werden per import geladen (Vite) -->
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
 

@@ -1,5 +1,5 @@
 // ==== Event-Bus für lose Kopplung ====
-const EventBus = {
+export const EventBus = {
   _listeners: {},
   
   /**
@@ -54,7 +54,7 @@ const EventBus = {
 };
 
 // Event-Namen als Konstanten (für bessere IDE-Unterstützung)
-const Events = {
+export const Events = {
   // Config Events
   CONFIG_CHANGED: 'config:changed',
   CONFIG_PROFILE_CHANGED: 'config:profile:changed',

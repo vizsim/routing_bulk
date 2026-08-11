@@ -1,5 +1,8 @@
 // ==== Geocoder: Adresssuche mit Photon ====
-const Geocoder = {
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+
+export const Geocoder = {
   _input: null,
   _clearButton: null,
   _suggestionsContainer: null,

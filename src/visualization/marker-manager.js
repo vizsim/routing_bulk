@@ -1,5 +1,8 @@
 // ==== Marker-Manager: Verwaltung von Target-Markern ====
-const MarkerManager = {
+import { State } from '../core/state.js';
+import { TargetService } from '../services/target-service.js';
+
+export const MarkerManager = {
   /**
    * Highlightet einen Target-Marker auf der Karte
    * @param {number} index - Index des Zielpunkts

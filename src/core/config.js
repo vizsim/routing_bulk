@@ -1,5 +1,5 @@
 // ==== Konfiguration ====
-const CONFIG = {
+export const CONFIG = {
   // Overpass API: Reihenfolge = Fallback bei Fehlern (erster nicht erreichbar → nächster)
   OVERPASS_SERVERS: [
     "https://overpass-api.de/api/",
@@ -37,7 +37,7 @@ const CONFIG = {
  * Prüft ob der "Zielpunkte merken" Modus aktiv ist
  * @returns {boolean} - true wenn aktiv, false sonst
  */
-function isRememberMode() {
+export function isRememberMode() {
   return CONFIG.REMEMBER_TARGETS === true;
 }
 

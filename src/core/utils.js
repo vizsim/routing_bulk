@@ -1,5 +1,5 @@
 // ==== Utility-Funktionen ====
-const Utils = {
+export const Utils = {
   /**
    * Validiert und normalisiert eine Zahl
    * @param {number|string} value - Der zu validierende Wert

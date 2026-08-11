@@ -1,5 +1,7 @@
 // ==== Colormap-Utilities ====
-const ColormapUtils = {
+import { CONFIG } from '../core/config.js';
+
+export const ColormapUtils = {
   /**
    * Berechnet gewichtetes Level für Count (Mischung aus linearer und quantil-basierter Verteilung)
    * @param {number} count - Aktueller Count

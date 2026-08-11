@@ -1,5 +1,10 @@
 // ==== Histogram-Renderer: Distanz-Histogramm ====
-const HistogramRenderer = {
+import { CONFIG } from '../core/config.js';
+import { State } from '../core/state.js';
+import { Distribution } from '../domain/distribution.js';
+import { Geo } from '../domain/geo.js';
+
+export const HistogramRenderer = {
   /**
    * Zeigt Platzhalter-Text, wenn noch keine Routen vorhanden sind.
    * @param {HTMLCanvasElement} canvas

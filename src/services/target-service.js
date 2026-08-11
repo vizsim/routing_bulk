@@ -1,5 +1,10 @@
 // ==== Target-Service: Verwaltung von Zielpunkten ====
-const TargetService = {
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { MapRenderer } from '../visualization/map-renderer.js';
+
+export const TargetService = {
   /**
    * Prüft ob zwei Zielpunkte gleich sind (mit Toleranz)
    * @param {Array} target1 - [lat, lng]

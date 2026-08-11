@@ -1,5 +1,7 @@
 // ==== Geo-Helfer ====
-const Geo = {
+import { State } from '../core/state.js';
+
+export const Geo = {
   toRad(d) {
     return d * Math.PI / 180;
   },

@@ -1,5 +1,5 @@
 // ==== State-Management ====
-const State = {
+export const State = {
   // Map & Layer
   map: null,
   layerGroup: null,

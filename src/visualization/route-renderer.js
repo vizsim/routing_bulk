@@ -1,5 +1,14 @@
 // ==== Route-Renderer: Route-Visualisierung ====
-const RouteRenderer = {
+import { CONFIG } from '../core/config.js';
+import { State } from '../core/state.js';
+import { API } from '../domain/api.js';
+import { AggregationService } from '../services/aggregation-service.js';
+import { RouteService } from '../services/route-service.js';
+import { RouteWarning } from '../ui/route-warning.js';
+import { ColormapUtils } from './colormap-utils.js';
+import { MapRenderer } from './map-renderer.js';
+
+export const RouteRenderer = {
   /**
    * Formatiert Distanz in Metern für Anzeige (z. B. "1,8 km" oder "450 m").
    * @param {number} meters

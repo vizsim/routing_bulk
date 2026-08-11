@@ -1,5 +1,9 @@
 // ==== Overpass Service: Abfragen von OpenStreetMap-Daten ====
-const OverpassService = {
+import { CONFIG } from '../core/config.js';
+import { Utils } from '../core/utils.js';
+import { API } from '../domain/api.js';
+
+export const OverpassService = {
   _defaultServers: [
     'https://overpass-api.de/api/',
     'https://overpass.kumi.systems/api/',

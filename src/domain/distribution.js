@@ -1,5 +1,7 @@
 // ==== Verteilungsfunktionen ====
-const Distribution = {
+import { State } from '../core/state.js';
+
+export const Distribution = {
   /**
    * Gibt das Distanz-Gewicht für einen einzelnen Abstand r (in m) zurück.
    * Wird z. B. mit Einwohner-Gewichtung kombiniert: weight = population * getDistanceWeight(...).

@@ -1,5 +1,15 @@
 // ==== Route-Service: Route-Berechnung & -Verwaltung ====
-const RouteService = {
+import { CONFIG, isRememberMode } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
+import { State } from '../core/state.js';
+import { Utils } from '../core/utils.js';
+import { API } from '../domain/api.js';
+import { Distribution } from '../domain/distribution.js';
+import { Geo } from '../domain/geo.js';
+import { PopulationService } from './population-service.js';
+import { TargetService } from './target-service.js';
+
+export const RouteService = {
   /**
    * Berechnet Routen zu einem Zielpunkt
    * @param {Array} target - [lat, lng]

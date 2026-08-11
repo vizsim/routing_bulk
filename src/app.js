@@ -1,5 +1,23 @@
 // ==== Haupt-Orchestrierung (neu strukturiert) ====
-const App = {
+import { CONFIG, isRememberMode } from './core/config.js';
+import { EventBus, Events } from './core/events.js';
+import { State } from './core/state.js';
+import { Utils } from './core/utils.js';
+import { RouteHandler } from './handlers/route-handler.js';
+import { ExportService } from './services/export-service.js';
+import { RouteService } from './services/route-service.js';
+import { TargetService } from './services/target-service.js';
+import { ColormapSelector } from './ui/colormap-selector.js';
+import { toggleAggregationUI, updateConfigFromUI } from './ui/config-helpers.js';
+import { DistributionSelector } from './ui/distribution-selector.js';
+import { RouteWarning } from './ui/route-warning.js';
+import { TargetsList } from './ui/targets-list.js';
+import { Geocoder } from './utils/geocoder.js';
+import { MapRenderer } from './visualization/map-renderer.js';
+import { RouteRenderer } from './visualization/route-renderer.js';
+import { Visualization } from './visualization/visualization.js';
+
+export const App = {
   /**
    * Initialisiert die Anwendung
    */
