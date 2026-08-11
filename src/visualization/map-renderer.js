@@ -112,6 +112,10 @@ export const MapRenderer = {
       center: toLngLat(CONFIG.MAP_CENTER),
       zoom: CONFIG.MAP_ZOOM - ZOOM_OFFSET,
       maxZoom: 19 - ZOOM_OFFSET,
+      // Permalink: MapLibre schreibt #zoom/lat/lng in die URL und stellt den
+      // Ausschnitt beim Laden daraus wieder her (center/zoom oben sind dann nur
+      // Fallback ohne Hash). Gleiches Format wie svz/unfallkarte.
+      hash: true,
       attributionControl: { compact: false },
       dragRotate: false,
       pitchWithRotate: false,
