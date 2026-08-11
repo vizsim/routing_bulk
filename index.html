@@ -325,7 +325,7 @@
         <h4 id="block-analyse-heading" class="config-block-title">Gebietsanalyse</h4>
         <div class="beta-hint">
           <strong>Experimentell.</strong> Bereich zeichnen → Schulen &amp; Kitas darin
-          finden → Fahrten je Einrichtung und Modal Split annehmen → alle Wege als
+          finden → Wege je Einrichtung und Modal Split annehmen → alle Wege als
           Belastungskarte rechnen (unter 18-Jährige, eigener Routing-Server).
         </div>
         <div class="config-group">
@@ -335,7 +335,7 @@
           </p>
         </div>
         <div class="config-group" id="analysis-facilities-group" style="display: none;">
-          <label class="config-group-label">Einrichtungen im Bereich (Fahrten/Tag editierbar):</label>
+          <label class="config-group-label">Einrichtungen im Bereich (Wege/Tag editierbar):</label>
           <div id="analysis-facilities"></div>
         </div>
         <div class="config-group" id="analysis-settings-group" style="display: none;">
@@ -347,6 +347,10 @@
           <p class="config-hint" id="analysis-estimate"></p>
         </div>
         <div id="analysis-result" class="demand-info" style="display: none;"></div>
+        <div class="config-group" id="analysis-filter-group" style="display: none;">
+          <label class="config-group-label">Angezeigte Wege:</label>
+          <div id="analysis-mode-filter" class="analysis-mode-filter"></div>
+        </div>
         <div class="config-group" id="analysis-export-group" style="display: none;">
           <button id="analysis-export-btn" class="export-button" type="button">Analyse als GeoJSON exportieren</button>
         </div>

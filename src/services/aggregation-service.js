@@ -52,7 +52,7 @@ export const AggregationService = {
       const profile = (item && !item.paths && item.profile) || null;
       const source = (item && !item.paths && item.startSource) || null;
       // Gewicht: 1 im Normalfall; die Gebietsanalyse rechnet Stichproben und
-      // gibt jeder Route ein Gewicht (Fahrten ÷ Stichprobengröße)
+      // gibt jeder Route ein Gewicht (Wege ÷ Stichprobengröße)
       const weight = (item && !item.paths && typeof item.weight === 'number') ? item.weight : 1;
 
       // ÖPNV-Verbindungen (Beta): Aggregation pro Leg — gleiche Linie mit

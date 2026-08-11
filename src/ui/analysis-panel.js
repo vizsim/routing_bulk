@@ -213,7 +213,7 @@ export const AnalysisPanel = {
     if (!el) return;
     const n = AnalysisService.estimateRoutes(this._facilities, this._typeSettings);
     const trips = this._facilities.reduce((s, f) => s + f.trips, 0);
-    el.textContent = `${trips.toLocaleString('de-DE')} Fahrten/Tag → ~${n.toLocaleString('de-DE')} Routen werden am eigenen Routing-Server gerechnet.`;
+    el.textContent = `${trips.toLocaleString('de-DE')} Wege/Tag → ~${n.toLocaleString('de-DE')} Routen werden am eigenen Routing-Server gerechnet.`;
   },
 
   // ---- Berechnung & Ergebnis ----
@@ -236,18 +236,19 @@ export const AnalysisPanel = {
       if (!result) return; // abgebrochen
 
       if (result.segments.length > 0) {
-        const maxCount = Math.max(...result.segments.map(s => s.count));
-        RouteRenderer.drawAggregatedRoutes(result.segments, maxCount, { unit: 'Fahrten/Tag' });
+        this._renderModeFilter();
+        this._applyModeFilter();
       }
       if (resultEl) {
         const s = result.stats;
-        let html = `<div>${s.facilities} Einrichtungen · ${s.totalTrips.toLocaleString('de-DE')} Fahrten/Tag `
+        let html = `<div>${s.facilities} Einrichtungen · ${s.totalTrips.toLocaleString('de-DE')} Wege/Tag `
           + `· ${s.ok.toLocaleString('de-DE')} Routen gerechnet${s.fail ? ` (${s.fail} fehlgeschlagen)` : ''}</div>`;
         if (s.capacityLimited > 0) {
           html += `<div class="demand-info-warn">Bei ${s.capacityLimited} Einrichtung/Modus-Kombinationen gab es weniger unter 18-Jährige im Radius als Stichproben-Routen — Gewichte wurden entsprechend angehoben.</div>`;
         }
         resultEl.innerHTML = html;
       }
+      Utils.getElement('#analysis-filter-group').style.display = result.segments.length ? 'block' : 'none';
       Utils.getElement('#analysis-export-group').style.display = result.segments.length ? 'block' : 'none';
       Utils.getElement('#analysis-reset-group').style.display = 'block';
     } catch (err) {
@@ -257,6 +258,43 @@ export const AnalysisPanel = {
     } finally {
       if (runBtn) runBtn.disabled = false;
     }
+  },
+
+  // ---- Modus-Filter für die Belastungskarte ----
+
+  /** Baut die Checkboxen (alle an) neu auf — nach jedem Lauf. */
+  _renderModeFilter() {
+    const el = Utils.getElement('#analysis-mode-filter');
+    if (!el) return;
+    el.innerHTML = MODES.map(m => `
+      <label class="analysis-mode-check">
+        <input type="checkbox" data-mode="${m.key}" checked /> ${m.label}
+      </label>`).join('');
+    el.querySelectorAll('input').forEach(input => {
+      input.addEventListener('change', () => this._applyModeFilter());
+    });
+  },
+
+  /**
+   * Zeichnet die Belastungskarte für die angehakten Modi neu — aus den
+   * vorhandenen Kanten-Summen (byProfile), ohne Neuberechnung. Die Farbskala
+   * wird auf das Maximum der Auswahl skaliert.
+   */
+  _applyModeFilter() {
+    const result = AnalysisService.lastResult;
+    if (!result || !result.segments.length) return;
+    const active = [...document.querySelectorAll('#analysis-mode-filter input:checked')]
+      .map(i => i.dataset.mode);
+    const segments = result.segments
+      .map(seg => ({
+        ...seg,
+        count: active.reduce((sum, m) => sum + (seg.byProfile[m] || 0), 0)
+      }))
+      .filter(seg => seg.count > 0.05);
+    MapRenderer.clearRoutes();
+    if (segments.length === 0) return;
+    const maxCount = Math.max(...segments.map(s => s.count));
+    RouteRenderer.drawAggregatedRoutes(segments, maxCount, { unit: 'Wege/Tag' });
   },
 
   _setProgress(text) {
@@ -280,7 +318,7 @@ export const AnalysisPanel = {
     this._facilities = [];
     this._setProgress(null);
     ['#analysis-facilities-group', '#analysis-settings-group', '#analysis-run-group',
-     '#analysis-result', '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
+     '#analysis-result', '#analysis-filter-group', '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
       const el = Utils.getElement(sel);
       if (el) el.style.display = 'none';
     });

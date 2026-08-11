@@ -109,7 +109,7 @@ export const RouteRenderer = {
    * @param {number} maxCount - Maximale Anzahl für Skalierung
    */
   drawAggregatedRoutes(aggregatedSegments, maxCount, options = {}) {
-    const unit = options.unit || null; // z.B. 'Fahrten/Tag' (Gebietsanalyse)
+    const unit = options.unit || null; // z.B. 'Wege/Tag' (Gebietsanalyse)
     // Berechne Min/Max und alle Counts für gewichtete Verteilung
     const counts = aggregatedSegments.map(seg => seg.count);
     const minCount = Math.min(...counts);

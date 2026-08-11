@@ -141,6 +141,29 @@ html, body {
   margin: 0;
 }
 
+/* Modus-Filter für die Belastungskarte (nach dem Lauf) */
+.analysis-mode-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.analysis-mode-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* schlägt ".config-group input" (width: 100%) */
+.analysis-mode-check input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
 /* Falls es doch mal eng wird (Browser-Zoom): innen scrollen statt abschneiden */
 #analysis-settings {
   overflow-x: auto;

@@ -13,7 +13,7 @@ export const CONFIG = {
   TRANSIT_ARRIVE_HOUR: 8, // Ankunft nächster Werktag um diese Stunde (Schulwege)
 
   // Gebietsanalyse (experimentell): max. Routen je Einrichtung×Modus.
-  // Jede Route trägt das Gewicht Fahrten/Stichprobe; die Aggregation
+  // Jede Route trägt das Gewicht Wege/Stichprobe; die Aggregation
   // summiert Gewichte. Alle Requests gehen an den eigenen GH-Server.
   ANALYSIS_MAX_SAMPLE: 150,
   PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)

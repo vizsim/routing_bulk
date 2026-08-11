@@ -1,11 +1,11 @@
 // ==== Analysis-Service: Gebietsanalyse (experimentell) ====
 //
 // Mini-Verkehrsmodell für einen gezeichneten Bereich:
-// 1. Erzeugung: Schulen/Kitas im Polygon, Fahrten je Einrichtung (editierbar)
+// 1. Erzeugung: Schulen/Kitas im Polygon, Wege je Einrichtung (editierbar)
 // 2. Aufteilung: Modal Split je Einrichtungstyp (Fuß/Rad/ÖPNV/Auto)
 // 3. Umlegung: gewichtete Stichprobe — pro Einrichtung×Modus werden höchstens
 //    CONFIG.ANALYSIS_MAX_SAMPLE Routen gerechnet, jede Route trägt das Gewicht
-//    Fahrten ÷ Stichprobengröße; die Kanten-Aggregation summiert Gewichte.
+//    Wege ÷ Stichprobengröße; die Kanten-Aggregation summiert Gewichte.
 //
 // ÖPNV heißt hier: Fußweg ab den zielnächsten Haltestellen (Zubringer-Modell,
 // eigener GH-Server) — KEIN Transitous, die Mengen wären mit Fair Use
@@ -18,7 +18,7 @@ import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
 import { PopulationService } from './population-service.js';
 
-// Defaults je Einrichtungstyp: Fahrten/Tag, Einzugsradius, Modal Split (%)
+// Defaults je Einrichtungstyp: Wege/Tag, Einzugsradius, Modal Split (%)
 export const FACILITY_TYPES = {
   kindergarten: {
     label: 'Kindergarten',
@@ -60,7 +60,7 @@ export const AnalysisService = {
 
   /**
    * Einrichtungstyp aus OSM-Attributen ableiten. isced:level ist lückenhaft
-   * gepflegt — Namens-Heuristik als Fallback; die Fahrtenzahl bleibt in der
+   * gepflegt — Namens-Heuristik als Fallback; die Wegezahl bleibt in der
    * UI ohnehin editierbar.
    */
   classify(props) {
@@ -78,7 +78,7 @@ export const AnalysisService = {
 
   /**
    * Findet Schulen/Kitas im Polygon (aus schools.pmtiles) und initialisiert
-   * die editierbaren Fahrtenzahlen aus den Typ-Defaults.
+   * die editierbaren Wegezahlen aus den Typ-Defaults.
    * @param {Array<[lat,lng]>} polygon
    * @returns {Promise<Array<{lat, lon, name, type, trips}>>}
    */
@@ -114,7 +114,7 @@ export const AnalysisService = {
   },
 
   /**
-   * Zerlegt Fahrten einer Einrichtung in (Modus, Stichprobe, Gewicht).
+   * Zerlegt Wege einer Einrichtung in (Modus, Stichprobe, Gewicht).
    * @returns {Array<{mode, ghProfile, sample, weight, trips}>}
    */
   _modePlan(facility, typeSettings) {
@@ -267,7 +267,7 @@ export const AnalysisService = {
   },
 
   /**
-   * Exportiert das letzte Analyse-Ergebnis als GeoJSON (Fahrten je Kante,
+   * Exportiert das letzte Analyse-Ergebnis als GeoJSON (Wege je Kante,
    * aufgeschlüsselt nach Modus; Metadaten machen den Export reproduzierbar).
    */
   exportGeoJSON(polygon) {
@@ -298,7 +298,7 @@ export const AnalysisService = {
       metadata: {
         exportDate: new Date().toISOString(),
         mode: 'analysis',
-        note: 'Gewichtete Stichproben-Umlegung (trips = Fahrten/Tag, nicht Routen)',
+        note: 'Gewichtete Stichproben-Umlegung (trips = Wege/Tag, nicht Routen)',
         polygon: polygon ? polygon.map(([lat, lng]) => [lng, lat]) : null,
         facilities: result.facilities.map(f => ({ name: f.name, type: f.type, trips: f.trips })),
         typeSettings: result.typeSettings,
