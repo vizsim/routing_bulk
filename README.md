@@ -4,16 +4,16 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 
 ## Features
 
-- 🗺️ **Interaktive Karte**: Klick auf die Karte, um einen Zielpunkt zu setzen
-- 🎯 **Mehrere Startpunkte**: Automatische Generierung von zufälligen Startpunkten in einem konfigurierbaren Radius
-- 🚴 **Verschiedene Profile**: Unterstützung für verschiedene Routing-Profile (Fahrrad, Auto, etc.)
-- 📊 **Aggregierte Darstellung**: Visualisierung von Routen mit Farbcodierung basierend auf der Anzahl der Routen pro Segment
-- 🎨 **Colormaps**: Verschiedene Farbschemata für die aggregierte Darstellung (viridis, plasma, inferno, magma)
+- 🗺️ **Interaktive Karte** (MapLibre GL, OpenFreeMap Positron): Klick auf die Karte, um einen Zielpunkt zu setzen; Kartenausschnitt als Permalink (`#zoom/lat/lng`)
+- 🎯 **Nachfragemodell**: Startpunkte nach Zensus 2022 gewichtet, mit Kapazitätsgrenze je 100×100-m-Zelle (aus einer Zelle mit 10 Personen kommen höchstens 10 Starts); Basis wahlweise alle Einwohner oder nur unter 18-Jährige
+- 🚌 **ÖPNV-Anteil**: einstellbarer Prozentsatz der Startpunkte beginnt an den zielnächsten Haltestellen statt am Wohnort — Wege ab Haltestelle werden immer zu Fuß gerechnet
+- 🚴 **Profile**: Fuß, Fahrrad, Auto (GraphHopper)
+- 📈 **Längenverteilung**: Verteilungsfunktionen für die Wohnort-Startpunkte (lognormal, uniform, normal, …) mit Live-Histogramm (Beeline oder echte Routenlänge)
+- 📊 **Exakte Aggregation**: Zählung pro Straßengraph-Kante über GraphHopper-`edge_id` (kein Geometrie-Matching), Farbcodierung über wählbare Colormaps (viridis, plasma, inferno, magma)
+- ⚡ **Schnell**: Requests über Concurrency-Pool, progressives Zeichnen mit Fortschrittsanzeige, Abbruch laufender Berechnungen bei neuem Klick
+- 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
-- 📈 **Längenverteilung**: Verschiedene Verteilungsfunktionen für Startpunkte (lognormal, uniform, normal, etc.)
-- 🏫 **Schulen anzeigen**: Deutschlandweiter Layer mit Schulen & Kindergärten (OpenStreetMap via PMTiles, zuschaltbar unter „Darstellung“)
-- 📤 **Export**: Export von Routen als GeoJSON
-- 🎛️ **Konfigurierbar**: Anpassbare Anzahl von Routen, Radius, Aggregierungsmethode und mehr
+- 📤 **Export**: GeoJSON — aggregiert je Kante mit Gesamtsumme (`count`) plus Aufschlüsselung nach Verkehrsmittel (`count_foot`, …) und Quelle (`count_residential`/`count_transit`); einzeln mit `profile` und `startSource` je Route
 
 ## Verwendung
 
@@ -21,83 +21,77 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 
 Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](https://vizsim.github.io/routing_bulk/)
 
+### Lokal entwickeln
+
+```bash
+npm install     # einmalig
+npm run dev     # Dev-Server mit Auto-Reload (Vite)
+npm run build   # Produktions-Build nach dist/
+```
+
+Das Deployment auf GitHub Pages läuft automatisch: Jeder Push auf `main` baut
+und deployt über die GitHub Action (`.github/workflows/deploy.yml`).
+
 ### Nutzung
 
 1. Klicke auf die Karte, um einen Zielpunkt zu setzen
-2. Die Anwendung generiert automatisch zufällige Startpunkte und berechnet Routen zum Zielpunkt
-3. Nutze die Konfigurationsoptionen, um die Darstellung anzupassen:
-   - **Profil**: Wähle zwischen verschiedenen Routing-Profilen
-   - **Anzahl Routen**: Anzahl der zu berechnenden Routen
-   - **Radius**: Radius für die Generierung von Startpunkten
-   - **Längenverteilung**: Verteilungsfunktion für Startpunkte
-   - **Aggregierte Darstellung**: Zeigt Routen mit Farbcodierung basierend auf der Anzahl
-   - **Zielpunkte merken**: Speichert mehrere Zielpunkte und ihre Routen
-4. **Schulen anzeigen**: Unter „Darstellung & Export“ den Schalter „Schulen & Kindergärten anzeigen“ aktivieren
+2. Die Anwendung erzeugt Startpunkte nach dem Nachfragemodell und berechnet Routen zum Zielpunkt
+3. Die Panel-Bereiche (einklappbar):
+   - **Einstellungen**: Profil, Anzahl Routen, Radius, Längenverteilung, Histogramm
+   - **Nachfragedetails**: Einwohner-Gewichtung, Basis (alle / nur unter 18), ÖPNV-Anteil
+   - **Kartenebenen**: Einwohner, Schulen & Kindergärten, ÖPNV-Haltestellen
+   - **Routendarstellung**: aggregierte Darstellung, Colormap, Punkte ausblenden
+   - **Export**: Routen als GeoJSON herunterladen
 
 ## Projektstruktur
 
-```
+```text
 routing_bulk/
-├── index.html              # Haupt-HTML-Datei
-├── style.css              # Stylesheet
-├── README.md              # Diese Datei
-├── LICENSE                # MIT-Lizenz
-├── bulk_router_logo.svg   # Logo
+├── index.html              # Einstiegspunkt (ein ES-Module-Script)
+├── style.css               # Stylesheet
+├── vite.config.js          # Vite (base './', MapLibre-Worker)
+├── package.json            # Scripts + Dependencies (maplibre-gl, pmtiles, pbf)
+├── .github/workflows/      # GitHub-Pages-Deployment (Vite-Build)
 │
-├── docs/                  # Dokumentation
-│   ├── AGGREGATION_PROBLEM.md      # Dokumentation zum Aggregierungs-Problem
-│   ├── AGGREGATION_PARAMETERS.md   # Dokumentation zu Aggregierungs-Parametern
-│   └── CODE_REVIEW_CHECKLIST.md    # Code Review & Refactoring Checkliste
+├── docs/                   # Dokumentation
+│   ├── routing_bulk_review.md      # Review, Plan & Umsetzungsstand
+│   ├── AGGREGATION_PROBLEM.md      # (historisch) Geometrie-Aggregation
+│   └── ...
 │
 └── src/
-    ├── core/              # Kern-Module
-    │   ├── config.js      # Konfiguration
-    │   ├── state.js       # State-Management
-    │   ├── utils.js       # Utility-Funktionen
-    │   ├── events.js      # Event-Bus
-    │   └── compat.js      # Kompatibilitäts-Helper
-    │
-    ├── services/          # Business-Logik
-    │   ├── route-service.js        # Route-Berechnung
+    ├── core/               # Konfiguration, State, Event-Bus, Utils
+    ├── domain/             # Geo-Funktionen, Verteilungen, GraphHopper-API
+    ├── services/           # Business-Logik
+    │   ├── route-service.js        # Routen-Berechnung (Pool, Abbruch, Profile)
+    │   ├── demand-service.js       # Nachfragemodell (Kapazität, unter-18, ÖPNV-Mix)
+    │   ├── population-service.js   # Zensus-/PMTiles-Reader (Tiles direkt lesen)
+    │   ├── aggregation-service.js  # exakte Kanten-Aggregation (edge_id)
     │   ├── target-service.js       # Zielpunkt-Verwaltung
-    │   ├── export-service.js       # Export-Funktionalität
-    │   └── aggregation-service.js  # Routen-Aggregierung
-    │
-    ├── domain/            # Domain-Modelle & Utilities
-    │   ├── geo.js         # Geo-Funktionen
-    │   ├── distribution.js # Verteilungs-Funktionen
-    │   └── api.js         # API-Calls
-    │
-    ├── visualization/     # Visualisierung
-    │   ├── visualization.js       # Visualisierungs-Orchestrierung
-    │   ├── map-renderer.js         # Karten-Rendering
-    │   ├── route-renderer.js       # Route-Rendering
-    │   ├── colormap-utils.js       # Colormap-Utilities
-    │   ├── histogram-renderer.js   # Histogramm-Rendering
-    │   ├── marker-manager.js       # Marker-Verwaltung
-    │   └── school-renderer.js      # Schul-Rendering
-    │
-    ├── ui/                # UI-Komponenten
-    │   ├── targets-list.js         # Zielpunkte-Liste
-    │   ├── config-helpers.js       # Config-UI-Helper
-    │   ├── distribution-selector.js # Verteilungs-Auswahl
-    │   ├── colormap-selector.js    # Colormap-Auswahl
-    │   └── route-warning.js        # Route-Warnung (Modal)
-    │
-    ├── handlers/          # Event-Handler
-    │   └── route-handler.js        # Route-Event-Handler
-    │
-    ├── utils/             # Utilities
-    │   └── geocoder.js    # Geocoding (Adresssuche)
-    │
-    └── app.js             # Haupt-Orchestrierung
+    │   └── export-service.js       # GeoJSON-Export
+    ├── visualization/      # MapLibre-Rendering
+    │   ├── map-renderer.js         # Karte, Layer (Routen, Schulen, ÖPNV, Zensus), Kontextmenü
+    │   ├── route-renderer.js       # Routen als GeoJSON-Sources (data-driven Styling)
+    │   ├── visualization.js        # Orchestrierung, Marker (Start/Ziel)
+    │   ├── marker-manager.js       # Ziel-Marker-Verwaltung
+    │   ├── histogram-renderer.js   # Histogramm (Canvas)
+    │   └── colormap-utils.js       # Colormap-Berechnungen
+    ├── ui/                 # Panel-Komponenten
+    │   ├── accordion.js            # einklappbare Bereiche (mit localStorage)
+    │   ├── demand-selector.js      # Bereich "Nachfragedetails"
+    │   ├── info-hints.js           # ⓘ-Tooltips (fixed, Viewport-Klemmung)
+    │   ├── targets-list.js / config-helpers.js / distribution-selector.js
+    │   └── colormap-selector.js / route-warning.js
+    ├── handlers/           # Event-Handler (Routen berechnet/progressiv)
+    ├── utils/              # Geocoder (Adresssuche)
+    └── app.js              # Haupt-Orchestrierung
 ```
 
 ## Technologie-Stack
 
-- **Leaflet.js**: Karten-Visualisierung
-- **GraphHopper API**: Routing-Berechnung
-- **Vanilla JavaScript**: Keine externen Frameworks
+- **MapLibre GL JS**: GPU-Karten-Rendering (Vector-Basemap: OpenFreeMap Positron)
+- **PMTiles**: Datenlayer (Zensus, Schulen, Haltestellen) als statische Tile-Archive, ohne Tile-Server
+- **GraphHopper API**: Routing (eigene Instanz, mit `edge_id`-Path-Details)
+- **Vite**: Dev-Server + Build; Vanilla JavaScript (ES-Module), kein Framework
 - **Event-Bus Pattern**: Lose Kopplung zwischen Modulen
 
 ## Konfiguration
@@ -105,24 +99,27 @@ routing_bulk/
 Die Hauptkonfiguration befindet sich in `src/core/config.js`:
 
 ```javascript
-const CONFIG = {
-  //GH_ROUTE_URL: "https://ghroute.duckdns.org/route",
+export const CONFIG = {
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route",
-  PROFILE: "bike",
+  BASEMAP_STYLE_URL: "https://tiles.openfreemap.org/styles/positron",
+  PROFILE: "foot",
   N: 10,
   RADIUS_M: 2000,
-  // ...
+  ROUTE_CONCURRENCY: 12,
+  // PMTiles-Quellen: POPULATION_*, SCHOOLS_*, PLATFORMS_*
+  // Nachfragemodell: DEMAND_BASIS, DEMAND_TRANSIT_SHARE, DEMAND_TRANSIT_STOPS
 };
 ```
 
 ## Aggregierung
 
-Die Anwendung unterstützt zwei Aggregierungsmethoden:
-
-1. **Simple**: Schnelle Aggregierung basierend auf normalisierten Koordinaten
-2. **Lazy Overlap Splitting**: Präzisere Aggregierung mit Overlap-Erkennung
-
-Weitere Details zur Aggregierung finden sich in [`docs/AGGREGATION_PARAMETERS.md`](docs/AGGREGATION_PARAMETERS.md) und [`docs/AGGREGATION_PROBLEM.md`](docs/AGGREGATION_PROBLEM.md).
+Die Aggregation zählt exakt pro Kante des Straßengraphen: GraphHopper liefert
+per Path Detail `edge_id`, welche Kanten jede Route benutzt — zwei Routen teilen
+sich ein Segment genau dann, wenn sie dieselbe Kanten-ID haben. Kein
+Geometrie-Matching, keine Toleranzen. Die früheren geometrischen Methoden und
+ihr Grundproblem sind historisch dokumentiert in
+[`docs/AGGREGATION_PROBLEM.md`](docs/AGGREGATION_PROBLEM.md); Plan und
+Umsetzungsstand in [`docs/routing_bulk_review.md`](docs/routing_bulk_review.md).
 
 ## Entwicklung
 
@@ -134,13 +131,12 @@ Die Anwendung folgt einer modularen Architektur mit klarer Trennung von Concerns
 - **Services**: Business-Logik (Route-Berechnung, Zielpunkt-Verwaltung, Export, Aggregation)
 - **Domain**: Domain-Modelle und Utilities (Geo-Funktionen, Verteilungen, API-Calls)
 - **Visualization**: Visualisierungs-Logik (modular aufgeteilt in spezialisierte Renderer)
-  - `visualization.js`: Orchestrierung und Delegation
-  - `map-renderer.js`: Karten-Rendering
-  - `route-renderer.js`: Route-Rendering
+  - `visualization.js`: Orchestrierung und Marker (Start/Ziel)
+  - `map-renderer.js`: MapLibre-Karte, Sources/Layer, Kontextmenü, Legenden
+  - `route-renderer.js`: Routen und Aggregation als GeoJSON-Features
   - `colormap-utils.js`: Colormap-Berechnungen
   - `histogram-renderer.js`: Histogramm-Visualisierung
-  - `marker-manager.js`: Marker-Verwaltung
-  - `school-renderer.js`: Schul-Visualisierung
+  - `marker-manager.js`: Ziel-Marker-Verwaltung
 - **UI**: UI-Komponenten (modulare, wiederverwendbare Komponenten)
 - **Handlers**: Event-Handler für lose Kopplung zwischen Modulen
 - **Utils**: Zusätzliche Utilities (Geocoding)
@@ -153,20 +149,23 @@ Die Kommunikation zwischen Modulen erfolgt über einen Event-Bus (`EventBus`), w
 
 ### Modellierung von Schulwegen
 
-Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. Hierfür werden zusätzlich zu den Routenberechnungen weitere Datenquellen benötigt:
+Der Kern-Use-Case ist die Modellierung von Schulwegen. Zwei der drei dafür
+nötigen Bausteine sind inzwischen umgesetzt:
 
-1. **Nachfrage (Schülerinnen und Schüler)**: 
-   - **Zensus 2022 Daten**: 100x100m Raster mit Einwohnerzahlen und "Anteil unter 18 Jähriger"
-   - Diese Daten ermöglichen die Abschätzung der Anzahl von Schülerinnen und Schülern pro Rasterzelle
+1. **Nachfrage (Schülerinnen und Schüler)** — ✅ umgesetzt:
+   - Zensus-2022-Raster (100×100 m) mit `Einwohner` und `Unter18` als PMTiles
+   - Startpunkte werden danach gewichtet, mit Kapazitätsgrenze je Zelle;
+     Basis „nur unter 18“ wählbar (siehe Panel „Nachfragedetails“)
    - siehe https://atlas.zensus2022.de/
 
-2. **Bushaltestellen und Fußverkehr**:
-   - Bushaltestellen in der Nähe von Schulen können als zusätzliche Startpunkte für Fußwege dienen
-   - Von diesen Haltestellen aus können Fußwege zu den Schulen modelliert werden
-   - Dies ermöglicht eine realistischere Darstellung von Schulwegen, die auch öffentliche Verkehrsmittel einbezieht
-   - **Datenquelle**: ÖPNV-Haltestellen aus OpenStreetMap sind als deutschlandweiter PMTiles-Layer eingebunden (zuschaltbar unter „Darstellung“)
+2. **Bushaltestellen und Fußverkehr** — ✅ umgesetzt:
+   - ÖPNV-Haltestellen (OpenStreetMap) als deutschlandweiter PMTiles-Layer
+   - Ein einstellbarer Anteil der Startpunkte beginnt an den zielnächsten
+     Haltestellen; diese Wege werden immer als Fußwege gerechnet
+   - Offen: echtes ÖPNV-Routing (Bus-/Bahnfahrt selbst, Linien-Belastung)
+     via MOTIS/Transitous `/plan` — siehe `docs/routing_bulk_review.md`
 
-3. **Einzugsbereiche der Schulen**:
+3. **Einzugsbereiche der Schulen** — offen:
    - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind
    - Die Datenlage ist für verschiedene Bezirke in Berlin sehr unterschiedlich
    - Stand jetzt wurden nur Daten für Grundschulen gefunden
