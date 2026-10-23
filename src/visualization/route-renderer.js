@@ -8,6 +8,7 @@ import { State } from '../core/state.js';
 import { API } from '../domain/api.js';
 import { classInfo, formatCount, INFRA_ATTRS, modeCount, resolveView } from '../domain/infra.js';
 import { AggregationService } from '../services/aggregation-service.js';
+import { CrossingRoadService } from '../services/crossing-road-service.js';
 import { RouteService } from '../services/route-service.js';
 import { RouteWarning } from '../ui/route-warning.js';
 import { ColormapUtils } from './colormap-utils.js';
@@ -31,6 +32,9 @@ const TRANSIT_MODE_COLORS = {
   HIGHSPEED_RAIL: '#475569',
   FERRY: '#0891b2'
 };
+
+// Segment-Sätze, deren Querungen schon nachgeschlagen werden (_lookUpCrossings)
+const _crossingsLookedUp = new WeakSet();
 
 const TRANSIT_MODE_NAMES = {
   WALK: 'Fußweg', BUS: 'Bus', TRAM: 'Tram', SUBWAY: 'U-Bahn', METRO: 'S-Bahn',
@@ -179,6 +183,20 @@ export const RouteRenderer = {
 
     MapRenderer.setAggregatedFeatures(features, lookup);
     EventBus.emit(Events.AGGREGATION_DRAWN, { view, stats, unit, infra });
+    if (infra) this._lookUpCrossings(aggregatedSegments);
+  },
+
+  /**
+   * Querungen: gequerte Straße und ihr Tempo nachschlagen (asynchron, aus den
+   * Kacheln der Tempolimit-Ebene), danach neu einfärben — sofern noch dieselben
+   * Segmente gezeichnet sind. Je Segment-Satz einmal.
+   */
+  _lookUpCrossings(segments) {
+    if (_crossingsLookedUp.has(segments)) return;
+    _crossingsLookedUp.add(segments);
+    CrossingRoadService.annotate(segments)
+      .then(changed => { if (changed && this._lastAgg?.segments === segments) this.redrawAggregated(); })
+      .catch(e => console.warn('[RouteRenderer] Querungen nicht ermittelt:', e));
   },
 
   /**

@@ -8,6 +8,7 @@
 // Klassifiziert wird erst beim Zeichnen; Regeländerungen brauchen daher keine
 // Neuberechnung der Routen.
 import { CONFIG } from '../core/config.js';
+import { formatSpeed } from './maxspeed.js';
 
 // ---- Modi ----
 
@@ -109,7 +110,10 @@ const FOOT_GUIDANCE = [
   { key: 'sidewalk_yes', label: 'Gehweg, Gegenseite offen', color: '#7fbf7b' },
   { key: 'sidewalk_one', label: 'Gehweg einseitig', color: '#a6dba0' },
   { key: 'living_street', label: 'Verkehrsberuhigter Bereich', color: '#35978f' },
-  { key: 'crossing', label: 'Querung', color: '#2166ac' },
+  { key: 'crossing_signals', label: 'Querung mit Ampel', color: '#2166ac' },
+  { key: 'crossing_calm', label: 'Querung ohne Ampel, Straße bis 30 km/h', color: '#67a9cf' },
+  { key: 'crossing_fast', label: 'Querung ohne Ampel, Straße über 30 km/h', color: '#c51b7d' },
+  { key: 'crossing', label: 'Querung, Straße oder Tempo unbekannt', color: '#a6bddb' },
   { key: 'check_separate', label: 'Prüffall: Fahrbahn trotz separatem Gehweg', color: '#8073ac' },
   { key: 'no_sidewalk_partial', label: 'Kein Gehweg, Gegenseite offen', color: '#f46d43' },
   { key: 'no_sidewalk', label: 'Kein Gehweg', color: '#d73027' },
@@ -164,9 +168,22 @@ const SLOPE_CLASSES = [
 
 // ---- Klassifikation ----
 
+/**
+ * Querung nach Sicherung und Tempo der gequerten Straße. seg.crossingType und
+ * seg.crossingRoad ergänzt domain/crossing-roads.js nach dem Zeichnen; bis dahin
+ * (oder ohne berührte Straße, z. B. nur Gleise) 'crossing' = Straße oder Tempo unbekannt.
+ */
+export function classifyCrossing(seg) {
+  const type = seg.crossingType ?? edgeAttrs(seg).crossing;
+  if (type === 'traffic_signals') return 'crossing_signals';
+  const speed = seg.crossingRoad?.speed;
+  if (speed == null) return 'crossing';
+  return speed <= 30 ? 'crossing_calm' : 'crossing_fast';
+}
+
 export function classifyFoot(seg) {
   const a = edgeAttrs(seg);
-  if (a.footway === 'crossing') return 'crossing';
+  if (a.footway === 'crossing') return classifyCrossing(seg);
   if (a.footway === 'sidewalk') return 'sidewalk_separate';
   if (NO_MOTOR_ROADS.has(a.road_class)) return 'footpath';
   if (a.road_class === 'living_street') return 'living_street';
@@ -256,7 +273,8 @@ export function classifySurface(a) {
 export function classifySpeed(seg, mode) {
   const a = edgeAttrs(seg);
   if (NO_MOTOR_ROADS.has(a.road_class) && a.footway !== 'crossing') return 'no_motor';
-  const v = speedOf(seg, mode);
+  // Querung: es zählt das Tempo der gequerten Straße (domain/crossing-roads.js)
+  const v = a.footway === 'crossing' ? (seg.crossingRoad?.speed ?? null) : speedOf(seg, mode);
   if (v == null) return 'unknown';
   if (v <= 20) return 'le20';
   if (v <= 30) return 'le30';
@@ -378,7 +396,7 @@ const SMOOTHNESS_LABELS = {
 const CROSSING_LABELS = {
   traffic_signals: 'mit Ampel', marked: 'markiert', uncontrolled: 'markiert, ohne Ampel',
   unmarked: 'unmarkiert', railway_barrier: 'Bahnübergang mit Schranke', railway: 'Bahnübergang',
-  no: 'Querung nicht möglich', missing: 'Art nicht erfasst'
+  zebra: 'Zebrastreifen', informal: 'informell', no: 'Querung nicht möglich', missing: 'Art nicht erfasst'
 };
 
 const FOOT_ACCESS_LABELS = {
@@ -489,7 +507,9 @@ export function describeSegment(seg, view, opts = {}) {
   sub.push(countText);
 
   const rows = [];
-  const roadText = [ROAD_CLASS_LABELS[a.road_class] || a.road_class || 'Weg', speedLabel(seg, mode)];
+  // Ohne Kfz-Verkehr kein Tempo (wie die Tempo-Legende)
+  const noMotor = NO_MOTOR_ROADS.has(a.road_class) && a.footway !== 'crossing';
+  const roadText = [ROAD_CLASS_LABELS[a.road_class] || a.road_class || 'Weg', noMotor ? 'kein Kfz-Verkehr' : speedLabel(seg, mode)];
 
   if (mode === 'foot') {
     const sides = footSides(seg);
@@ -499,13 +519,22 @@ export function describeSegment(seg, view, opts = {}) {
     if (footway === 'sidewalk') {
       rows.push({ label: 'Gehweg', value: 'separat erfasster Gehweg' });
     } else if (footway === 'crossing') {
-      rows.push({ label: 'Querung', value: CROSSING_LABELS[a.crossing] || 'Querung' });
+      rows.push({ label: 'Querung', value: CROSSING_LABELS[seg.crossingType ?? a.crossing] || 'Querung' });
     } else if (NO_MOTOR_ROADS.has(a.road_class)) {
       rows.push({ label: 'Gehweg', value: 'eigener Weg, kein Gehweg nötig' });
     } else {
       rows.push({ label: 'Gehweg', value: `in Hauptlaufrichtung rechts: ${sideLabel(right)} · links: ${sideLabel(left)}` });
     }
-    rows.push({ label: 'Straße', value: roadText.join(' · ') });
+    if (footway === 'crossing') {
+      // Statt des Fußwegs die gequerte Straße (domain/crossing-roads.js)
+      const road = seg.crossingRoad;
+      rows.push({
+        label: 'Gequert',
+        value: road ? [road.name || ROAD_CLASS_LABELS[road.highway] || 'Straße', formatSpeed(road.speed)].join(' · ') : 'keine Straße erkannt'
+      });
+    } else {
+      rows.push({ label: 'Straße', value: roadText.join(' · ') });
+    }
     if (a.foot_road_access && FOOT_ACCESS_LABELS[a.foot_road_access]) {
       rows.push({ label: 'Zugang', value: FOOT_ACCESS_LABELS[a.foot_road_access] });
     }
@@ -570,6 +599,11 @@ export function exportProperties(seg) {
     put('sidewalk_right', sides.right);
     put('sidewalk_left', sides.left);
     put('footway', a.footway);
+    if (a.footway === 'crossing') {
+      put('crossing_type', seg.crossingType ?? a.crossing);
+      put('crossed_road', seg.crossingRoad?.name);
+      put('crossed_road_maxspeed', seg.crossingRoad?.speed);
+    }
   }
   if (modeCount(seg.byProfile, 'bike') > 0) {
     put('bike_class_ab', modeCount(seg.dir.ab.byProfile, 'bike') > 0 ? classifyBikeDir(seg, 'ab') : undefined);

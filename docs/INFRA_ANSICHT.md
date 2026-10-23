@@ -1,7 +1,7 @@
 # Infrastruktur-Ansicht der aggregierten Darstellung (v1)
 
-Stand: 2026-10-22 · Läuft ohne Änderung am Routing-Server; der optionale
-Server-Patch `backward_*` wird automatisch genutzt, sobald er deployt ist.
+Stand: 2026-10-23 · Der Server-Patch `backward_*` läuft seit 2026-10-23 auf
+ghroute; ohne ihn fällt der Client automatisch zurück.
 
 ## Was v1 kann
 
@@ -21,7 +21,8 @@ Server-Patch `backward_*` wird automatisch genutzt, sobald er deployt ist.
 - **Export**: zusätzliche Spalten je Kante, z. B. `length_m`, `count_ab`/`count_ba`
   (Analyse: `trips_ab`/`trips_ba`), `foot_class`, `sidewalk_right`/`sidewalk_left`,
   `bike_class_ab`/`bike_class_ba`, `bicycle_infra_ab`/`_ba`, `max_speed_ab`/`_ba`,
-  `road_class`, `surface`, `lit`, `street_name`, `osm_way_id`. Weiterhin keine `edge_id`.
+  `road_class`, `surface`, `lit`, `street_name`, `osm_way_id`; für Querungen
+  `crossing_type`, `crossed_road`, `crossed_road_maxspeed`. Weiterhin keine `edge_id`.
 
 ## Datenfluss
 
@@ -43,6 +44,8 @@ Server-Patch `backward_*` wird automatisch genutzt, sobald er deployt ist.
    `Events.AGGREGATION_DRAWN`; `InfraControls` (Leiste/Legende) und
    `SegmentPanel` reagieren darauf. Ansichtswechsel zeichnen mit
    `RouteRenderer.redrawAggregated()` neu, ohne neu zu aggregieren.
+5. Im Infrastruktur-Modus schlägt `CrossingRoadService.annotate` danach die
+   Querungen nach (siehe „Querungen“) und zeichnet einmal neu.
 
 ## Richtung und Straßenseite
 
@@ -61,25 +64,40 @@ rechts), für Fuß fehlt die zweite Straßenseite.
 `footSides(seg)` setzt beides zusammen: rechts = `ab.sidewalk ?? ba.backward_sidewalk`,
 links = `ba.sidewalk ?? ab.backward_sidewalk` (relativ zu `coords`).
 
-## Server-Patch `backward_*` (vorbereitet, nicht deployt)
+## Querungen
 
-Branch `backward-path-details` auf Basis von `bikelanes_ec_upstream_2026-10`
-im GraphHopper-Fork: neue Klasse `BackwardDetails`, eine Schleife in
-`PathDetailsBuilderFactory`, Test `BackwardDetailsTest`, Eintrag im CHANGELOG.
-`backward_<ev>` liefert den Wert, den ein Encoded Value für die Gegenrichtung
-speichert — dieselbe Semantik wie das Präfix `backward_` in Custom Models.
+Fuß-Klassen: „mit Ampel“, „ohne Ampel, Straße bis 30 km/h“, „ohne Ampel, Straße
+über 30 km/h“, „Straße oder Tempo unbekannt“. GraphHopper liefert für eine
+Querung (`footway=crossing`) nur den Fußweg selbst; zwei Lücken füllt der Client
+aus den Kacheln der Unfallkarte (`src/domain/crossing-roads.js`,
+`src/services/crossing-road-service.js`; z14, jede Kachel einmal je Sitzung):
 
-- Kein Reimport, sofern der Server schon aus diesem Fork-Stand läuft: die Werte
-  liegen dann im Graph, Fork bauen, JAR tauschen, Server neu starten. Läuft ein
-  anderer Build (z. B. das 11.0-JAR aus `myconfig/`), unterscheiden sich die
-  Storage-Versionen — dann ist ein Reimport nötig. Vorher prüfen, welcher Build
-  auf ghroute läuft.
+- **Gequerte Straße und Tempo** aus den Tempolimit-Kacheln: Eine Straße gilt als
+  gequert, wenn ein Ende des Überwegs höchstens 2,5 m von ihr liegt oder er sie
+  schneidet — Nähe allein reicht nicht (Überwege über Straßenbahngleise neben
+  einer Hauptstraße). GraphHopper teilt den Überweg am Straßenknoten; die übrigen
+  Stücke desselben Überwegs (`osm_way_id`) übernehmen das Ergebnis.
+- **Querungsart**: GraphHopper (`OSMCrossingParser`) liest sie nur aus
+  Knoten-Tags, `crossing=*` am Weg geht verloren. Ersatz: andere Stücke desselben
+  Überwegs, sonst `crossing` des Wegs aus den Querungs-Kacheln.
+
+Bis das Nachschlagen fertig ist (asynchron, danach wird neu gezeichnet), stehen
+Querungen ohne Ampel unter „Straße oder Tempo unbekannt“. Das Merkmal Tempo nimmt
+für Querungen das Tempo der gequerten Straße.
+
+## Server-Patch `backward_*` (seit 2026-10-23 auf ghroute)
+
+Im GraphHopper-Fork (`bikelanes_ec_upstream_2026-10`, Commit 1137a8450): neue
+Klasse `BackwardDetails`, eine Schleife in `PathDetailsBuilderFactory`, Test
+`BackwardDetailsTest`, Eintrag im CHANGELOG. `backward_<ev>` liefert den Wert,
+den ein Encoded Value für die Gegenrichtung speichert — dieselbe Semantik wie das
+Präfix `backward_` in Custom Models.
+
+- Ohne Reimport live gegangen (neues JAR, Neustart): der Graph-Stand war derselbe.
 - Prüfen: `mvn -pl core -am test -Dtest=BackwardDetailsTest -Dsurefire.failIfNoSpecifiedTests=false`
-  (hier mangels Maven-Zugang mit javac 21 gegen die Fork-Klassen übersetzt; die
-  vier Tests und ein Prüfprogramm mit virtuellen Kanten, zusammengeführten
-  Teilstrecken und `-ea` liefen grün)
-- Der Client braucht keine Änderung; `backward_sidewalk` steht schon in
-  `CONFIG.INFRA_DETAILS.foot`.
+  (der Fork braucht JDK 25)
+- Der Client fragt `backward_sidewalk` immer an (`CONFIG.INFRA_DETAILS.foot`);
+  lehnt ein Server ohne Patch es ab, lässt er es für die Sitzung weg.
 
 ## Grenzen von v1
 

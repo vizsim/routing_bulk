@@ -8,6 +8,7 @@
 // Unfälle und Querungen liegen als kleine Punkte über den Routen, die Tempolimits
 // als Unterlage darunter. Ausgeblendete Ebenen laden keine Kacheln.
 import { CONFIG } from '../core/config.js';
+import { LIVING_STREET_KMH, MAXSPEED_TYPE_KMH, UNLIMITED_KMH } from '../domain/maxspeed.js';
 
 const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)';
 const ACCIDENT_ATTRIBUTION = '<a href="https://unfallatlas.statistikportal.de/" target="_blank" rel="noopener">Unfallatlas</a> der Statistischen Ämter (dl-de/by-2-0)';
@@ -39,19 +40,17 @@ const crossingColor = ['match', ['get', 'crossing'], ...CROSSINGS.flatMap(c => [
 const SPEED_STOPS = [[10, '#006400'], [30, '#31a354'], [50, '#fdcc8a'], [100, '#e31a1c'], [140, '#8B0000']];
 const SPEED_UNLIMITED = '#000000';
 const SPEED_UNKNOWN = '#c4c8cc';
-const UNLIMITED = 999;
 
-// Tempo eines Wegs in km/h: maxspeed, sonst ein Richtungswert; ohne Zahl helfen
-// maxspeed:type (Zone 30/20, inner-/außerorts) und der verkehrsberuhigte Bereich
-// (Schritttempo). 0 = keine Angabe, UNLIMITED = maxspeed=none.
+// Tempo eines Wegs in km/h als MapLibre-Ausdruck — dieselbe Regel wie speedOfWay in
+// domain/maxspeed.js (dort für die Querungen). 0 = keine Angabe.
 const speedOfWay = ['let', 'raw',
   ['to-string', ['coalesce', ['get', 'maxspeed'], ['get', 'maxspeed_forward'], ['get', 'maxspeed_backward'], '']],
   ['case',
-    ['==', ['downcase', ['var', 'raw']], 'none'], UNLIMITED,
+    ['==', ['downcase', ['var', 'raw']], 'none'], UNLIMITED_KMH,
     ['>', ['to-number', ['var', 'raw'], 0], 0], ['to-number', ['var', 'raw'], 0],
     ['match', ['get', 'maxspeed_type'],
-      'DE:zone30', 30, 'DE:zone20', 20, 'DE:urban', 50, 'DE:rural', 100, 'DE:living_street', 7,
-      ['match', ['get', 'highway'], 'living_street', 7, 0]]]];
+      ...Object.entries(MAXSPEED_TYPE_KMH).flat(),
+      ['match', ['get', 'highway'], 'living_street', LIVING_STREET_KMH, 0]]]];
 
 // Führende Zahl einer zeitweisen Regel wie „30 @ (Mo-Fr 06:00-19:00)“, sonst 0
 const conditionalSpeed = ['let', 'c', ['to-string', ['coalesce', ['get', 'maxspeed_conditional'], '']],
@@ -59,7 +58,7 @@ const conditionalSpeed = ['let', 'c', ['to-string', ['coalesce', ['get', 'maxspe
 
 const speedColor = (speed) => ['let', 'v', speed,
   ['case',
-    ['==', ['var', 'v'], UNLIMITED], SPEED_UNLIMITED,
+    ['==', ['var', 'v'], UNLIMITED_KMH], SPEED_UNLIMITED,
     ['<=', ['var', 'v'], 0], SPEED_UNKNOWN,
     ['interpolate', ['linear'], ['var', 'v'], ...SPEED_STOPS.flat()]]];
 
