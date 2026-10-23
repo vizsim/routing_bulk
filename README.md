@@ -15,7 +15,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 📊 **Exakte Aggregation**: Zählung pro Straßengraph-Kante über GraphHopper-`edge_id` (kein Geometrie-Matching), Farbcodierung über wählbare Colormaps (viridis, plasma, inferno, magma)
 - 🧭 **Infrastruktur-Ansicht** der aggregierten Darstellung: „Färben nach Anzahl | Infrastruktur“, je Modus (Fuß/Rad) und Merkmal (Führung, Untergrund, Tempo, Licht, Steigung) aus GraphHopper-Path-Details (`sidewalk`, `bicycle_infra`, `max_speed` …); Klick auf eine Linie zeigt die Infrastruktur des Abschnitts — Details in [docs/INFRA_ANSICHT.md](docs/INFRA_ANSICHT.md)
 - ⚡ **Schnell**: Requests über Concurrency-Pool, progressives Zeichnen mit Fortschrittsanzeige, Abbruch laufender Berechnungen bei neuem Klick
-- 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022)
+- 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022); dazu aus der [Unfallkarte](https://vizsim.de/unfallkarte/) Unfälle (Unfallatlas, wahlweise nur mit Rad-/Fußbeteiligung), Querungen und zulässige Geschwindigkeiten — dezenter gezeichnet, als Kontext zu den Routen
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
 - 📤 **Export**: GeoJSON — aggregiert je Kante mit Gesamtsumme (`count`) plus Aufschlüsselung nach Verkehrsmittel (`count_foot`, …) und Quelle (`count_residential`/`count_transit`); einzeln mit `profile` und `startSource` je Route
 - 📱 **Oberfläche im Stil der [Unfallkarte](https://vizsim.de/unfallkarte/)**: Suche oben links, Panel oben rechts unter der Suchzeile (keine Überlappung), Zoom als 44-px-Kacheln unten links; am Handy (≤ 640 px) wird das Panel zum Bottom-Sheet mit Streifen (Titel + Einstellungen in Kurzform, zum Hochziehen) und die Suche zum Lupen-Knopf
@@ -49,7 +49,7 @@ und deployt über die GitHub Action (`.github/workflows/deploy.yml`).
 3. Die Panel-Bereiche (einklappbar):
    - **Einstellungen**: Profil, Anzahl Routen, Radius, Längenverteilung, Histogramm
    - **Nachfragedetails**: Einwohner-Gewichtung, Basis (alle / nur unter 18), ÖPNV-Anteil
-   - **Kartenebenen**: Einwohner, Schulen & Kindergärten, ÖPNV-Haltestellen
+   - **Kartenebenen**: Einwohner, Schulen & Kindergärten, ÖPNV-Haltestellen, Unfälle, Querungen, zulässige Geschwindigkeit
    - **Routendarstellung**: aggregierte Darstellung, Colormap, Punkte ausblenden
    - **Export**: Routen als GeoJSON herunterladen
 4. Über den Tab **Gebietsanalyse** (oben im Panel) lässt sich alternativ ein Bereich zeichnen und für alle Schulen/Kitas darin eine Belastungskarte in Wege/Tag rechnen — beim Zeichnen führt eine Leiste oben durch die Schritte (Punkt zurück / Abbrechen / Fertig, auch per Rücktaste / Esc / Enter)

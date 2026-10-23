@@ -1027,6 +1027,30 @@ select {
   width: 16px;
   height: 16px;
 }
+/* Farbmuster der Unfallkarten-Ebenen (src/visualization/context-layers.js),
+   in derselben 16-px-Spalte wie die Badges */
+.layer-legend-swatch {
+  flex: none;
+}
+.layer-legend-dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+}
+.layer-legend-line,
+.layer-legend-dashed {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+.layer-legend-dashed {
+  background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px);
+}
+/* Unterschalter in der Legende (Unfälle: nur Rad/Fuß) */
+.layer-legend .switch-toggle {
+  margin: 2px 0 6px;
+}
 
 /* ═══════════════════════════ Infokästen ═══════════════════════════ */
 

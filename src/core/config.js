@@ -74,7 +74,18 @@ export const CONFIG = {
   // ÖPNV-Haltestellen (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Livesuche)
   PLATFORMS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/platforms.pmtiles", // leer = Toggle ausblenden
   PLATFORMS_LAYER_NAME: "germany_osm_platforms", // Source-Layer im PMTiles
-  PLATFORMS_LAYER_VISIBLE: false // Haltestellen-Layer initial anzeigen
+  PLATFORMS_LAYER_VISIBLE: false, // Haltestellen-Layer initial anzeigen
+
+  // Kartenebenen aus der Unfallkarte: dieselben PMTiles, hier zurückhaltender
+  // gezeichnet (src/visualization/context-layers.js). Leere URL = Toggle ausblenden.
+  ACCIDENTS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/accidents/accidents_single_mlt.pmtiles", // Unfallatlas, MLT-Kacheln
+  ACCIDENTS_LAYER_VISIBLE: false,
+  ACCIDENTS_ONLY_BIKE_FOOT: true, // nur Unfälle mit Rad- oder Fußbeteiligung
+  CROSSINGS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/crossings.pmtiles",
+  CROSSINGS_LAYER_VISIBLE: false,
+  MAXSPEED_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/maxspeed_major.pmtiles", // Hauptstraßen
+  MAXSPEED_MINOR_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/maxspeed_minor.pmtiles", // Nebenstraßen
+  MAXSPEED_LAYER_VISIBLE: false
 };
 
 /**

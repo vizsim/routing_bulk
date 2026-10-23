@@ -16,6 +16,7 @@ import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 import { PolygonDraw } from '../ui/polygon-draw.js';
+import { ContextLayers } from './context-layers.js';
 
 // Klickbare Punkt-Layer, die Vorrang vor einem Segment-Klick haben
 const POI_LAYERS = ['analysis-facility-icons', 'schools-points', 'schools-polygon-icons', 'platforms-points', 'platforms-polygon-icons'];
@@ -171,6 +172,7 @@ export const MapRenderer = {
       this._initRouteSources();
       this._initSchoolsLayer();
       this._initPlatformsLayer();
+      ContextLayers.addLayers(map, this._labelLayerId);
       this._initRouteHover();
       if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
     });
@@ -181,9 +183,10 @@ export const MapRenderer = {
     // Einwohner-Bereich (Startpunkte gewichten + Layer anzeigen)
     this._initPopulationUI();
 
-    // Layer-Toggles (Schulen, Haltestellen)
+    // Layer-Toggles (Schulen, Haltestellen; Unfälle, Querungen, Tempolimits)
     this._initSchoolsToggle();
     this._initPlatformsToggle();
+    ContextLayers.initToggles(map);
 
     EventBus.emit(Events.MAP_READY);
   },

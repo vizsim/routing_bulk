@@ -239,6 +239,46 @@
           </div>
           <div id="platforms-legend" class="layer-legend" style="display: none;"></div>
         </div>
+        <!-- Ebenen aus der Unfallkarte, zurückhaltend gezeichnet (src/visualization/context-layers.js) -->
+        <div class="config-group">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-accidents-visible">
+              <input type="checkbox" id="config-accidents-visible" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Unfälle (Unfallatlas)</span>
+            </label>
+          </div>
+          <div id="accidents-legend" class="layer-legend" style="display: none;">
+            <div class="switch-toggle switch-toggle-small">
+              <label for="config-accidents-bike-foot">
+                <input type="checkbox" id="config-accidents-bike-foot" />
+                <span class="switch-slider"></span>
+                <span class="switch-text">nur mit Rad- oder Fußbeteiligung</span>
+              </label>
+            </div>
+            <div class="layer-legend-items"></div>
+          </div>
+        </div>
+        <div class="config-group">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-crossings-visible">
+              <input type="checkbox" id="config-crossings-visible" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Querungen</span>
+            </label>
+          </div>
+          <div id="crossings-legend" class="layer-legend" style="display: none;"></div>
+        </div>
+        <div class="config-group">
+          <div class="switch-toggle switch-toggle-small">
+            <label for="config-maxspeed-visible">
+              <input type="checkbox" id="config-maxspeed-visible" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Zulässige Geschwindigkeit</span>
+            </label>
+          </div>
+          <div id="maxspeed-legend" class="layer-legend" style="display: none;"></div>
+        </div>
       </section>
 
       <section class="config-block" aria-labelledby="block-routen-heading">
