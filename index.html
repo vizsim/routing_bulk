@@ -9,20 +9,25 @@
 </head>
 <body>
   <div class="panel" id="main-panel">
-    <div class="panel-header">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h3 style="display: flex; align-items: center; gap: 10px; margin: 0;">
-          <img src="bulk_router_logo.svg" alt="Bulk-Router Logo" style="width: 32px; height: 32px;" />
-          Bulk-Router
-        </h3>
-        <button class="btn-close" id="collapse-panel" title="Ein-/Ausklappen">
-          <svg width="16" height="16" viewBox="-20 -20 490 450" fill="currentColor">
-            <g transform="translate(32, 42.666667) rotate(180 225 200)">
-              <path d="M246.312928,5.62892705 C252.927596,9.40873724 258.409564,14.8907053 262.189374,21.5053731 L444.667042,340.84129 C456.358134,361.300701 449.250007,387.363834 428.790595,399.054926 C422.34376,402.738832 415.04715,404.676552 407.622001,404.676552 L42.6666667,404.676552 C19.1025173,404.676552 7.10542736e-15,385.574034 7.10542736e-15,362.009885 C7.10542736e-15,354.584736 1.93772021,347.288125 5.62162594,340.84129 L188.099293,21.5053731 C199.790385,1.04596203 225.853517,-6.06216498 246.312928,5.62892705 Z"/>
-            </g>
-          </svg>
-        </button>
+    <!-- Handy: zugeklappt starten, schon beim Parsen (vor dem ersten Bild) — sonst stünde das
+         ganze Panel kurz über der Karte und klappte erst nach dem Laden weg (Vorbild: Unfallkarte).
+         Grenze = MOBILE_QUERY in src/ui/mobile-layout.js und die Media-Query in style.css. -->
+    <script>if (matchMedia("(max-width: 640px)").matches) document.currentScript.parentElement.classList.add("collapsed");</script>
+    <div class="panel-title" id="panel-title">
+      <img class="panel-logo" src="bulk_router_logo.svg" alt="" width="30" height="30" />
+      <div class="grow">
+        <h1 class="panel-heading">Bulk-Router</h1>
+        <!-- Der Umbruch gilt nur am Desktop; im Bottom-Sheet blendet die Mobile-Query ihn aus.
+             Der Aufruf („Tippe in die Karte …“) erscheint nur am Handy und nur ohne Ziel. -->
+        <p class="panel-subtext">
+          <span class="panel-subtext-tagline">Routen von vielen Startpunkten <br />zu einem Ziel</span>
+          <span class="panel-subtext-cta">Tippe in die Karte, um ein Ziel zu setzen</span>
+        </p>
       </div>
+      <button type="button" class="toggle-arrow toggle-root open" id="collapse-panel"
+        aria-expanded="true" aria-controls="panel-content" aria-label="Panel ein-/ausklappen"></button>
+    </div>
+    <div class="panel-section" id="panel-content">
       <div id="no-target-hint" class="panel-hint panel-hint--no-target" role="status" aria-live="polite">
         <p class="panel-hint-main">
           <strong>Zielpunkt setzen</strong> Klick in die Karte → Es werden automatisch Startpunkte gewählt und Routen zum Ziel erstellt.
@@ -31,8 +36,6 @@
           Schulen &amp; Kindergärten sowie ÖPNV-Haltestellen lassen sich unter „Kartenebenen“ einblenden.
         </p>
       </div>
-    </div>
-    <div class="panel-section">
       <div class="panel-tabs" role="tablist">
         <button id="tab-routing" class="panel-tab active" type="button" role="tab" aria-selected="true">Routing</button>
         <button id="tab-analysis" class="panel-tab" type="button" role="tab" aria-selected="false">Gebietsanalyse <span class="panel-tab-beta">β</span></button>
@@ -153,7 +156,7 @@
           <span class="config-group-label-row">
             <label class="config-group-label">Datenbasis (Zensus 2022)</label>
             <span class="info-hint" role="img" aria-label="Quellenangabe">
-              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-icon" aria-hidden="true">i</span>
               <span class="info-hint-text">Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
             </span>
           </span>
@@ -174,7 +177,7 @@
           <span class="config-group-label-row">
             <label class="config-group-label">Wer startet?</label>
             <span class="info-hint" role="img" aria-label="Quellenangabe">
-              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-icon" aria-hidden="true">i</span>
               <span class="info-hint-text">Startpunkte werden nach Einwohnerzahl der 100×100-m-Zellen gezogen. Aus einer Zelle können höchstens so viele Startpunkte kommen, wie dort Personen wohnen.</span>
             </span>
           </span>
@@ -189,7 +192,7 @@
               Start an ÖPNV-Haltestelle: <strong id="transit-share-value">0 %</strong>
             </label>
             <span class="info-hint" role="img" aria-label="Erklärung">
-              <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
+              <span class="info-hint-icon" aria-hidden="true">i</span>
               <span class="info-hint-text">Anteil der Startpunkte, die statt am Wohnort an einer Haltestelle beginnen (Zubringer mit Bus/Bahn). Für diesen Anteil gilt die Längenverteilung nicht: Fahrgäste steigen zielnah aus, die nächste Haltestelle trägt am meisten. Wege ab Haltestelle werden immer zu Fuß gerechnet — auch wenn oben Rad oder Auto gewählt ist.</span>
             </span>
           </span>
@@ -332,10 +335,8 @@
           Belastungskarte rechnen (unter 18-Jährige, eigener Routing-Server).
         </div>
         <div class="config-group">
+          <!-- Während des Zeichnens erklärt die Leiste oben (src/ui/draw-bar.js), was zu tun ist -->
           <button id="analysis-draw-btn" class="analysis-btn" type="button">Bereich zeichnen</button>
-          <p class="config-hint" id="analysis-draw-hint" style="display: none;">
-            Klick: Punkt setzen · Doppelklick oder Enter: fertig · Esc: abbrechen
-          </p>
         </div>
         <div class="config-group" id="analysis-facilities-group" style="display: none;">
           <label class="config-group-label">Einrichtungen im Bereich (Wege/Tag editierbar):</label>
@@ -347,7 +348,7 @@
           <div id="analysis-settings"></div>
         </div>
         <div class="config-group" id="analysis-run-group" style="display: none;">
-          <button id="analysis-run-btn" class="export-button" type="button">Berechnen</button>
+          <button id="analysis-run-btn" class="export-button btn-primary" type="button">Berechnen</button>
           <p class="config-hint" id="analysis-estimate"></p>
         </div>
         <div id="analysis-result" class="demand-info" style="display: none;"></div>
@@ -364,25 +365,25 @@
           <button id="analysis-reset-btn" class="analysis-btn" type="button">Analyse zurücksetzen</button>
         </div>
       </section>
-
-      <div class="github-links">
-        <img src="https://img.shields.io/badge/Status-Experimental-red" alt="Status: Experimental" class="status-badge">
-        <div style="flex: 1;"></div>
-        <a href="https://github.com/vizsim/routing_bulk" target="_blank" rel="noopener noreferrer" 
-           title="GitHub Repository" 
-           class="github-link">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </div>
+    <!-- Fußzeile: bleibt auch zugeklappt stehen (Desktop und Handy-Streifen). Die Chips links
+         spiegeln die aktuellen Einstellungen (src/ui/mobile-layout.js#renderStats). -->
+    <div class="panel-footer" id="panel-footer">
+      <div class="fc-stats" id="panel-stats"></div>
+      <div class="fc-links">
+        <span class="fc-badge" title="Experimentell: Daten und Funktionen können sich noch ändern">Experimentell</span>
+        <a href="https://github.com/vizsim/routing_bulk" target="_blank" rel="noopener noreferrer"
+          title="Quellcode auf GitHub (vizsim/routing_bulk)" aria-label="Quellcode auf GitHub">
+          <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
           </svg>
         </a>
-        <a href="https://github.com/vizsim/routing_bulk/issues" target="_blank" rel="noopener noreferrer" 
-           title="Fehler melden oder Feedback geben"
-           class="github-link">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/>
-            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/>
+        <a href="https://github.com/vizsim/routing_bulk/issues" target="_blank" rel="noopener noreferrer"
+          title="Fehler melden / Feedback (GitHub Issues)" aria-label="GitHub Issues">
+          <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path>
+            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path>
           </svg>
-          <span>Issues</span>
         </a>
       </div>
     </div>

@@ -9,6 +9,8 @@ import { Utils } from '../core/utils.js';
 import { AnalysisService, FACILITY_TYPES, MODES } from '../services/analysis-service.js';
 import { MapRenderer } from '../visualization/map-renderer.js';
 import { RouteRenderer } from '../visualization/route-renderer.js';
+import { DrawBar } from './draw-bar.js';
+import { MobileLayout } from './mobile-layout.js';
 import { PolygonDraw } from './polygon-draw.js';
 
 export const AnalysisPanel = {
@@ -88,20 +90,30 @@ export const AnalysisPanel = {
 
   _startDrawing() {
     this._reset();
-    const hint = Utils.getElement('#analysis-draw-hint');
     const btn = Utils.getElement('#analysis-draw-btn');
-    if (hint) hint.style.display = 'block';
     if (btn) btn.disabled = true;
 
+    // Am Handy braucht das Zeichnen die Karte: Sheet zuklappen, die Leiste oben
+    // übernimmt Hinweis und Knöpfe (Fertig/Abbrechen/Punkt zurück)
+    MobileLayout.collapseOnMobile();
+    DrawBar.show({
+      onUndo: () => PolygonDraw.undo(),
+      onCancel: () => PolygonDraw.cancel(),
+      onDone: () => PolygonDraw.finish()
+    });
+
     PolygonDraw.start({
+      onChange: (points) => DrawBar.update(points),
       onFinish: async (polygon) => {
-        if (hint) hint.style.display = 'none';
+        DrawBar.hide();
         if (btn) { btn.disabled = false; btn.textContent = 'Bereich neu zeichnen'; }
         this._polygon = polygon;
+        // Nächster Schritt steht im Panel (Einrichtungen, Berechnen) — am Handy aufklappen
+        if (MobileLayout.isMobile()) MobileLayout.setCollapsed(false);
         await this._loadFacilities();
       },
       onCancel: () => {
-        if (hint) hint.style.display = 'none';
+        DrawBar.hide();
         if (btn) btn.disabled = false;
       }
     });

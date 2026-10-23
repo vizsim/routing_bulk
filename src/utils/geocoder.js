@@ -3,6 +3,7 @@ import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 
 export const Geocoder = {
+  _container: null,
   _input: null,
   _clearButton: null,
   _suggestionsContainer: null,
@@ -26,7 +27,7 @@ export const Geocoder = {
     const { lat, lng, limit = 10 } = options;
     
     // Photon API URL
-    let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${limit}`;
+    let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${limit}&lang=de`;
     
     // Wenn Koordinaten vorhanden, für bessere Ergebnisse hinzufügen
     if (lat !== undefined && lng !== undefined) {
@@ -55,61 +56,7 @@ export const Geocoder = {
    * @returns {Array} Formatierte Adress-Objekte
    */
   _formatResults(features) {
-    return features.map(feature => {
-      const props = feature.properties || {};
-      const coords = feature.geometry?.coordinates || [];
-      
-      // Erstelle eine lesbare Adresszeile
-      const addressParts = [];
-      
-      if (props.name) {
-        addressParts.push(props.name);
-      }
-      
-      if (props.housenumber && props.street) {
-        addressParts.push(`${props.housenumber} ${props.street}`);
-      } else if (props.street) {
-        addressParts.push(props.street);
-      }
-      
-      if (props.city) {
-        addressParts.push(props.city);
-      }
-      
-      if (props.postcode) {
-        addressParts.push(props.postcode);
-      }
-      
-      if (props.state) {
-        addressParts.push(props.state);
-      }
-      
-      if (props.country) {
-        addressParts.push(props.country);
-      }
-      
-      const addressLine = addressParts.join(', ');
-      
-      // Erstelle eine kurze Beschreibung (Typ + Ort)
-      const typeParts = [];
-      if (props.osm_type) {
-        typeParts.push(props.osm_type);
-      }
-      if (props.type) {
-        typeParts.push(props.type);
-      }
-      const type = typeParts.join(' / ') || 'Ort';
-      
-      return {
-        name: props.name || addressLine,
-        address: addressLine,
-        type: type,
-        lat: coords[1] || null,
-        lng: coords[0] || null,
-        coordinates: coords.length === 2 ? [coords[1], coords[0]] : null, // [lat, lng]
-        raw: feature // Original-Feature für weitere Details
-      };
-    });
+    return features.map(formatPhotonFeature);
   },
 
   /**
@@ -124,7 +71,7 @@ export const Geocoder = {
     }
 
     try {
-      const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`;
+      const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=de`;
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -166,105 +113,52 @@ export const Geocoder = {
   },
 
   /**
-   * Erstellt das Input-Feld oben links auf der Karte
+   * Erstellt die Suche oben links auf der Karte (Aufbau wie in der Unfallkarte:
+   * Umrandung mit Lupe, Feld und ×; die Ergebnisliste darunter als Geschwister —
+   * am Handy faltet src/ui/mobile-layout.js die Umrandung zum Lupen-Knopf).
    */
   _createInputField() {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'geocoder-map-control';
-    
-    // Icon
-    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    icon.setAttribute('class', 'geocoder-icon');
-    icon.setAttribute('width', '18');
-    icon.setAttribute('height', '18');
-    icon.setAttribute('viewBox', '0 0 24 24');
-    icon.setAttribute('fill', 'none');
-    icon.setAttribute('stroke', 'currentColor');
-    icon.setAttribute('stroke-width', '2');
-    icon.setAttribute('stroke-linecap', 'round');
-    icon.setAttribute('stroke-linejoin', 'round');
-    
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', '11');
-    circle.setAttribute('cy', '11');
-    circle.setAttribute('r', '8');
-    icon.appendChild(circle);
-    
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'm21 21-4.35-4.35');
-    icon.appendChild(path);
-    
-    // Input
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'geocoder-input';
-    input.className = 'geocoder-input';
-    input.placeholder = 'Adresse suchen...';
-    input.autocomplete = 'off';
-    
-    // Clear Button
-    const clearButton = document.createElement('button');
-    clearButton.className = 'geocoder-clear';
-    clearButton.id = 'geocoder-clear';
-    clearButton.style.display = 'none';
-    clearButton.title = 'Löschen';
-    clearButton.type = 'button';
-    
-    const clearIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    clearIcon.setAttribute('width', '16');
-    clearIcon.setAttribute('height', '16');
-    clearIcon.setAttribute('viewBox', '0 0 24 24');
-    clearIcon.setAttribute('fill', 'none');
-    clearIcon.setAttribute('stroke', 'currentColor');
-    clearIcon.setAttribute('stroke-width', '2');
-    clearIcon.setAttribute('stroke-linecap', 'round');
-    clearIcon.setAttribute('stroke-linejoin', 'round');
-    
-    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line1.setAttribute('x1', '18');
-    line1.setAttribute('y1', '6');
-    line1.setAttribute('x2', '6');
-    line1.setAttribute('y2', '18');
-    clearIcon.appendChild(line1);
-    
-    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line2.setAttribute('x1', '6');
-    line2.setAttribute('y1', '6');
-    line2.setAttribute('x2', '18');
-    line2.setAttribute('y2', '18');
-    clearIcon.appendChild(line2);
-    
-    clearButton.appendChild(clearIcon);
-    
-    wrapper.appendChild(icon);
-    wrapper.appendChild(input);
-    wrapper.appendChild(clearButton);
-    
-    // Füge oben links auf der Karte hinzu
+    const container = document.createElement('div');
+    container.className = 'geocoder-map-control';
+    container.innerHTML = `
+      <div class="geocoder-input-wrapper">
+        <svg class="geocoder-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" id="geocoder-input" class="geocoder-input" placeholder="Adresse suchen…"
+          autocomplete="off" aria-label="Adresse suchen" />
+        <button type="button" class="geocoder-clear" id="geocoder-clear" title="Löschen" aria-label="Suche leeren"
+          style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>`;
+
+    // Oben links auf der Karte
     const mapContainer = Utils.getElement('#map');
     if (mapContainer) {
-      mapContainer.appendChild(wrapper);
+      mapContainer.appendChild(container);
     }
-    
-    this._input = input;
-    this._clearButton = clearButton;
+
+    this._container = container;
+    this._input = container.querySelector('#geocoder-input');
+    this._clearButton = container.querySelector('#geocoder-clear');
   },
 
   /**
-   * Erstellt den Container für Adressvorschläge
+   * Erstellt den Container für Adressvorschläge (unter der Eingabe)
    */
   _createSuggestionsContainer() {
     const container = document.createElement('div');
     container.className = 'geocoder-suggestions';
     container.id = 'geocoder-suggestions';
     container.style.display = 'none';
-    
-    // Füge zum Input-Wrapper hinzu
-    const wrapper = this._input?.parentNode;
-    if (wrapper) {
-      wrapper.appendChild(container);
-    }
-    
+    this._container?.appendChild(container);
     this._suggestionsContainer = container;
   },
 
@@ -274,7 +168,7 @@ export const Geocoder = {
   _setupEventListeners() {
     if (!this._input) return;
 
-    const wrapper = this._input.parentNode;
+    const wrapper = this._container;
 
     // Verhindere, dass Klicks auf Geocoder-Elemente Map-Clicks auslösen
     if (wrapper) {
@@ -424,11 +318,13 @@ export const Geocoder = {
   _createSuggestionHTML(suggestion, index) {
     const isHighlighted = index === this._selectedIndex ? 'highlighted' : '';
     
+    const secondary = suggestion.secondary
+      ? `<div class="geocoder-suggestion-address">${this._escapeHtml(suggestion.secondary)}</div>`
+      : '';
     return `
       <div class="geocoder-suggestion ${isHighlighted}" data-index="${index}">
         <div class="geocoder-suggestion-name">${this._escapeHtml(suggestion.name)}</div>
-        <div class="geocoder-suggestion-address">${this._escapeHtml(suggestion.address)}</div>
-        <div class="geocoder-suggestion-type">${this._escapeHtml(suggestion.type)}</div>
+        ${secondary}
       </div>
     `;
   },
@@ -575,3 +471,38 @@ export const Geocoder = {
     }
   }
 };
+
+/**
+ * Photon-Feature → { name, secondary, address, … } (rein, damit testbar).
+ * Hauptzeile = Name, sonst „Straße Hausnummer“ (deutsche Reihenfolge), sonst Ort;
+ * Nebenzeile = was die Hauptzeile nicht schon sagt (Straße, PLZ Ort, Land, Staat).
+ * `address` ist beides zusammen und landet nach der Auswahl im Suchfeld.
+ */
+export function formatPhotonFeature(feature) {
+  const props = feature?.properties || {};
+  const coords = feature?.geometry?.coordinates || [];
+  const street = [props.street, props.housenumber].filter(Boolean).join(' ');
+  const locality = props.city || props.town || props.village || props.locality || props.district || '';
+  const place = [props.postcode, locality].filter(Boolean).join(' ');
+  const name = props.name || street || place || 'Unbekannter Ort';
+
+  const parts = [];
+  if (street && street !== name) parts.push(street);
+  if (place && place !== name) parts.push(place);
+  if (props.state && props.state !== locality && props.state !== name) parts.push(props.state);
+  if (props.country && props.country !== name) parts.push(props.country);
+  const secondary = parts.join(', ');
+
+  const type = [props.osm_type, props.type].filter(Boolean).join(' / ') || 'Ort';
+  const hasCoords = coords.length === 2;
+  return {
+    name,
+    secondary,
+    address: secondary ? `${name}, ${secondary}` : name,
+    type,
+    lat: hasCoords ? coords[1] : null,
+    lng: hasCoords ? coords[0] : null,
+    coordinates: hasCoords ? [coords[1], coords[0]] : null, // [lat, lng]
+    raw: feature
+  };
+}

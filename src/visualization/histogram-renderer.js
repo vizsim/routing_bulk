@@ -4,28 +4,52 @@ import { State } from '../core/state.js';
 import { Distribution } from '../domain/distribution.js';
 import { Geo } from '../domain/geo.js';
 
+// Breite folgt dem Panel (volle Inhaltsbreite); 250 px nur, solange das Panel
+// zugeklappt ist und nichts zu messen da ist. Rahmen und Hintergrund kommen aus
+// style.css (#distance-histogram), Farben/Schrift passend zum Panel-Stil.
+const FALLBACK_WIDTH = 250;
+const BASE_HEIGHT = 120;
+const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+function canvasWidth(canvas) {
+  // Rahmen (2 × 1 px) abziehen, sonst ragt die Zeichnung um 2 px über
+  const w = Math.floor((canvas.parentElement?.clientWidth || 0) - 2);
+  return w >= 120 ? w : FALLBACK_WIDTH;
+}
+
 export const HistogramRenderer = {
+  _lastArgs: null,
+  _lastWidth: 0,
+  _observer: null,
+
+  /** Neu zeichnen, wenn sich die Panelbreite ändert (Handy: Sheet aufgeklappt, Drehen). */
+  _observe(canvas) {
+    if (this._observer || !window.ResizeObserver || !canvas.parentElement) return;
+    this._observer = new ResizeObserver(() => {
+      if (!this._lastArgs || canvasWidth(canvas) === this._lastWidth) return;
+      this.updateDistanceHistogram(...this._lastArgs);
+    });
+    this._observer.observe(canvas.parentElement);
+  },
+
   /**
    * Zeigt Platzhalter-Text, wenn noch keine Routen vorhanden sind.
    * @param {HTMLCanvasElement} canvas
    */
   _drawPlaceholder(canvas) {
     const dpr = window.devicePixelRatio || 1;
-    const baseWidth = 250;
-    const baseHeight = 120;
+    const baseWidth = canvasWidth(canvas);
+    const baseHeight = BASE_HEIGHT;
+    this._lastWidth = baseWidth;
     canvas.width = baseWidth * dpr;
     canvas.height = baseHeight * dpr;
     canvas.style.width = baseWidth + 'px';
     canvas.style.height = baseHeight + 'px';
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = '#f9f9f9';
-    ctx.fillRect(0, 0, baseWidth, baseHeight);
-    ctx.strokeStyle = '#ddd';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0.5, 0.5, baseWidth - 1, baseHeight - 1);
-    ctx.fillStyle = '#888';
-    ctx.font = '12px system-ui';
+    ctx.clearRect(0, 0, baseWidth, baseHeight);
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `12px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const lines = ['Keine Routen.', 'Zuerst Ziel setzen und Karte anklicken.'];
@@ -45,6 +69,8 @@ export const HistogramRenderer = {
   updateDistanceHistogram(starts, target, options = {}) {
     const canvas = document.getElementById('distance-histogram');
     if (!canvas) return;
+    this._lastArgs = [starts, target, options];
+    this._observe(canvas);
 
     if (!starts || starts.length === 0) {
       this._drawPlaceholder(canvas);
@@ -73,8 +99,8 @@ export const HistogramRenderer = {
       if (distances.length === 0) {
         distances = starts.map(s => Geo.distanceMeters(s[0], s[1], target[0], target[1]));
         maxDistM = CONFIG.RADIUS_M;
-        barFillStyle = 'rgba(0, 102, 255, 0.5)';
-        barStrokeStyle = 'rgba(0, 82, 204, 0.6)';
+        barFillStyle = 'rgba(29, 78, 216, 0.45)';
+        barStrokeStyle = 'rgba(29, 78, 216, 0.7)';
         showExpectedCurve = true;
       } else {
         maxDistM = Math.max(CONFIG.RADIUS_M, Math.max(...distances));
@@ -87,15 +113,16 @@ export const HistogramRenderer = {
         Geo.distanceMeters(start[0], start[1], target[0], target[1])
       );
       maxDistM = CONFIG.RADIUS_M;
-      barFillStyle = 'rgba(0, 102, 255, 0.5)';
-      barStrokeStyle = 'rgba(0, 82, 204, 0.6)';
+      barFillStyle = 'rgba(29, 78, 216, 0.45)';
+      barStrokeStyle = 'rgba(29, 78, 216, 0.7)';
       showExpectedCurve = true;
     }
 
     // Retina-Display Support
     const dpr = window.devicePixelRatio || 1;
-    const baseWidth = 250;
-    const baseHeight = 120;
+    const baseWidth = canvasWidth(canvas);
+    const baseHeight = BASE_HEIGHT;
+    this._lastWidth = baseWidth;
 
     canvas.width = baseWidth * dpr;
     canvas.height = baseHeight * dpr;
@@ -146,8 +173,6 @@ export const HistogramRenderer = {
     const maxExpected = expectedBins ? Math.max(...expectedBins, maxCount) : maxCount;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = '#f9f9f9';
-    ctx.fillRect(0, 0, width, height);
 
     const padding = 20;
     const chartHeight = height - 40;
@@ -171,9 +196,9 @@ export const HistogramRenderer = {
     });
 
     if (showExpectedCurve && expectedBins) {
-      ctx.strokeStyle = '#666';
+      ctx.strokeStyle = '#4b5563';
       ctx.lineWidth = 2;
-      ctx.fillStyle = '#666';
+      ctx.fillStyle = '#4b5563';
       ctx.beginPath();
       const expectedPoints = [];
       bins.forEach((_, i) => {
@@ -197,8 +222,8 @@ export const HistogramRenderer = {
     }
 
     // Achsen
-    ctx.fillStyle = '#666';
-    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `10px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
@@ -223,7 +248,7 @@ export const HistogramRenderer = {
       if (x >= padding && x <= width - padding) {
         const label = tickKm % 1 === 0 ? tickKm.toFixed(0) : tickKm.toFixed(1);
         ctx.fillText(label + 'km', x, height - padding + 5);
-        ctx.strokeStyle = '#999';
+        ctx.strokeStyle = '#9ca3af';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(x, height - padding);
@@ -248,8 +273,8 @@ export const HistogramRenderer = {
     if (distances.length > 0 && avgM > 0) {
       ctx.textAlign = 'right';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = '#444';
-      ctx.font = '11px system-ui';
+      ctx.fillStyle = '#1f2937';
+      ctx.font = `600 11px ${FONT}`;
       ctx.fillText('Ø ' + formatDist(avgM), width - padding, 6);
     }
   }

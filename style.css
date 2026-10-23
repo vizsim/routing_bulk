@@ -1,55 +1,283 @@
-/* ============================================
-   RESET & BASE STYLES
-   ============================================ */
+/* ============================================================================
+   Bulk-Router — Stil nach vizsim/unfallkarte
+   ----------------------------------------------------------------------------
+   Gleiche Designsprache wie die Unfallkarte: weiße Karten mit 16-px-Radius,
+   weicher Schatten, gedämpftes Grau für Labels, Akzent #1d4ed8. Layout:
+   Suche oben links, Panel oben rechts UNTER der Suchzeile (top: 60px — so
+   kollidieren die beiden auch bei mittleren Breiten nicht), Karten-
+   Bedienelemente als 44-px-Kacheln unten links. Unter 640 px wird das Panel
+   zum Bottom-Sheet und die Suche zum Lupen-Knopf (src/ui/mobile-layout.js,
+   Abschnitt „Mobile“ am Dateiende).
+   ============================================================================ */
 
-html, body { 
-  height: 100%; 
-  margin: 0; 
+/* MapLibre-Grundstil ZUERST: die Regeln unten überschreiben Teile davon (Kacheln, Popups).
+   Vorher kam er per JS-Import und damit NACH dieser Datei — gleich spezifische Regeln
+   hier hätten dann verloren. Vite löst den Paketpfad auf (wie in der Unfallkarte). */
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* ───── Design-Tokens (1:1 Unfallkarte, unten ergänzt) ───── */
+:root {
+  --ui-surface: #ffffff;
+  --ui-border: #e3e5e9;
+  --ui-divider: #eceef1;
+  --ui-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+  --ui-shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.12);
+  --ui-radius: 16px;
+  --ui-radius-sm: 12px;
+  --ui-text: #1f2937;
+  --ui-text-strong: #111827;
+  --ui-text-muted: #6b7280;
+  --ui-accent: #1d4ed8;
+  --ui-hover: #f3f4f6;
+
+  /* Ergänzungen für die Formular-Elemente des Bulk-Routers */
+  --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ui-accent-soft: #eef2ff;                 /* gewählte Kachel (wie .basemap-btn.selected) */
+  --ui-chip-active: rgba(29, 78, 216, 0.14); /* gewählter Chip (wie .legend-chip) */
+  --ui-focus: #2563eb;
+  --ui-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  --ui-input-border: #d9e2ec;
+  --ui-field: #f9fafb;
+  --ui-amber-bg: #fffbeb;
+  --ui-amber-border: #fde68a;
+  --ui-amber-text: #78350f;
+  --ui-tooltip: #111827;
 }
 
-#map { 
-  height: 100%; 
+/* ───── Grundlayout ───── */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  /* Die Seite selbst scrollt nie — die Karte füllt das Fenster, das Panel scrollt in sich.
+     Ohne diese Zeile wird beim Ziehen des Handy-Sheets die ganze Seite scrollbar (es ragt
+     während der Geste per transform unter das Fenster). */
+  overflow: hidden;
+  font-family: var(--ui-font);
+  color: var(--ui-text);
 }
 
-/* MapLibre Zoom Controls Position (unten links) */
-.maplibregl-ctrl-bottom-left {
-  bottom: 10px;
-  left: 10px;
+#map {
+  width: 100%;
+  height: 100%;
 }
 
-/* Panel-Tabs (Routing / Gebietsanalyse) */
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+.grow {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* ═══════════════════════════ Panel (oben rechts) ═══════════════════════════ */
+
+.panel {
+  position: absolute;
+  top: 60px;
+  right: 10px;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: 364px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100dvh - 100px);
+  /* Oben KEIN Innenabstand: den trägt die klebende Titelzeile selbst, sonst bliebe über
+     ihr ein Spalt, durch den der Inhalt sichtbar wegscrollt. */
+  padding: 0 16px 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.panel::-webkit-scrollbar { width: 10px; }
+.panel::-webkit-scrollbar-track { background: transparent; }
+.panel::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 999px;
+  border: 3px solid var(--ui-surface);
+}
+.panel::-webkit-scrollbar-thumb:hover { background: #b6bcc6; }
+
+/* Titelzeile bleibt beim Scrollen stehen; getrennt mit weichem Schatten statt Linie. */
+.panel-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -16px;
+  padding: 16px 16px 10px;
+  background: var(--ui-surface);
+  box-shadow: 0 6px 10px -8px rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+}
+
+.panel-logo {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.panel-heading {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ui-text-strong);
+}
+
+.panel-subtext {
+  margin: 1px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ui-text-muted);
+}
+
+/* Aufruf „Tippe in die Karte …“ nur im Handy-Streifen und nur ohne Ziel (Mobile-Query) */
+.panel-subtext-cta {
+  display: none;
+}
+
+/* ───── Chevron-Knöpfe (wie Unfallkarte: SVG-Maske, Spitze unten = offen) ───── */
+.toggle-arrow {
+  --arrow-color: #9ca3af;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+  transform: rotate(90deg); /* zugeklappt: Spitze zeigt nach links */
+  transition: transform 0.2s ease;
+}
+.toggle-arrow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--arrow-color);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4 6.5 10 12.5 16 6.5' fill='none' stroke='%23000' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='miter'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4 6.5 10 12.5 16 6.5' fill='none' stroke='%23000' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='miter'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.toggle-arrow.open {
+  transform: rotate(0deg);
+}
+.toggle-arrow:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.panel-title .toggle-arrow.toggle-root {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+}
+
+/* Zugeklappt bleiben nur Titel- und Fußzeile stehen — außer WÄHREND einer Zieh-Geste am
+   Handy: dann muss der Inhalt schon da sein (das Sheet wird voll gerendert und per transform
+   nach unten geschoben), sonst käme mit dem Finger nichts hoch. */
+.panel.collapsed:not(.is-dragging) > :not(.panel-title):not(.panel-footer) {
+  display: none;
+}
+
+.panel.is-dragging {
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ───── Hinweis „Zielpunkt setzen“ (erste Zeile im Inhalt) ───── */
+.panel-hint {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  border-radius: var(--ui-radius-sm);
+}
+.panel-hint--no-target {
+  background: var(--ui-accent-soft);
+  border: 1px solid #c7d2fe;
+}
+.panel-hint-main {
+  margin: 0 0 8px;
+}
+.panel-hint-main:last-child {
+  margin-bottom: 0;
+}
+.panel-hint-main strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ui-accent);
+}
+.panel-hint-secondary {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid #c7d2fe;
+  font-size: 11.5px;
+  color: var(--ui-text-muted);
+}
+.panel-hint.is-hidden {
+  display: none;
+}
+
+.panel-section {
+  padding: 0;
+}
+
+/* ───── Tabs (Routing / Gebietsanalyse) als Segment-Schalter ───── */
 .panel-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 12px;
+  margin: 12px 0 4px;
   padding: 3px;
-  background: #f1f5f9;
-  border-radius: 8px;
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-sm);
 }
 
 .panel-tab {
   flex: 1;
   padding: 7px 8px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--ui-text-muted);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 9px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s;
 }
-
 .panel-tab:hover {
-  color: #2563eb;
+  color: var(--ui-text-strong);
 }
-
 .panel-tab.active {
-  background: #fff;
-  color: #1e293b;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  background: var(--ui-surface);
+  color: var(--ui-text-strong);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
-
+.panel-tab:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
 .panel-tab-beta {
   font-size: 9px;
   font-weight: 700;
@@ -57,256 +285,48 @@ html, body {
   vertical-align: super;
 }
 
-/* Gebietsanalyse */
-.analysis-btn {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #1e293b;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.analysis-btn:hover:not(:disabled) {
-  border-color: #d97706;
-  color: #d97706;
-}
-
-.analysis-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-#analysis-facilities {
-  max-height: 300px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* Zweizeilig: Name in voller Breite, darunter Typ-Chip + Fahrten-Input —
-   so bleibt auch ein langer Einrichtungsname komplett lesbar */
-.analysis-facility {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  align-items: center;
-  padding: 5px 4px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.analysis-facility + .analysis-facility {
-  border-top: 1px solid #f1f5f9;
-}
-
-/* Hover-Kopplung Panel ↔ Karte (Halo am Icon in Analyse-Amber) */
-.analysis-facility.is-hovered {
-  background: #fef3c7;
-}
-
-.analysis-facility-name {
-  grid-column: 1 / -1;
-  min-width: 0;
-  overflow-wrap: break-word;
-  cursor: pointer;
-}
-
-.analysis-facility-type {
-  justify-self: start;
-  font-size: 10px;
-  color: #64748b;
-  background: #f1f5f9;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-/* Höhere Spezifität als ".config-group input" (width: 100% dort) */
-.analysis-facility .analysis-trips-input {
-  width: 64px;
-  justify-self: end;
-  padding: 3px 4px;
-  font-size: 12px;
-  text-align: right;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.analysis-facility .analysis-trips-input::-webkit-outer-spin-button,
-.analysis-facility .analysis-trips-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
+/* ───── Abschnitte (Akkordeon, src/ui/accordion.js) ───── */
+.config-block {
   margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--ui-divider);
 }
 
-/* Raumtyp-Zeile über der Split-Tabelle (RegioStaR7 aus den Zensus-Zellen) */
-.analysis-area-context {
-  font-size: 11px;
-  color: #92400e;
-  background: #fef3c7;
-  border-radius: 4px;
-  padding: 4px 6px;
-  margin-bottom: 6px;
-}
-
-.analysis-inline-btn {
-  font-size: 11px;
-  padding: 1px 6px;
-  border: 1px solid #d97706;
-  border-radius: 4px;
-  background: white;
-  color: #92400e;
-  cursor: pointer;
-}
-
-.analysis-inline-btn:hover {
-  background: #fde68a;
-}
-
-/* Modus-Filter für die Belastungskarte (nach dem Lauf) */
-.analysis-mode-filter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-}
-
-.analysis-mode-check {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* schlägt ".config-group input" (width: 100%) */
-.analysis-mode-check input[type="checkbox"] {
-  width: auto;
-  margin: 0;
-  cursor: pointer;
-}
-
-/* Falls es doch mal eng wird (Browser-Zoom): innen scrollen statt abschneiden */
-#analysis-settings {
-  overflow-x: auto;
-}
-
-.analysis-settings-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-
-.analysis-settings-table th {
-  text-align: center;
-  font-weight: 600;
-  color: #64748b;
-  padding: 2px;
-}
-
-.analysis-settings-table td {
-  padding: 2px;
-}
-
-.analysis-settings-table td input {
-  width: 100%;
-  min-width: 36px;
-  padding: 3px 2px;
-  font-size: 11px;
-  text-align: right;
-  /* Spinner ausblenden — mit ihnen sprengen 5 Zahlenspalten die Panelbreite */
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.analysis-settings-table td input::-webkit-outer-spin-button,
-.analysis-settings-table td input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* Radius braucht 4-5 Stellen (z. B. 2000, 10000) */
-.analysis-settings-table td input[data-field="radiusM"] {
-  min-width: 52px;
-}
-
-.analysis-settings-type {
-  font-size: 11px;
-  /* darf umbrechen — nowrap sprengt mit "Weiterführende Schule" die Panelbreite;
-     hyphens statt anywhere: "Weiter-führende" statt "Weiterführ ende" */
-  hyphens: auto;
-  overflow-wrap: break-word;
-}
-
-.analysis-split-invalid td {
-  background: #fef2f2;
-}
-
-/* Fester Beta-Hinweis, solange das ÖPNV-Profil aktiv ist */
-.beta-hint {
-  margin-top: 8px;
-  padding: 8px 10px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: #78350f;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 6px;
-}
-
-.beta-hint a {
-  color: #92400e;
-}
-
-/* Beta-Kennzeichnung am ÖPNV-Profil-Button */
-.profile-btn {
-  position: relative;
-}
-
-.profile-beta-tag {
-  position: absolute;
-  top: 1px;
-  right: 3px;
-  font-size: 9px;
+.config-block-title {
+  margin: 0 0 10px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1;
-  color: #b45309;
-  pointer-events: none;
+  color: var(--ui-text-strong);
 }
 
-.profile-btn.active .profile-beta-tag {
-  color: #fde68a;
-}
-
-/* Accordion: einklappbare Panel-Bereiche */
 .config-block-title[role="button"] {
-  cursor: pointer;
-  user-select: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
 }
-
 .config-block-title[role="button"]::after {
-  content: '';
-  width: 8px;
-  height: 8px;
-  margin-left: 8px;
-  border-right: 2px solid #999;
-  border-bottom: 2px solid #999;
-  transform: rotate(45deg); /* Chevron nach unten = offen */
-  transition: transform 0.2s;
-  flex-shrink: 0;
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: #9ca3af;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4 6.5 10 12.5 16 6.5' fill='none' stroke='%23000' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='miter'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4 6.5 10 12.5 16 6.5' fill='none' stroke='%23000' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='miter'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 0.2s ease;
 }
-
 .config-block.collapsed .config-block-title[role="button"]::after {
-  transform: rotate(-45deg); /* Chevron nach rechts = zu */
+  transform: rotate(90deg); /* Spitze nach links = zu */
 }
-
-.config-block-title[role="button"]:hover {
-  color: #2563eb;
+.config-block-title[role="button"]:hover::after {
+  background: #6b7280;
+}
+.config-block-title[role="button"]:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
 .config-block-body {
@@ -314,101 +334,156 @@ html, body {
   grid-template-rows: 1fr;
   transition: grid-template-rows 0.2s ease;
 }
-
 .config-block-body-inner {
   overflow: hidden;
   min-height: 0;
 }
-
 .config-block.collapsed .config-block-body {
   grid-template-rows: 0fr;
 }
-
-/* Eingeklappt: kein Leerraum unter dem Titel */
 .config-block.collapsed .config-block-title {
   margin-bottom: 0;
 }
-.config-block.collapsed {
-  padding-bottom: 4px;
-}
 
-/* Deaktivierter Abschnitt (z. B. Nachfrage-Optionen ohne Einwohner-Gewichtung) */
+/* Deaktivierter Bereich (z. B. Nachfrage-Optionen ohne Einwohner-Gewichtung) */
 .is-disabled {
   opacity: 0.4;
   pointer-events: none;
 }
 
-/* Nachfragedetails: Basis-Auswahl, ÖPNV-Anteil, Info-Zeile */
-.demand-basis-buttons {
+/* ───── Fußzeile: Einstellungs-Chips + Status + Links (wie #feature-count-wrapper) ───── */
+.panel-footer {
   display: flex;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-divider);
 }
 
-.demand-basis-btn {
-  flex: 1;
-  padding: 6px 8px;
+/* Zwei Kennzahlen: am Desktop untereinander (wie Unfallkarte), am Handy in einer Zeile */
+.fc-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.3;
+}
+.fc-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
   font-size: 12px;
-  font-weight: 500;
-  color: #444;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
+  color: var(--ui-text-muted);
+}
+.fc-stat strong {
+  font-weight: 700;
+  color: var(--ui-text);
+}
+.fc-stat svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-right: 1px;
+  color: var(--ui-text);
+  opacity: 0.65;
 }
 
-.demand-basis-btn:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+.fc-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-
-.demand-basis-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-#config-transit-share {
-  width: 100%;
-  margin: 6px 0 2px;
-}
-
-.config-hint {
-  margin: 2px 0 0;
+.fc-badge {
+  margin-right: 4px;
+  padding: 2px 8px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: var(--ui-accent-soft);
+  color: #3730a3;
   font-size: 11px;
+  font-weight: 700;
   line-height: 1.45;
-  color: #777;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
+.fc-links a {
+  display: inline-flex;
+  align-items: center;
+  color: #4b5563;
+  text-decoration: none;
+}
+.fc-links a:hover {
+  color: var(--ui-text-strong);
+}
+.fc-links a:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.demand-info {
-  margin-top: 10px;
-  padding: 8px 10px;
+/* ═══════════════════════════ Formular-Elemente ═══════════════════════════ */
+
+.config-group {
+  margin-bottom: 12px;
+}
+.config-group:last-child {
+  margin-bottom: 0;
+}
+
+.config-group-with-border {
+  padding-top: 0;
+}
+
+/* :where() hält die Spezifität bei 0,1,0 — gezielte Regeln (Analyse-Tabellen,
+   Inline-Felder) gewinnen so ohne Wettrüsten. */
+.config-group :where(label) {
+  display: block;
+  margin-bottom: 5px;
   font-size: 12px;
-  line-height: 1.5;
-  color: #333;
-  background: #f5f7fa;
-  border-radius: 6px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
 }
 
-.demand-info-sub {
-  color: #666;
-  font-size: 11px;
+.config-group :where(input:not([type="checkbox"], [type="radio"], [type="range"]), select) {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--ui-text-strong);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-input-border);
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.config-group :where(input, select):focus {
+  outline: none;
+  border-color: var(--ui-focus);
+  box-shadow: var(--ui-focus-ring);
 }
 
-.demand-info-stops {
-  margin-top: 4px;
-  padding-left: 2px;
+.config-group input[type="checkbox"],
+.config-group input[type="radio"] {
+  accent-color: var(--ui-accent);
 }
 
-.demand-info-stop {
-  font-size: 11px;
-  color: #10b981;
-  line-height: 1.5;
+/* Zwei Felder nebeneinander */
+.config-group-inline {
+  display: flex;
+  gap: 12px;
 }
-
-.demand-info-stop span {
-  color: #888;
+.config-field-half {
+  flex: 1;
+  min-width: 0;
+}
+.config-field-half input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .config-field-inline {
@@ -417,400 +492,88 @@ html, body {
   gap: 6px;
   margin-top: 8px;
   font-size: 12px;
-  color: #444;
+  color: var(--ui-text);
 }
-
-.config-field-inline input[type="number"] {
-  width: 56px;
+.config-field-inline label {
   margin: 0;
-}
-
-.demand-info-warn {
-  margin-top: 4px;
-  color: #b45309;
-  font-size: 11px;
-}
-
-/* Legende der Datenlayer (Schulen, Haltestellen) — nur sichtbar wenn Layer aktiv */
-.layer-legend {
-  margin: 2px 0 8px 40px;
-  font-size: 12px;
-  color: #555;
-}
-
-.layer-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  line-height: 1.6;
-}
-
-.layer-legend-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-/* Fortschrittsanzeige während der Routen-Berechnung */
-.route-progress {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border-radius: 16px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  z-index: 1500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-}
-
-/* MapLibre-Popups als kompakte Tooltips (Route/Aggregation/Ziel/Einwohner) */
-.route-distance-tooltip .maplibregl-popup-content,
-.aggregated-route-tooltip .maplibregl-popup-content,
-.target-tooltip .maplibregl-popup-content,
-.population-tooltip .maplibregl-popup-content {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  white-space: nowrap;
-}
-.route-distance-tooltip .maplibregl-popup-tip,
-.aggregated-route-tooltip .maplibregl-popup-tip,
-.target-tooltip .maplibregl-popup-tip,
-.population-tooltip .maplibregl-popup-tip {
-  border-top-color: rgba(0, 0, 0, 0.8);
-}
-
-/* Klick-Popups (Haltestellen, Schulen) */
-.platform-popup .maplibregl-popup-content,
-.school-popup .maplibregl-popup-content {
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-/* Einwohner-Layer: Legende / Colormap (nur sichtbar wenn Layer aktiv) */
-.population-legend {
-  display: none;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #eee;
-}
-.population-legend-bar {
-  display: flex;
-  height: 12px;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-.population-legend-segment {
-  flex: 1;
-  min-width: 0;
-}
-.population-legend-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #666;
-}
-.population-legend-tick {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-}
-
-/* ============================================
-   LAYOUT - PANEL
-   ============================================ */
-
-.panel {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: white;
-  padding: 0;
-  z-index: 1000;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.15);
-  font: 14px/1.3 system-ui;
-  min-width: 270px;
-  max-width: 360px;
-  max-height: calc(100vh - 35px);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.panel-header {
-  padding: 15px 20px 15px 15px;
-  border-bottom: 1px solid #eee;
-  position: relative;
-}
-
-.panel-header h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-/* Panel Collapse Button */
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-  transition: color 0.2s ease;
-  flex-shrink: 0;
-}
-
-.btn-close:hover {
-  color: #333;
-}
-
-.btn-close:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-.btn-close svg {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.2s ease;
-}
-
-/* Basis-Pfeil-Logik */
-.toggle-arrow {
-  display: inline-block;
-  transform: rotate(0deg);
-  transition: transform 0.2s ease;
-}
-
-.panel.collapsed .toggle-arrow {
-  transform: rotate(90deg);
-}
-
-/* Panel Collapsed State */
-.panel.collapsed .panel-section {
-  display: none;
-}
-
-.panel.collapsed {
-  max-height: none;
-  overflow: visible;
-}
-
-/* Hinweis wenn noch kein Ziel gesetzt (Workflow) – verschwindet, sobald ein Ziel gesetzt ist */
-.panel-hint {
-  margin-top: 12px;
-  padding: 14px 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #333;
-  border-radius: 8px;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-}
-.panel-hint--no-target {
-  background: #e8eeff;
-  border: 2px solid #0066ff;
-  box-shadow: 0 2px 8px rgba(0, 102, 255, 0.12);
-}
-.panel-hint-main {
-  margin: 0 0 10px 0;
   font-weight: 500;
+  color: var(--ui-text);
 }
-.panel-hint-main:last-child {
-  margin-bottom: 0;
-}
-.panel-hint-main strong {
-  color: #0047ab;
-}
-.panel-hint-secondary {
+.config-field-inline input[type="number"] {
+  width: 60px;
   margin: 0;
-  padding-top: 10px;
-  border-top: 1px solid rgba(0, 102, 255, 0.25);
-  font-size: 12px;
-  color: #555;
-  line-height: 1.45;
-}
-.panel-hint.is-hidden {
-  display: none;
 }
 
-.panel-section {
-  padding: 15px 20px 15px 15px;
-}
-
-/* Konfiguration in Blöcke gegliedert */
-.config-block {
-  margin-top: 16px;
-  padding: 12px 0;
-  border-top: 1px solid #eee;
-}
-.config-block:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
-.config-block-title {
-  margin: 0 0 10px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-/* Inhalt unter Blocktitel optisch eingerückt */
-.config-block > .config-group,
-.config-block > .config-group-inline,
-.config-block > .legend {
-  padding-left: 14px;
-  border-left: 2px solid #e8ecf2;
-  margin-left: 0;
-}
-.config-block > .config-group:first-of-type,
-.config-block > .config-group-inline:first-of-type {
-  margin-top: 0;
-}
-
-.config-group-export {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
-}
-
-.config-separator {
-  height: 1px;
-  background: #eee;
-  margin: 12px 15px;
-}
-
-/* GitHub Links */
-.github-links {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #eee;
-}
-
-.status-badge {
-  height: 20px;
-  display: block;
-}
-
-.github-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #666;
-  text-decoration: none;
-  font-size: 12px;
-  transition: color 0.2s ease;
-  padding: 4px;
-}
-
-.github-link:hover {
-  color: #333;
-}
-
-.github-link svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.panel-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* ============================================
-   CONFIG GROUPS & FORM ELEMENTS
-   ============================================ */
-
-.config-group {
-  margin-bottom: 12px;
-}
-
-.config-group:last-child {
-  margin-bottom: 0;
-}
-
-.config-group-with-border {
-  padding-top: 12px;
-  border-top: 1px solid #eee;
-  margin-top: 12px;
-}
-
-/* Zeile mit Label + Info-Icon (z. B. Quellenangabe Einwohner) */
+/* Zeile mit Label + ⓘ */
 .config-group-label-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
-.config-group-label-row .config-group-label {
+.config-group-label-row .config-group-label,
+.config-group-label-row label {
   margin-bottom: 0;
-  font-weight: 500;
-  font-size: 13px;
-  color: #555;
 }
+.config-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+
+.config-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ui-text-muted);
+}
+
+/* ───── ⓘ als CSS-Badge (kein Unicode-Glyph: fehlt in vielen System-Schriften) ───── */
 .info-hint {
   position: relative;
   display: inline-flex;
+  flex: none;
   cursor: help;
-  color: #888;
-  flex-shrink: 0;
+  color: var(--ui-text-muted);
 }
 .info-hint-icon {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 8.5px;
+  font-weight: 600;
+  font-style: normal;
   line-height: 1;
+  user-select: none;
 }
 .info-hint:hover {
-  color: #555;
+  color: var(--ui-text);
 }
+/* Tooltip im Stil des gemeinsamen Unfallkarte-Tooltips (dunkel, 11.5 px).
+   position:fixed, damit das scrollende Panel ihn nicht abschneidet — die
+   Koordinaten setzt src/ui/info-hints.js beim Hovern. */
 .info-hint-text {
-  /* fixed statt absolute: das Panel scrollt (overflow) und würde den Tooltip
-     an seiner Kante abschneiden. Die Koordinaten setzt ui/info-hints.js beim
-     Hovern anhand der Icon-Position (mit Viewport-Klemmung). */
   position: fixed;
   left: 0;
   top: 0;
-  width: max(260px, min(320px, 90vw));
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: normal;
-  line-height: 1.4;
-  color: #333;
-  background: #fff;
-  border: 1px solid #ddd;
+  z-index: 3000;
+  box-sizing: border-box;
+  width: max(240px, min(300px, 90vw));
+  padding: 7px 10px;
+  font: 400 11.5px/1.4 var(--ui-font);
+  color: #fff;
+  background: var(--ui-tooltip);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
   white-space: normal;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.15s, visibility 0.15s;
-  z-index: 2000;
+  transition: opacity 80ms ease, visibility 80ms ease;
   pointer-events: none;
 }
 .info-hint:hover .info-hint-text {
@@ -818,329 +581,352 @@ html, body {
   visibility: visible;
 }
 
-.config-group label {
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 500;
-  font-size: 12px;
-  color: #555;
-}
-
-.config-group input,
-.config-group select {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.config-group input:focus,
-.config-group select:focus {
-  outline: none;
-  border-color: #0066ff;
-  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1);
-}
-
-/* Inline config group für nebeneinander liegende Felder */
-.config-group-inline {
-  display: flex;
-  gap: 12px;
-}
-
-.config-field-half {
-  flex: 1;
-  min-width: 0; /* Verhindert Overflow */
-}
-
-.config-field-half input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* ============================================
-   BUTTONS - PROFILE
-   ============================================ */
-
-.profile-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.profile-btn {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 14px;
-}
-
-.profile-btn:hover {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.profile-btn:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-}
-
-.profile-btn.active {
-  border-color: #0066ff;
-  background: #0066ff;
-  color: white;
-}
-
-.profile-btn svg {
-  display: block;
-}
-
-/* ============================================
-   BUTTONS - DISTRIBUTION
-   ============================================ */
-
-.distribution-buttons {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.dist-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 12px;
-}
-
-.dist-btn:hover {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.dist-btn:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-}
-
-.dist-btn.active {
-  border-color: #0066ff;
-  background: #0066ff;
-  color: white;
-}
-
-.dist-btn svg {
-  display: block;
-}
-
-/* ============================================
-   HISTOGRAM
-   ============================================ */
-
-.histogram-mode-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.histogram-mode-label {
-  font-size: 13px;
-  color: #444;
-  flex-shrink: 0;
-}
-
-.histogram-mode-buttons {
-  display: flex;
-  gap: 4px;
-}
-
-.histogram-mode-btn {
-  flex: 1;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  color: #555;
-  cursor: pointer;
-}
-
-.histogram-mode-btn:hover {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.histogram-mode-btn:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-}
-
-.histogram-mode-btn.active {
-  border-color: #0066ff;
-  background: #0066ff;
-  color: white;
-}
-
-.histogram-mode-btn[data-mode="route"].active {
-  border-color: #0a7d3a;
-  background: #0a7d3a;
-}
-
-#distance-histogram {
-  width: 100%;
-  height: 120px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: #f9f9f9;
-}
-
-/* ============================================
-   SWITCHES / TOGGLES
-   ============================================ */
-
+/* ───── Schalter (wie .switch der Unfallkarte) ───── */
 .switch-toggle {
   position: relative;
   margin-bottom: 0;
 }
-
-.switch-toggle label {
-  cursor: pointer;
-  margin: 0;
-  padding: 0;
+.switch-toggle + .switch-toggle {
+  margin-top: 8px;
+}
+.config-group .switch-toggle label {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 500;
 }
-
 .switch-toggle input[type="checkbox"] {
   position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
 }
-
 .switch-slider {
   position: relative;
   display: inline-block;
+  flex: none;
   width: 40px;
-  height: 20px;
-  background-color: #ccc;
-  border-radius: 20px;
-  transition: background-color 0.3s;
-  flex-shrink: 0;
+  height: 22px;
+  background: #cbd5e1;
+  border-radius: 22px;
+  transition: background-color 0.2s;
 }
-
 .switch-slider::before {
   content: "";
   position: absolute;
-  height: 14px;
-  width: 14px;
   left: 3px;
   bottom: 3px;
-  background-color: white;
+  width: 16px;
+  height: 16px;
+  background: #fff;
   border-radius: 50%;
-  transition: transform 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
 }
-
 .switch-toggle input[type="checkbox"]:checked + .switch-slider {
-  background-color: #0066ff;
+  background: var(--ui-accent);
 }
-
 .switch-toggle input[type="checkbox"]:checked + .switch-slider::before {
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
-
 .switch-toggle input[type="checkbox"]:focus-visible + .switch-slider {
-  box-shadow: 0 0 0 2px #0066ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
 }
-
 .switch-toggle label .switch-icon {
   display: block;
-  flex-shrink: 0;
+  flex: none;
   opacity: 0.7;
 }
-
 .switch-text {
-  font-size: 14px;
-  color: #333;
-  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
-  white-space: nowrap;
+  color: var(--ui-text);
+  user-select: none;
 }
 
-/* Kleinerer Switch für "Startpunkte ausblenden" */
 .switch-toggle-small .switch-slider {
   width: 32px;
-  height: 16px;
+  height: 18px;
 }
-
 .switch-toggle-small .switch-slider::before {
-  height: 12px;
   width: 12px;
-  left: 2px;
-  bottom: 2px;
+  height: 12px;
 }
-
 .switch-toggle-small input[type="checkbox"]:checked + .switch-slider::before {
-  transform: translateX(16px);
+  transform: translateX(14px);
 }
-
 .switch-toggle-small .switch-text {
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
-/* ============================================
-   LEGEND & COLORMAP
-   ============================================ */
-
-.legend {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
+/* ───── Schieberegler (wie die Kontext-Regler der Unfallkarte) ───── */
+.panel input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 7px;
+  margin: 8px 0 4px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+}
+.panel input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--ui-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.panel input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--ui-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.panel input[type="range"]:focus-visible {
+  box-shadow: var(--ui-focus-ring);
 }
 
-.legend-title {
-  font-size: 11px;
+/* ═══════════════════════════ Auswahl-Knöpfe ═══════════════════════════ */
+
+/* Profile: Kacheln wie die Basemap-Auswahl der Unfallkarte */
+.profile-buttons {
+  display: flex;
+  gap: 8px;
+}
+.profile-btn {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--ui-field);
+  color: #4b5563;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.profile-btn:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text-strong);
+}
+.profile-btn.active {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+.profile-btn:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.profile-btn svg {
+  display: block;
+}
+.profile-beta-tag {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: #b45309;
+  pointer-events: none;
+}
+
+/* Chips: Längenverteilung, Histogramm-Modus, Nachfrage-Basis, Infrastruktur-Leiste
+   (wie .legend-chip der Unfallkarte; Auswahl = Akzentrand + zartes Blau) */
+.distribution-buttons,
+.demand-basis-buttons,
+.histogram-mode-buttons {
+  display: flex;
+  gap: 6px;
+}
+.distribution-buttons {
+  margin-bottom: 10px;
+}
+.demand-basis-buttons {
+  margin-top: 2px;
+}
+
+.dist-btn,
+.demand-basis-btn,
+.histogram-mode-btn,
+.infra-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.dist-btn:hover,
+.demand-basis-btn:hover,
+.histogram-mode-btn:hover,
+.infra-btn:hover:not(:disabled) {
+  border-color: #c3c8d0;
+  color: var(--ui-text-strong);
+}
+.dist-btn.active,
+.demand-basis-btn.active,
+.histogram-mode-btn.active,
+.infra-btn.active {
+  border-color: var(--ui-accent);
+  background: var(--ui-chip-active);
+  color: var(--ui-accent);
   font-weight: 600;
-  color: #666;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+}
+.dist-btn:focus-visible,
+.demand-basis-btn:focus-visible,
+.histogram-mode-btn:focus-visible,
+.infra-btn:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
 }
 
+.dist-btn {
+  flex: 1;
+  padding: 6px 8px;
+}
+.dist-btn svg {
+  display: block;
+}
+.demand-basis-btn {
+  flex: 1;
+}
+
+/* Routenlänge = Grün wie die Balken im Histogramm */
+.histogram-mode-btn[data-mode="route"].active {
+  border-color: #0a7d3a;
+  background: rgba(10, 125, 58, 0.12);
+  color: #0a7d3a;
+}
+
+/* ───── Aktions-Knöpfe ───── */
+/* Sekundär (Export, Zurücksetzen): neutral umrandet; Primär (.btn-primary): Akzent gefüllt
+   — wie .export-load / .export-format im Export-Dialog der Unfallkarte. */
+.export-button,
+.analysis-btn {
+  width: 100%;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.export-button:hover:not(:disabled),
+.analysis-btn:hover:not(:disabled) {
+  background: var(--ui-hover);
+}
+.export-button:focus-visible,
+.analysis-btn:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.export-button:disabled,
+.analysis-btn:disabled {
+  color: var(--ui-text-muted);
+  background: var(--ui-hover);
+  cursor: not-allowed;
+}
+#analysis-draw-btn:not(:disabled) {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+}
+.btn-primary,
+.export-button.btn-primary {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled),
+.export-button.btn-primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.config-group-export {
+  margin-top: 0;
+}
+
+/* ═══════════════════════════ Histogramm & Legenden ═══════════════════════════ */
+
+.histogram-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.histogram-mode-label {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+
+#distance-histogram {
+  display: block;
+  width: 100%;
+  height: 120px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-field);
+}
+
+/* Colormap-Legende (Färben nach Anzahl) und Infrastruktur-Legenden */
+.legend {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-divider);
+}
+.legend + .config-group,
+.infra-legend + .config-group {
+  margin-top: 12px;
+}
+.legend-title {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #374151;
+}
 .legend-gradient {
   margin-bottom: 4px;
 }
-
 .legend-gradient-bar {
-  height: 20px;
+  height: 14px;
   width: 100%;
-  border-radius: 4px;
-  background: linear-gradient(to right, 
+  border-radius: 999px;
+  background: linear-gradient(to right,
     rgb(253, 231, 37) 0%,
     rgb(181, 222, 43) 11.11%,
     rgb(110, 206, 88) 22.22%,
@@ -1150,622 +936,426 @@ html, body {
     rgb(49, 104, 142) 66.67%,
     rgb(62, 73, 137) 77.78%,
     rgb(72, 40, 120) 88.89%,
-    rgb(68, 1, 84) 100%
-  );
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s;
+    rgb(68, 1, 84) 100%);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
 }
-
 .legend-gradient-bar:hover {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(0, 102, 255, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
-
 .legend-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  color: #888;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--ui-text-muted);
 }
 
-/* Colormap Preview */
 .colormap-preview-container {
   display: none;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
-
 .colormap-preview-container.show {
   display: grid;
 }
-
 .colormap-preview {
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--ui-field);
   cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  padding: 2px;
-  transition: all 0.2s;
+  transition: border-color 0.15s, background-color 0.15s;
 }
-
 .colormap-preview:hover {
-  border-color: #0066ff;
-  transform: translateY(-1px);
+  background: var(--ui-hover);
 }
-
 .colormap-preview.active {
-  border-color: #0066ff;
-  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
 }
-
 .colormap-preview-bar {
+  height: 12px;
+  width: 100%;
+  border-radius: 999px;
+}
+
+/* Einwohner-Layer: Farbskala (nur sichtbar, wenn der Layer an ist) */
+.population-legend {
+  display: none;
+  margin: 8px 0 4px;
+}
+.population-legend-bar {
+  display: flex;
+  height: 10px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.population-legend-segment {
+  flex: 1;
+  min-width: 0;
+}
+.population-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ui-text-muted);
+}
+.population-legend-tick {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+/* Legenden der Datenlayer (Schulen, Haltestellen) */
+.layer-legend {
+  margin: 4px 0 10px 42px;
+  font-size: 12px;
+  color: var(--ui-text);
+}
+.layer-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.7;
+}
+.layer-legend-icon {
+  flex: none;
+  width: 16px;
   height: 16px;
-  width: 100%;
-  border-radius: 2px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* ============================================
-   EXPORT BUTTON (sekundäre Aktion)
-   ============================================ */
+/* ═══════════════════════════ Infokästen ═══════════════════════════ */
 
-.export-button {
-  width: 100%;
-  padding: 10px 16px;
-  background: transparent;
-  color: #555;
-  border: 1px solid #888;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+/* Beta-/Experimentell-Hinweise: zartes Amber wie der Zoom-Hinweis der Unfallkarte */
+.beta-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ui-amber-text);
+  background: var(--ui-amber-bg);
+  border: 1px solid var(--ui-amber-border);
+  border-radius: 10px;
+}
+.beta-hint a {
+  color: #92400e;
+}
+.beta-hint + .config-group {
+  margin-top: 10px;
 }
 
-.export-button:hover:not(:disabled) {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
+.demand-info {
+  margin-top: 10px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-divider);
+  border-radius: 10px;
+}
+.demand-info-sub {
+  font-size: 11.5px;
+  color: var(--ui-text-muted);
+}
+.demand-info-stops {
+  margin-top: 4px;
+  padding-left: 2px;
+}
+.demand-info-stop {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #047857;
+}
+.demand-info-stop span {
+  color: var(--ui-text-muted);
+}
+.demand-info-warn {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: #b45309;
 }
 
-.export-button:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-}
-
-.export-button:disabled {
-  background: #f5f5f5;
-  border-color: #ddd;
-  color: #999;
-  cursor: not-allowed;
-}
-
-/* ============================================
-   TARGETS LIST
-   ============================================ */
+/* ═══════════════════════════ Zielpunkt-Liste ═══════════════════════════ */
 
 .targets-list {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 8px;
-  background: #f9f9f9;
+  padding: 6px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
 }
-
 .target-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
   margin-bottom: 4px;
-  background: white;
-  border-radius: 4px;
-  font-size: 13px;
-  border: 1px solid #eee;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-divider);
+  border-radius: 8px;
 }
-
 .target-item:last-child {
   margin-bottom: 0;
 }
-
 .target-item-label {
-  font-weight: 500;
-  color: #333;
   flex: 0 0 auto;
   margin-right: 8px;
+  font-weight: 600;
+  color: var(--ui-text-strong);
 }
-
 .target-item-coords {
   flex: 1;
-  color: #666;
   font-size: 11px;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-align: right;
+  color: var(--ui-text-muted);
 }
-
 .target-item-buttons {
   display: flex;
-  gap: 4px;
   flex: 0 0 auto;
+  gap: 4px;
   margin-left: 8px;
 }
-
-.target-item-edit {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  transition: background-color 0.2s;
+.target-item-edit,
+.target-item-remove {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  font-size: 11px;
   line-height: 1;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
 }
-
+.target-item-edit {
+  color: var(--ui-accent);
+}
 .target-item-edit:hover {
-  background: #2563eb;
+  background: var(--ui-accent-soft);
 }
-
 .target-item-edit svg {
   width: 12px;
   height: 12px;
 }
-
 .target-item-remove {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  transition: background-color 0.2s;
+  color: #dc2626;
 }
-
 .target-item-remove:hover {
-  background: #dc2626;
+  background: #fef2f2;
 }
-
 .target-item-highlighted {
-  border: 2px solid #ef4444 !important;
+  border-color: #ef4444 !important;
   background: #fff5f5 !important;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
 }
-
 .target-item-selected {
-  border: 2px solid #3b82f6 !important;
-  background: #eff6ff !important;
+  border-color: var(--ui-accent) !important;
+  background: var(--ui-accent-soft) !important;
 }
 
-/* ============================================
-   TOOLTIPS
-   ============================================ */
-
-.route-distance-tooltip {
-  font-size: 12px;
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-
-.aggregated-route-tooltip {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* ============================================
-   CONTEXT MENU
-   ============================================ */
-
-.context-menu {
-  position: fixed;
-  background: #2d2d2d;
-  border: 1px solid #1a1a1a;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  padding: 6px 0;
-  z-index: 2000;
-  min-width: 220px;
-  font-size: 14px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  display: none;
-}
-
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-  cursor: pointer;
-  color: #e0e0e0;
-  text-decoration: none;
-  transition: all 0.2s;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.context-menu-item:hover {
-  background-color: #3d3d3d;
-  color: #ffffff;
-}
-
-.context-menu-item svg {
-  flex-shrink: 0;
-  display: block;
-}
-
-.context-menu-item span {
-  flex: 1;
-  line-height: 1.4;
-}
-
-.context-menu-separator {
-  height: 1px;
-  background-color: #404040;
-  margin: 6px 0;
-}
-
-/* ============================================
-   TARGET TOOLTIP
-   ============================================ */
-
-.target-tooltip {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-}
-
-/* Target Marker Highlighting */
+/* Marker-Hervorhebung auf der Karte */
 .target-marker-highlighted {
   filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
   transform: scale(1.15);
   transition: transform 0.2s ease, filter 0.2s ease;
   z-index: 1000 !important;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
-
 .target-marker-selected {
-  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
+  filter: drop-shadow(0 0 6px rgba(29, 78, 216, 0.8)) drop-shadow(0 0 2px rgba(29, 78, 216, 0.6));
   transition: filter 0.2s ease;
 }
 
-/* ============================================
-   GEOCODER UI (Map Control)
-   ============================================ */
+/* ═══════════════════════════ Gebietsanalyse ═══════════════════════════ */
 
-.geocoder-map-control {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 1000;
-  width: 300px;
-  max-width: calc(100vw - 20px);
-}
-
-.geocoder-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #666;
-  pointer-events: none;
-  z-index: 1;
-  flex-shrink: 0;
-}
-
-.geocoder-input {
-  width: 100%;
-  padding: 10px 36px 10px 38px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  box-sizing: border-box;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.geocoder-input:focus {
-  outline: none;
-  border-color: #0066ff;
-  box-shadow: 0 2px 12px rgba(0, 102, 255, 0.2);
-}
-
-.geocoder-input:focus + .geocoder-clear ~ .geocoder-icon,
-.geocoder-input:focus ~ .geocoder-icon {
-  color: #0066ff;
-}
-
-.geocoder-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-  transition: color 0.2s;
-  z-index: 1;
-  border-radius: 4px;
-}
-
-.geocoder-clear:hover {
-  color: #333;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.geocoder-clear svg {
-  display: block;
-}
-
-.geocoder-suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  max-height: 400px;
+#analysis-facilities {
+  max-height: 300px;
   overflow-y: auto;
-  z-index: 2000;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
 }
 
-.geocoder-suggestion {
-  padding: 10px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.15s;
-}
-
-.geocoder-suggestion:last-child {
-  border-bottom: none;
-}
-
-.geocoder-suggestion:hover,
-.geocoder-suggestion.highlighted {
-  background-color: #f5f8ff;
-}
-
-.geocoder-suggestion-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 4px;
-  line-height: 1.3;
-}
-
-.geocoder-suggestion-address {
+/* Zweizeilig: Name in voller Breite, darunter Typ-Chip + Wege-Eingabe */
+.analysis-facility {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 6px;
   font-size: 12px;
-  color: #666;
-  margin-bottom: 2px;
-  line-height: 1.3;
 }
-
-.geocoder-suggestion-type {
-  font-size: 11px;
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
+.analysis-facility + .analysis-facility {
+  border-top: 1px solid var(--ui-divider);
 }
-
-/* ============================================
-   MODAL / WARNUNG
-   ============================================ */
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-  backdrop-filter: blur(2px);
+.analysis-facility.is-hovered {
+  background: #fef3c7; /* Hover-Kopplung Panel ↔ Karte (Analyse-Amber) */
 }
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  max-width: 420px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: modalFadeIn 0.2s ease-out;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  font-feature-settings: 'kern' 1, 'liga' 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  border-bottom: 1px solid #eee;
-}
-
-.modal-icon {
-  color: #f59e0b;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  letter-spacing: -0.01em;
-}
-
-.modal-body {
-  padding: 20px 24px;
-  color: #555;
-  line-height: 1.65;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-}
-
-.modal-body p {
-  margin: 0 0 12px 0;
-}
-
-.modal-body p:last-child {
-  margin-bottom: 0;
-}
-
-.modal-body strong {
-  color: #f59e0b;
-  font-weight: 600;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid #eee;
-  justify-content: flex-end;
-}
-
-.modal-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 15px;
-  font-weight: 500;
+.analysis-facility-name {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: break-word;
   cursor: pointer;
-  transition: all 0.2s;
-  min-width: 100px;
-  font-family: inherit;
-  letter-spacing: -0.01em;
+  color: var(--ui-text-strong);
+}
+.analysis-facility-type {
+  justify-self: start;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  color: var(--ui-text-muted);
+  background: var(--ui-hover);
+  border-radius: 999px;
+}
+.analysis-facility .analysis-trips-input {
+  width: 68px;
+  justify-self: end;
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.analysis-facility .analysis-trips-input::-webkit-outer-spin-button,
+.analysis-facility .analysis-trips-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-.modal-btn-primary {
-  background: #0066ff;
-  color: white;
+/* Raumtyp-Zeile über der Split-Tabelle (RegioStaR7 aus den Zensus-Zellen) */
+.analysis-area-context {
+  margin-bottom: 6px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 8px;
+}
+.analysis-inline-btn {
+  padding: 1px 7px;
+  font-size: 11px;
+  color: #92400e;
+  background: #fff;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.analysis-inline-btn:hover {
+  background: #fde68a;
 }
 
-.modal-btn-primary:hover {
-  background: #0052cc;
+/* Modus-Filter der Belastungskarte */
+.analysis-mode-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.analysis-mode-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.config-group .analysis-mode-check {
+  display: flex;
+  margin: 0;
+  font-weight: 500;
+  color: var(--ui-text);
+}
+.analysis-mode-check input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
 }
 
-.modal-btn-secondary {
-  background: #f3f4f6;
-  color: #333;
+#analysis-settings {
+  overflow-x: auto; /* bei Browser-Zoom innen scrollen statt abschneiden */
+}
+.analysis-settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.analysis-settings-table th {
+  padding: 2px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ui-text-muted);
+}
+.analysis-settings-table td {
+  padding: 2px;
+}
+.analysis-settings-table td input {
+  width: 100%;
+  min-width: 36px;
+  padding: 4px 3px;
+  font-size: 11px;
+  text-align: right;
+  border-radius: 6px;
+  /* Spinner aus — mit ihnen sprengen 5 Zahlenspalten die Panelbreite */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.analysis-settings-table td input::-webkit-outer-spin-button,
+.analysis-settings-table td input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.analysis-settings-table td input[data-field="radiusM"] {
+  min-width: 52px;
+}
+.analysis-settings-type {
+  font-size: 11px;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.analysis-split-invalid td {
+  background: #fef2f2;
 }
 
-.modal-btn-secondary:hover {
-  background: #e5e7eb;
-}
-
-/* ============================================
-   INFRASTRUKTUR-ANSICHT (src/ui/infra-controls.js, src/ui/segment-panel.js)
-   ============================================ */
+/* ═══════════════════════════ Infrastruktur-Ansicht ═══════════════════════════ */
 
 .infra-controls {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
-
 .infra-row {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
-
 .infra-row-label {
-  flex: 0 0 82px;
-  padding-top: 4px;
-  font-size: 13px;
-  color: #444;
+  flex: 0 0 84px;
+  padding-top: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
 }
-
 .infra-seg {
   display: flex;
   flex: 1;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
-
 .infra-seg-wrap {
   flex-wrap: wrap;
 }
-
-.infra-btn {
+.infra-seg > .infra-btn {
   flex: 1;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  color: #555;
-  cursor: pointer;
-  white-space: nowrap;
 }
-
-.infra-seg-wrap .infra-btn {
+.infra-seg-wrap > .infra-btn {
   flex: 0 1 auto;
 }
-
-.infra-btn:hover:not(:disabled) {
-  border-color: #0066ff;
-  background: #f5f8ff;
-  color: #0066ff;
-}
-
-.infra-btn:focus-visible {
-  outline: 2px solid #0066ff;
-  outline-offset: 2px;
-}
-
-.infra-btn.active {
-  border-color: #0066ff;
-  background: #0066ff;
-  color: #fff;
-}
-
 .infra-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1776,174 +1366,799 @@ html, body {
   margin: 0 0 6px;
   padding: 0;
 }
-
 .infra-legend-row {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  line-height: 1.7;
-  color: #333;
+  line-height: 1.75;
+  color: var(--ui-text);
 }
-
 .infra-swatch {
   flex: 0 0 22px;
-  height: 6px;
+  height: 5px;
   border-radius: 3px;
 }
-
 .infra-legend-label {
   flex: 1;
 }
-
 .infra-legend-share {
   font-variant-numeric: tabular-nums;
-  color: #666;
+  color: var(--ui-text-muted);
 }
 
-/* Infopanel eines Abschnitts: Karte unten links, am Handy Bottom-Sheet */
+/* ═══════════════════════════ Suche (Photon) ═══════════════════════════ */
+/* Stil wie Unfallkarte/hilo_profiler: Eingabe als Karte mit Lupe, Ergebnisliste darunter. */
+
+.geocoder-map-control {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1001; /* über dem Panel: die Ergebnisliste darf es überdecken */
+  width: 320px;
+  max-width: calc(100vw - 24px);
+}
+
+.geocoder-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--ui-input-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(8px);
+}
+.geocoder-input-wrapper:focus-within {
+  border-color: var(--ui-focus);
+  box-shadow: var(--ui-focus-ring), 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.geocoder-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 38px 11px 40px;
+  font-size: 14px;
+  color: var(--ui-text-strong);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+.geocoder-input::placeholder {
+  color: #64748b;
+}
+
+.geocoder-icon {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.geocoder-clear {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.geocoder-clear:hover {
+  background: #eef2f7;
+}
+.geocoder-clear svg {
+  display: block;
+}
+
+.geocoder-suggestions {
+  margin-top: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--ui-input-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+.geocoder-suggestion {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-input-border);
+  cursor: pointer;
+}
+.geocoder-suggestion:last-child {
+  border-bottom: none;
+}
+.geocoder-suggestion:hover,
+.geocoder-suggestion.highlighted {
+  background: #eef2f7;
+}
+.geocoder-suggestion-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ui-text-strong);
+}
+.geocoder-suggestion-address {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #64748b;
+}
+.geocoder-no-results {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ═══════════════════════════ Karte: Bedienelemente ═══════════════════════════ */
+
+/* Zoom als 44-px-Kacheln unten links (wie Unfallkarte/hilo_profiler) */
+.maplibregl-ctrl-bottom-left {
+  left: 10px;
+  bottom: 10px;
+}
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl {
+  margin: 0;
+}
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 44px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+  background-color: #fff;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow-sm);
+}
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--ui-border);
+}
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: var(--ui-hover);
+}
+
+/* ───── Popups (Haltestellen, Schulen): helle Karte wie die Unfallkarte ───── */
+.maplibregl-popup-content {
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--ui-text-strong);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow);
+}
+.maplibregl-popup-close-button {
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--ui-text-muted);
+  border-radius: 8px;
+}
+.maplibregl-popup-close-button:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text);
+}
+.pop-eyebrow {
+  margin-bottom: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+}
+.pop-title {
+  margin-bottom: 4px;
+  padding-right: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text-strong);
+}
+.pop-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pop-table td {
+  padding: 2px 0;
+  vertical-align: top;
+}
+.pop-table td:first-child {
+  padding-right: 14px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+}
+
+/* ───── Hover-Tooltips (Routen, Aggregation, Ziel, Einwohner): dunkel und knapp ───── */
+.route-distance-tooltip .maplibregl-popup-content,
+.aggregated-route-tooltip .maplibregl-popup-content,
+.target-tooltip .maplibregl-popup-content,
+.population-tooltip .maplibregl-popup-content {
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--ui-tooltip);
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+/* Spitze je nach Ankerseite einfärben (MapLibre wählt den Anker selbst) */
+:is(.route-distance-tooltip, .aggregated-route-tooltip, .target-tooltip, .population-tooltip):is(.maplibregl-popup-anchor-bottom, .maplibregl-popup-anchor-bottom-left, .maplibregl-popup-anchor-bottom-right) .maplibregl-popup-tip {
+  border-top-color: var(--ui-tooltip);
+}
+:is(.route-distance-tooltip, .aggregated-route-tooltip, .target-tooltip, .population-tooltip):is(.maplibregl-popup-anchor-top, .maplibregl-popup-anchor-top-left, .maplibregl-popup-anchor-top-right) .maplibregl-popup-tip {
+  border-bottom-color: var(--ui-tooltip);
+}
+:is(.route-distance-tooltip, .aggregated-route-tooltip, .target-tooltip, .population-tooltip).maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--ui-tooltip);
+}
+:is(.route-distance-tooltip, .aggregated-route-tooltip, .target-tooltip, .population-tooltip).maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--ui-tooltip);
+}
+
+/* ───── Fortschritt während der Routen-Berechnung ───── */
+.route-progress {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 1500;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--ui-tooltip);
+  border-radius: 999px;
+  box-shadow: var(--ui-shadow-sm);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════ Kontextmenü (Rechtsklick) ═══════════════════════════ */
+
+.context-menu {
+  position: fixed;
+  z-index: 2000;
+  display: none;
+  min-width: 220px;
+  padding: 6px;
+  font-size: 13px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow);
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font-weight: 500;
+  color: var(--ui-text);
+  text-decoration: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.context-menu-item:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text-strong);
+}
+.context-menu-item svg {
+  display: block;
+  flex: none;
+}
+.context-menu-item span {
+  flex: 1;
+  line-height: 1.4;
+}
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--ui-divider);
+}
+
+/* ═══════════════════════════ Dialog (viele Routen) ═══════════════════════════ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+}
+.modal-content {
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  animation: modalFadeIn 0.18s ease-out;
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.97) translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px 6px;
+}
+.modal-icon {
+  flex: none;
+  color: #d97706;
+}
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ui-text-strong);
+}
+.modal-body {
+  padding: 6px 18px 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text);
+}
+.modal-body p {
+  margin: 0 0 10px;
+}
+.modal-body p:last-child {
+  margin-bottom: 0;
+}
+.modal-body strong {
+  color: var(--ui-text-strong);
+  font-weight: 700;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
+}
+.modal-btn {
+  min-width: 100px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+}
+.modal-btn-primary {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: #fff;
+}
+.modal-btn-primary:hover {
+  background: #1e40af;
+}
+.modal-btn-secondary {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.modal-btn-secondary:hover {
+  background: var(--ui-hover);
+}
+
+/* ═══════════════════════════ Abschnitts-Infokarte (Infrastruktur) ═══════════════════════════ */
+/* Desktop: Karte unten links neben den Zoom-Kacheln. Handy: über dem Panel-Streifen
+   (Mobile-Query). Aufbau wie die Popups der Unfallkarte: Eyebrow, Titel, Label/Wert. */
+
 .segment-panel {
   position: fixed;
-  left: 56px;
-  bottom: 16px;
-  width: 360px;
-  max-width: calc(100vw - 72px);
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  left: 64px;
+  bottom: 10px;
   z-index: 1100;
-  background: #111827;
-  color: #f9fafb;
-  border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-  font: 14px/1.4 system-ui;
-  padding: 14px 16px 12px;
+  box-sizing: border-box;
+  /* bei mittleren Breiten schmaler, damit die Karte nicht unter das Panel rechts läuft
+     (64 px links + 364 px Panel + 20 px Luft) */
+  width: min(340px, max(260px, calc(100vw - 448px)));
+  max-width: calc(100vw - 74px);
+  max-height: calc(100dvh - 90px);
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
 }
-
 .segment-panel[hidden] {
   display: none;
 }
-
 .segment-panel-head {
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
-
 .segment-swatch {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  margin-top: 4px;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 19px;
   border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
-
 .segment-panel-titles {
   flex: 1;
   min-width: 0;
 }
-
-.segment-panel-title {
-  font-size: 17px;
+.segment-panel-eyebrow {
+  margin-bottom: 2px;
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
 }
-
+.segment-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ui-text-strong);
+}
 .segment-panel-sub {
   margin-top: 2px;
-  font-size: 13px;
-  color: #cbd5e1;
+  font-size: 12px;
+  color: var(--ui-text-muted);
 }
-
 .segment-panel-close {
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 50%;
-  background: #1f2937;
-  color: #f9fafb;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -2px -4px 0 0;
+  padding: 0;
   font-size: 20px;
   line-height: 1;
+  color: var(--ui-text-muted);
+  background: none;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
 }
-
 .segment-panel-close:hover {
-  background: #374151;
+  background: var(--ui-hover);
+  color: var(--ui-text);
 }
-
+.segment-panel-close:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
 .segment-panel-rows {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 6px 14px;
-  margin: 12px 0 10px;
+  gap: 4px 14px;
+  margin: 10px 0 0;
 }
-
 .segment-panel-rows dt {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #94a3b8;
-  padding-top: 2px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
 }
-
 .segment-panel-rows dd {
   margin: 0;
-  font-size: 13px;
+  color: var(--ui-text-strong);
 }
-
 .segment-panel-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-divider);
 }
-
 .segment-panel-links {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
 }
-
 .segment-panel-links a {
-  color: #67e8f9;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  text-decoration: none;
 }
-
+.segment-panel-links a:hover {
+  text-decoration: underline;
+}
 .segment-panel-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-left: auto;
-  font-size: 13px;
-  color: #cbd5e1;
+  font-size: 12px;
+  color: var(--ui-text-muted);
   font-variant-numeric: tabular-nums;
 }
-
 .segment-panel-nav button {
   width: 30px;
   height: 30px;
-  border: none;
-  border-radius: 50%;
-  background: #1f2937;
-  color: #f9fafb;
-  font-size: 18px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
   cursor: pointer;
 }
-
 .segment-panel-nav button:hover {
-  background: #374151;
+  background: var(--ui-hover);
 }
 
+/* ═══════════════════════════ Zeichenleiste (Gebietsanalyse) ═══════════════════════════ */
+/* Oben mittig, solange ein Bereich gezeichnet wird (src/ui/draw-bar.js) — wie die
+   Zeichenleiste der Unfallkarte: Hinweis + Punkt zurück / Abbrechen / Fertig. */
+
+.draw-bar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  z-index: 1200;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 8px 10px 8px 14px;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow-sm);
+}
+.draw-bar[hidden] {
+  display: none;
+}
+.draw-hint {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.draw-hint strong {
+  color: var(--ui-text-strong);
+}
+.draw-actions {
+  display: flex;
+  gap: 6px;
+}
+.draw-actions button {
+  padding: 5px 10px;
+  font: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.draw-actions button:hover:not(:disabled) {
+  background: var(--ui-hover);
+}
+.draw-actions button:disabled {
+  color: var(--ui-text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.draw-actions .draw-done {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: #fff;
+  font-weight: 600;
+}
+.draw-actions .draw-done:hover:not(:disabled) {
+  background: #1e40af;
+}
+.draw-actions .draw-done:disabled {
+  border-color: var(--ui-border);
+  background: var(--ui-hover);
+  color: var(--ui-text-muted);
+}
+
+/* ══════════════════════ Mobile: Panel als Bottom-Sheet ══════════════════════
+   Unter 640 px wandert das Panel an den unteren Rand und wird zum Sheet — zugeklappt
+   bleibt ein Streifen mit Titel und Fußzeile stehen, aufgeklappt deckt es höchstens
+   72 % der Höhe ab. Der INHALT ändert sich nicht, nur die Lage. Die Höhe des Streifens
+   misst src/ui/mobile-layout.js und meldet sie als --panel-peek; daran hängen Zoom-
+   Kacheln, Attribution, Fortschritt und Abschnitts-Infokarte. */
 @media (max-width: 640px) {
-  .segment-panel {
-    left: 0;
+  .panel {
+    top: auto;
     right: 0;
     bottom: 0;
+    left: 0;
     width: auto;
     max-width: none;
-    max-height: 55vh;
-    border-radius: 14px 14px 0 0;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    max-height: 72dvh;
+    padding: 0 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+    overscroll-behavior: contain;
+  }
+
+  /* Titelzeile = Griff der Zieh-Geste: der Browser darf hier nicht selbst scrollen. */
+  .panel-title {
+    margin: 0 -14px;
+    padding: 14px 14px 8px;
+    touch-action: none;
+  }
+  .panel.collapsed .panel-footer {
+    touch-action: none;
+  }
+
+  /* Anfasser-Strich als Affordanz — rein dekorativ */
+  .panel-title::before {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 34px;
+    height: 4px;
+    margin-left: -17px;
+    border-radius: 2px;
+    background: var(--ui-divider);
+  }
+
+  .panel-logo {
+    width: 26px;
+    height: 26px;
+    margin-top: 1px;
+  }
+  .panel-heading {
+    font-size: 18px;
+  }
+  .panel-subtext br {
+    display: none;
+  }
+  .panel-title .toggle-arrow.toggle-root {
+    width: 20px;
+    height: 20px;
+  }
+  /* Zugeklappt fährt das Sheet nach OBEN auf — also zeigt der Pfeil dorthin. */
+  .panel.collapsed .panel-title .toggle-arrow.toggle-root {
+    transform: rotate(180deg);
+  }
+
+  /* Ohne Ziel lädt der Streifen zum Tippen ein — solange der große Hinweis im
+     (zugeklappten) Panel steht. Ohne :has()-Unterstützung bleibt es beim Untertitel. */
+  .panel:has(#no-target-hint:not(.is-hidden)) .panel-subtext-tagline {
+    display: none;
+  }
+  .panel:has(#no-target-hint:not(.is-hidden)) .panel-subtext-cta {
+    display: inline;
+    color: var(--ui-accent);
+    font-weight: 600;
+  }
+
+  .panel-footer {
+    margin-top: 6px;
+  }
+  .fc-stats {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* Chips/Knöpfe brauchen am Finger mehr Fläche */
+  .dist-btn,
+  .demand-basis-btn,
+  .histogram-mode-btn,
+  .infra-btn {
+    padding: 7px 10px;
+  }
+
+  /* Während der Geste schiebt sich das Sheet über die Bedienelemente */
+  .panel.is-dragging {
+    z-index: 1300;
+  }
+
+  /* Bedienelemente sitzen direkt über dem Streifen … */
+  .maplibregl-ctrl-bottom-left {
+    bottom: calc(var(--panel-peek, 110px) + 12px);
+  }
+  .maplibregl-ctrl-bottom-right {
+    bottom: calc(var(--panel-peek, 110px) + 4px);
+  }
+  /* MapLibre rechnet 36 px für den ⓘ-Knopf ein; 74 px = Zoom-Kachel + Ränder */
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib {
+    box-sizing: border-box;
+    max-width: calc(100vw - 74px);
+  }
+  .route-progress {
+    bottom: calc(var(--panel-peek, 110px) + 14px);
+  }
+
+  /* … und verschwinden, solange das Sheet offen ist (es deckt die Karte ohnehin zu). */
+  .panel:not(.collapsed) ~ #map .maplibregl-ctrl-bottom-left {
+    display: none;
+  }
+
+  /* Infokarte über dem Streifen, volle Breite; verdeckt die Zoom-Kacheln → die gehen. */
+  .segment-panel {
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--panel-peek, 110px) + 8px);
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - var(--panel-peek, 110px) - 76px);
+  }
+  body.segment-open .maplibregl-ctrl-bottom-left {
+    display: none;
+  }
+  .panel:not(.collapsed) ~ .segment-panel,
+  .panel.is-dragging ~ .segment-panel {
+    display: none;
+  }
+
+  /* Suche: über die volle Breite statt fester 320 px … */
+  .geocoder-map-control {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+  }
+  /* … und zugeklappt nur ein Lupen-Knopf (Auf-/Zuklappen: src/ui/mobile-layout.js). */
+  .geocoder-map-control.is-collapsed {
+    right: auto;
+    width: 44px;
+  }
+  .geocoder-map-control.is-collapsed .geocoder-input-wrapper {
+    box-sizing: border-box; /* 44 px inkl. Rand — wie die Zoom-Kacheln */
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .geocoder-map-control.is-collapsed .geocoder-input,
+  .geocoder-map-control.is-collapsed .geocoder-clear,
+  .geocoder-map-control.is-collapsed .geocoder-suggestions {
+    display: none !important;
+  }
+  .geocoder-map-control.is-collapsed .geocoder-icon {
+    position: static;
+  }
+  .geocoder-map-control.is-collapsed .geocoder-input-wrapper:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+  }
+
+  /* Zeichenleiste rückt neben den Lupen-Knopf */
+  .draw-bar {
+    left: 62px;
+    right: 8px;
+    width: auto;
+    transform: none;
   }
 }

@@ -18,6 +18,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
 - 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
 - 📤 **Export**: GeoJSON — aggregiert je Kante mit Gesamtsumme (`count`) plus Aufschlüsselung nach Verkehrsmittel (`count_foot`, …) und Quelle (`count_residential`/`count_transit`); einzeln mit `profile` und `startSource` je Route
+- 📱 **Oberfläche im Stil der [Unfallkarte](https://vizsim.de/unfallkarte/)**: Suche oben links, Panel oben rechts unter der Suchzeile (keine Überlappung), Zoom als 44-px-Kacheln unten links; am Handy (≤ 640 px) wird das Panel zum Bottom-Sheet mit Streifen (Titel + Einstellungen in Kurzform, zum Hochziehen) und die Suche zum Lupen-Knopf
 - 🧪 **Gebietsanalyse (experimentell)**: eigener Panel-Tab — Bereich auf der Karte zeichnen, Schulen & Kitas darin finden, Wege/Tag je Einrichtung und Modal Split je Typ annehmen, alle Wege als gewichtete Belastungskarte rechnen (Wege/Tag je Kante, nach Verkehrsmittel filterbar, GeoJSON-Export mit `trips`, `trips_<modus>` und Metadaten); Konzept in [docs/ANALYSE_MODUS_KONZEPT.md](docs/ANALYSE_MODUS_KONZEPT.md)
 
 ## Verwendung
@@ -51,14 +52,15 @@ und deployt über die GitHub Action (`.github/workflows/deploy.yml`).
    - **Kartenebenen**: Einwohner, Schulen & Kindergärten, ÖPNV-Haltestellen
    - **Routendarstellung**: aggregierte Darstellung, Colormap, Punkte ausblenden
    - **Export**: Routen als GeoJSON herunterladen
-4. Über den Tab **Gebietsanalyse** (oben im Panel) lässt sich alternativ ein Bereich zeichnen und für alle Schulen/Kitas darin eine Belastungskarte in Wege/Tag rechnen
+4. Über den Tab **Gebietsanalyse** (oben im Panel) lässt sich alternativ ein Bereich zeichnen und für alle Schulen/Kitas darin eine Belastungskarte in Wege/Tag rechnen — beim Zeichnen führt eine Leiste oben durch die Schritte (Punkt zurück / Abbrechen / Fertig, auch per Rücktaste / Esc / Enter)
+5. Am Handy: Tippen auf den Streifen unten (oder Hochziehen) öffnet das Panel; die Fußzeile zeigt Profil, Routen und Radius auch im zugeklappten Zustand
 
 ## Projektstruktur
 
 ```text
 routing_bulk/
 ├── index.html              # Einstiegspunkt (ein ES-Module-Script)
-├── style.css               # Stylesheet
+├── style.css               # Stylesheet (Designtokens wie die Unfallkarte, Mobile-Query ≤ 640 px)
 ├── vite.config.js          # Vite (base './', MapLibre-Worker)
 ├── package.json            # Scripts + Dependencies (maplibre-gl, pmtiles, pbf)
 ├── .github/workflows/      # GitHub-Pages-Deployment (Vite-Build)
@@ -95,6 +97,8 @@ routing_bulk/
     │   ├── demand-selector.js      # Bereich "Nachfragedetails"
     │   ├── infra-controls.js       # Färben nach / Modus / Merkmal + Legende
     │   ├── segment-panel.js        # Infopanel beim Klick auf ein Segment
+    │   ├── mobile-layout.js        # Auf-/Zuklappen, Bottom-Sheet am Handy, Lupen-Suche, Fußzeile
+    │   ├── draw-bar.js / polygon-draw.js  # Bereich zeichnen (Gebietsanalyse)
     │   ├── info-hints.js           # ⓘ-Tooltips (fixed, Viewport-Klemmung)
     │   ├── targets-list.js / config-helpers.js / distribution-selector.js
     │   └── colormap-selector.js / route-warning.js

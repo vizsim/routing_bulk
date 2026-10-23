@@ -1,5 +1,5 @@
 // ==== Haupt-Orchestrierung (neu strukturiert) ====
-import 'maplibre-gl/dist/maplibre-gl.css';
+// MapLibre-CSS bindet style.css ein (@import am Dateianfang, vor den eigenen Regeln)
 import { CONFIG, isRememberMode } from './core/config.js';
 import { EventBus, Events } from './core/events.js';
 import { State } from './core/state.js';
@@ -16,6 +16,7 @@ import { DemandSelector } from './ui/demand-selector.js';
 import { DistributionSelector } from './ui/distribution-selector.js';
 import { InfraControls } from './ui/infra-controls.js';
 import { initInfoHints } from './ui/info-hints.js';
+import { MobileLayout } from './ui/mobile-layout.js';
 import { RouteWarning } from './ui/route-warning.js';
 import { SegmentPanel } from './ui/segment-panel.js';
 import { TargetsList } from './ui/targets-list.js';
@@ -38,8 +39,9 @@ export const App = {
     // Event-Listener registrieren
     this._registerEventListeners();
     
-    // Panel Collapse Handler
-    this._setupPanelCollapse();
+    // Panel auf-/zuklappen, am Handy Bottom-Sheet + Lupen-Suche (nach Geocoder und
+    // Profil-Knöpfen, deren Zustand die Fußzeile spiegelt)
+    MobileLayout.init();
     
     console.log('App initialisiert');
   },
@@ -820,27 +822,6 @@ export const App = {
       }
     }
   },
-  
-  /**
-   * Richtet Panel-Ein-/Ausklappen ein
-   */
-  _setupPanelCollapse() {
-    const collapseBtn = Utils.getElement('#collapse-panel');
-    const panel = Utils.getElement('#main-panel');
-    const arrow = collapseBtn?.querySelector('svg');
-    
-    if (!collapseBtn || !panel || !arrow) return;
-    
-    // Arrow-Klasse hinzufügen
-    if (arrow) {
-      arrow.classList.add('toggle-arrow');
-    }
-    
-    collapseBtn.addEventListener('click', () => {
-      panel.classList.toggle('collapsed');
-    });
-  },
-  
 };
 
 // ==== Start ====

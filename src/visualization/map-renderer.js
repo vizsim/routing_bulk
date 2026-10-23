@@ -121,14 +121,17 @@ export const MapRenderer = {
       // Ausschnitt beim Laden daraus wieder her (center/zoom oben sind dann nur
       // Fallback ohne Hash). Gleiches Format wie svz/unfallkarte.
       hash: true,
-      attributionControl: { compact: false },
+      // Attribution responsiv (MapLibre-Standard): am Desktop ausgeklappt, unter 640 px
+      // als ⓘ-Knopf über dem Panel-Streifen (src/ui/mobile-layout.js)
+      attributionControl: {},
       dragRotate: false,
       pitchWithRotate: false,
       touchPitch: false
     });
     map.touchZoomRotate.disableRotation();
 
-    // Zoom-Control unten links (wie zuvor)
+    // Zoom unten links, als 44-px-Kacheln gestylt (style.css, wie Unfallkarte);
+    // ohne Kompass, weil Drehen abgeschaltet ist
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-left');
 
     this._map = map;
@@ -336,7 +339,7 @@ export const MapRenderer = {
    * @returns {boolean} true, wenn der Klick verbraucht wurde
    */
   _handleSegmentClick(e) {
-    if (CONFIG.COLOR_BY !== 'infra' || this._aggFeatures.length === 0 || PolygonDraw.isActive()) return false;
+    if (!this._ready || CONFIG.COLOR_BY !== 'infra' || this._aggFeatures.length === 0 || PolygonDraw.isActive()) return false;
     const map = this._map;
     const pad = 6; // px Toleranz, vor allem für Touch
     const box = [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]];
@@ -347,6 +350,8 @@ export const MapRenderer = {
     // oben gezeichnet = höchste Menge (line-sort-key)
     const hit = hits.reduce((best, f) => ((f.properties?.count ?? 0) > (best.properties?.count ?? 0) ? f : best), hits[0]);
     if (hit.id == null) return false;
+    // Die Infokarte zeigt alles, was das Hover-Label sagt — am Touchscreen bliebe es sonst stehen
+    this._hoverPopup?.remove();
     EventBus.emit(Events.SEGMENT_SELECTED, { id: hit.id, lngLat: e.lngLat });
     return true;
   },
@@ -518,9 +523,9 @@ export const MapRenderer = {
       const p = f.properties || {};
       const typ = p.amenity === 'kindergarten' ? 'Kindergarten' : 'Schule';
       const name = p.name || `Unbenannte ${typ === 'Kindergarten' ? 'Einrichtung' : 'Schule'}`;
-      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '250px' })
+      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '260px' })
         .setLngLat(e.lngLat)
-        .setHTML(`<strong>${Utils.escapeHtml(name)}</strong><br>${typ}`)
+        .setHTML(`<div class="pop-eyebrow">${typ}</div><div class="pop-title">${Utils.escapeHtml(name)}</div>`)
         .addTo(this._map);
     };
     ['schools-points', 'schools-polygon-icons', 'schools-fill'].forEach(layerId => {
@@ -586,9 +591,9 @@ export const MapRenderer = {
       if (!f) return;
       const p = f.properties || {};
       const typ = p.amenity === 'kindergarten' ? 'Kindergarten' : 'Schule';
-      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '250px' })
+      new Popup({ closeButton: true, className: 'school-popup', maxWidth: '260px' })
         .setLngLat(e.lngLat)
-        .setHTML(`<strong>${Utils.escapeHtml(p.name || typ)}</strong><br>${typ}`)
+        .setHTML(`<div class="pop-eyebrow">${typ} · Gebietsanalyse</div><div class="pop-title">${Utils.escapeHtml(p.name || typ)}</div>`)
         .addTo(this._map);
     });
     map.on('mousemove', 'analysis-facility-icons', (e) => {
@@ -727,13 +732,21 @@ export const MapRenderer = {
       const f = e.features && e.features[0];
       if (!f) return;
       const p = f.properties || {};
-      let html = `<strong>${esc(p.name || 'Unbenannte Haltestelle')}</strong>`;
-      if (p.network) html += `<br>Netzwerk: ${esc(p.network)}`;
-      if (p.operator) html += `<br>Betreiber: ${esc(p.operator)}`;
-      if (p.tram === 'yes') html += '<br>Straßenbahn: Ja';
-      if (p.bus === 'yes' || p.highway === 'bus_stop') html += '<br>Bus: Ja';
-      if (p.train === 'yes' || p.railway) html += '<br>Bahn: Ja';
-      new Popup({ closeButton: true, className: 'platform-popup', maxWidth: '250px' })
+      // Aufbau wie die Popups der Unfallkarte: Eyebrow, Titel, Label/Wert-Tabelle
+      const rows = [];
+      if (p.network) rows.push(['Netzwerk', p.network]);
+      if (p.operator) rows.push(['Betreiber', p.operator]);
+      const modes = [
+        (p.bus === 'yes' || p.highway === 'bus_stop') && 'Bus',
+        p.tram === 'yes' && 'Straßenbahn',
+        (p.train === 'yes' || p.railway) && 'Bahn'
+      ].filter(Boolean);
+      if (modes.length) rows.push(['Verkehrsmittel', modes.join(' · ')]);
+      let html = `<div class="pop-eyebrow">Haltestelle</div><div class="pop-title">${esc(p.name || 'Unbenannte Haltestelle')}</div>`;
+      if (rows.length) {
+        html += `<table class="pop-table">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
+      }
+      new Popup({ closeButton: true, className: 'platform-popup', maxWidth: '260px' })
         .setLngLat(e.lngLat)
         .setHTML(html)
         .addTo(this._map);

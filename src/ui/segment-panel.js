@@ -2,15 +2,17 @@
 //
 // Öffnet sich im Infrastruktur-Modus beim Klick auf eine Linie
 // (Events.SEGMENT_SELECTED aus MapRenderer). Inhalt aus
-// domain/infra.js#describeSegment; am Handy als Bottom-Sheet, am Desktop als
-// Karte unten links. „‹ x von n ›“ blättert durch die Abschnitte derselben
-// Klasse, sortiert nach Menge. Nach jedem Neuzeichnen wird die Auswahl über
-// den Segment-Schlüssel wiedergefunden (Feature-IDs ändern sich).
+// domain/infra.js#describeSegment; am Desktop als Karte unten links, am Handy
+// über dem Panel-Streifen (style.css, Mobile-Query). „‹ x von n ›“ blättert
+// durch die Abschnitte derselben Klasse, sortiert nach Menge. Nach jedem
+// Neuzeichnen wird die Auswahl über den Segment-Schlüssel wiedergefunden
+// (Feature-IDs ändern sich).
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
-import { describeSegment } from '../domain/infra.js';
+import { INFRA_ATTRS, INFRA_MODES, describeSegment } from '../domain/infra.js';
 import { MapRenderer } from '../visualization/map-renderer.js';
+import { MobileLayout } from './mobile-layout.js';
 
 export const SegmentPanel = {
   _el: null,
@@ -69,6 +71,8 @@ export const SegmentPanel = {
     this._selectedId = null;
     MapRenderer.setSelectedSegment(null);
     if (this._el) this._el.hidden = true;
+    // Am Handy überdeckt die Karte die Zoom-Kacheln — die blendet style.css solange aus
+    document.body.classList.remove('segment-open');
   },
 
   /** Wählt ein Segment über seine Feature-ID aus und zeigt das Panel. */
@@ -117,11 +121,21 @@ export const SegmentPanel = {
     if (!map || !seg.coords?.length) return;
     const lats = seg.coords.map(c => c[0]);
     const lngs = seg.coords.map(c => c[1]);
-    const sheet = this._el && !this._el.hidden ? this._el.offsetHeight : 0;
-    const bottom = window.innerWidth <= 640 ? Math.min(sheet + 24, window.innerHeight * 0.6) : 60;
+    const card = this._el && !this._el.hidden ? this._el.offsetHeight : 0;
+    let padding;
+    if (MobileLayout.isMobile()) {
+      // Handy: Suche oben, Streifen + Infokarte unten
+      const bottom = Math.min(MobileLayout.peekHeight() + card + 24, window.innerHeight * 0.7);
+      padding = { top: 64, bottom, left: 40, right: 40 };
+    } else {
+      // Desktop: Infokarte unten links, Panel rechts (sofern aufgeklappt)
+      const panel = document.getElementById('main-panel');
+      const right = panel && !MobileLayout.isCollapsed() ? panel.offsetWidth + 30 : 60;
+      padding = { top: 70, bottom: card + 30, left: 60, right };
+    }
     map.fitBounds(
       [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: { top: 60, bottom, left: 60, right: 60 }, maxZoom: Math.max(map.getZoom(), 16), duration: 500 }
+      { padding, maxZoom: Math.max(map.getZoom(), 16), duration: 500 }
     );
   },
 
@@ -139,10 +153,14 @@ export const SegmentPanel = {
           <button type="button" data-nav="1" aria-label="Nächster Abschnitt dieser Klasse">›</button>
         </div>`
       : '';
+    const mode = INFRA_MODES[this._view.mode]?.longLabel || '';
+    const attr = INFRA_ATTRS[this._view.attr]?.label || '';
+    const eyebrow = [mode, attr].filter(Boolean).join(' · ');
     this._el.innerHTML = `
       <div class="segment-panel-head">
         <span class="segment-swatch" style="background:${esc(d.color)}"></span>
         <div class="segment-panel-titles">
+          <div class="segment-panel-eyebrow">${esc(eyebrow)}</div>
           <div class="segment-panel-title">${esc(d.title)}</div>
           <div class="segment-panel-sub">${esc(d.subtitle)}</div>
         </div>
@@ -154,5 +172,6 @@ export const SegmentPanel = {
         ${nav}
       </div>`;
     this._el.hidden = false;
+    document.body.classList.add('segment-open');
   }
 };

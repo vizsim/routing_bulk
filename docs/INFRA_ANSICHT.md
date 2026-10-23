@@ -12,8 +12,8 @@ Server-Patch `backward_*` wird automatisch genutzt, sobald er deployt ist.
   Transitous-Legs haben keine Infrastruktur-Sicht.
 - **Merkmal**: Führung, Untergrund, Tempo, Licht; für Rad zusätzlich Steigung.
 - **Legende** mit Anteil je Klasse an den Routen-km (Gebietsanalyse: Wege-km/Tag).
-- **Klick auf eine Linie** öffnet das Infopanel (Desktop unten links, Handy als
-  Bottom-Sheet) statt ein neues Ziel zu setzen; daneben klicken setzt weiter
+- **Klick auf eine Linie** öffnet das Infopanel (Desktop unten links, Handy über
+  dem Panel-Streifen; offenes Sheet blendet es aus) statt ein neues Ziel zu setzen; daneben klicken setzt weiter
   Ziele. „‹ x von n ›“ blättert durch die Abschnitte derselben Klasse, sortiert
   nach Menge. Links: OSM-Way, Mapillary (wenn `mapillary_coverage`).
 - **Gebietsanalyse**: dieselbe Leiste im Ergebnis; im Infrastruktur-Modus
@@ -69,9 +69,15 @@ im GraphHopper-Fork: neue Klasse `BackwardDetails`, eine Schleife in
 `backward_<ev>` liefert den Wert, den ein Encoded Value für die Gegenrichtung
 speichert — dieselbe Semantik wie das Präfix `backward_` in Custom Models.
 
-- Kein Reimport: die Werte liegen schon im Graph. Fork bauen, JAR tauschen,
-  Server neu starten.
+- Kein Reimport, sofern der Server schon aus diesem Fork-Stand läuft: die Werte
+  liegen dann im Graph, Fork bauen, JAR tauschen, Server neu starten. Läuft ein
+  anderer Build (z. B. das 11.0-JAR aus `myconfig/`), unterscheiden sich die
+  Storage-Versionen — dann ist ein Reimport nötig. Vorher prüfen, welcher Build
+  auf ghroute läuft.
 - Prüfen: `mvn -pl core -am test -Dtest=BackwardDetailsTest -Dsurefire.failIfNoSpecifiedTests=false`
+  (hier mangels Maven-Zugang mit javac 21 gegen die Fork-Klassen übersetzt; die
+  vier Tests und ein Prüfprogramm mit virtuellen Kanten, zusammengeführten
+  Teilstrecken und `-ea` liefen grün)
 - Der Client braucht keine Änderung; `backward_sidewalk` steht schon in
   `CONFIG.INFRA_DETAILS.foot`.
 

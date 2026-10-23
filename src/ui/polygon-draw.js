@@ -1,8 +1,10 @@
 // ==== Polygon-Draw: Bereich auf der Karte zeichnen (Gebietsanalyse) ====
 //
 // Bewusst ohne Zusatzbibliothek: Klick setzt einen Punkt, Doppelklick oder
-// Enter schließt das Polygon (ab 3 Punkten), Esc bricht ab. Vorschau über
-// eine eigene GeoJSON-Source.
+// Enter schließt das Polygon (ab 3 Punkten), Esc bricht ab, Rücktaste nimmt den
+// letzten Punkt zurück. Dieselben Schritte bietet die Zeichenleiste
+// (src/ui/draw-bar.js) als Knöpfe an — am Handy gibt es weder Doppelklick noch
+// Tastatur. Vorschau über eine eigene GeoJSON-Source.
 import { State } from '../core/state.js';
 
 const SOURCE = 'analysis-polygon';
@@ -66,7 +68,7 @@ export const PolygonDraw = {
 
   /**
    * Startet den Zeichenmodus.
-   * @param {Object} callbacks - { onFinish(polygon), onCancel() }
+   * @param {Object} callbacks - { onFinish(polygon), onCancel(), onChange(nPoints) }
    */
   start(callbacks = {}) {
     const map = State.getMap();
@@ -95,17 +97,29 @@ export const PolygonDraw = {
       this._refresh(map);
       if (callbacks.onCancel) callbacks.onCancel();
     };
+    const changed = () => {
+      this._refresh(map);
+      if (callbacks.onChange) callbacks.onChange(this._points.length);
+    };
     const onClick = (e) => {
       this._points.push([e.lngLat.lat, e.lngLat.lng]);
-      this._refresh(map);
+      changed();
+    };
+    const undo = () => {
+      if (this._points.length === 0) return;
+      this._points.pop();
+      changed();
     };
     const onDblClick = (e) => {
       e.preventDefault();
       finish();
     };
     const onKey = (e) => {
+      // Tippen im Suchfeld o. Ä. ist kein Zeichenbefehl
+      if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
       if (e.key === 'Enter') finish();
       else if (e.key === 'Escape') cancel();
+      else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
     };
     const cleanup = () => {
       this._active = false;
@@ -119,7 +133,27 @@ export const PolygonDraw = {
     map.on('click', onClick);
     map.on('dblclick', onDblClick);
     document.addEventListener('keydown', onKey);
-    this._handlers = { cancel };
+    this._handlers = { cancel, finish, undo };
+    if (callbacks.onChange) callbacks.onChange(0);
+  },
+
+  /** Letzten Punkt zurücknehmen (Zeichenleiste). */
+  undo() {
+    if (this._active) this._handlers?.undo();
+  },
+
+  /** Polygon schließen, sofern ≥ 3 Punkte (Zeichenleiste). */
+  finish() {
+    if (this._active) this._handlers?.finish();
+  },
+
+  /** Zeichnen abbrechen (Zeichenleiste). */
+  cancel() {
+    if (this._active) this._handlers?.cancel();
+  },
+
+  pointCount() {
+    return this._points.length;
   },
 
   isActive() {
