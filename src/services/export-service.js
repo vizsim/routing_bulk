@@ -4,6 +4,7 @@ import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
+import { exportProperties } from '../domain/infra.js';
 import { AggregationService } from './aggregation-service.js';
 import { RouteService } from './route-service.js';
 
@@ -62,6 +63,8 @@ export const ExportService = {
           properties.count_residential = bySource.residential || 0;
           properties.count_transit = bySource.transit || 0;
         }
+        // Infrastruktur je Kante (Klassen, Seiten, Richtungen; siehe docs/INFRA_ANSICHT.md)
+        Object.assign(properties, exportProperties(segment));
         features.push({
           type: 'Feature',
           geometry: {

@@ -14,6 +14,7 @@ import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
 import { Geo } from '../domain/geo.js';
+import { exportProperties } from '../domain/infra.js';
 import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
 import { PopulationService } from './population-service.js';
@@ -441,6 +442,13 @@ export const AnalysisService = {
       for (const mode of MODES) {
         if (seg.byProfile[mode.key]) properties[`trips_${mode.key}`] = rnd1(seg.byProfile[mode.key]);
       }
+      // Infrastruktur je Kante; Richtungszählungen heißen hier trips_ab/trips_ba
+      const { count_ab, count_ba, ...infra } = exportProperties(seg);
+      if (count_ab !== undefined) {
+        properties.trips_ab = rnd1(count_ab);
+        properties.trips_ba = rnd1(count_ba);
+      }
+      Object.assign(properties, infra);
       return {
         type: 'Feature',
         geometry: {

@@ -307,7 +307,8 @@ export const AnalysisPanel = {
         }
         resultEl.innerHTML = html;
       }
-      Utils.getElement('#analysis-filter-group').style.display = result.segments.length ? 'block' : 'none';
+      Utils.getElement('#analysis-infra-controls').style.display = result.segments.length ? 'block' : 'none';
+      this._toggleModeFilter(result.segments.length > 0);
       Utils.getElement('#analysis-export-group').style.display = result.segments.length ? 'block' : 'none';
       Utils.getElement('#analysis-reset-group').style.display = 'block';
     } catch (err) {
@@ -342,6 +343,13 @@ export const AnalysisPanel = {
   _applyModeFilter() {
     const result = AnalysisService.lastResult;
     if (!result || !result.segments.length) return;
+    // Infrastruktur-Ansicht: der Modus kommt aus der Infra-Leiste (Fuß inkl.
+    // ÖPNV-Zubringer | Rad), die Checkboxen gelten nur für „Färben nach Anzahl“
+    if (CONFIG.COLOR_BY === 'infra') {
+      MapRenderer.clearRoutes();
+      RouteRenderer.drawAggregatedRoutes(result.segments, 0, { unit: 'Wege/Tag' });
+      return;
+    }
     const active = [...document.querySelectorAll('#analysis-mode-filter input:checked')]
       .map(i => i.dataset.mode);
     const segments = result.segments
@@ -354,6 +362,21 @@ export const AnalysisPanel = {
     if (segments.length === 0) return;
     const maxCount = Math.max(...segments.map(s => s.count));
     RouteRenderer.drawAggregatedRoutes(segments, maxCount, { unit: 'Wege/Tag' });
+  },
+
+  /**
+   * Infrastruktur-Leiste geändert: Modus-Checkboxen nur bei „Färben nach
+   * Anzahl“ zeigen und die Belastungskarte neu zeichnen.
+   */
+  applyInfraView() {
+    const result = AnalysisService.lastResult;
+    this._toggleModeFilter(!!(result && result.segments.length));
+    this._applyModeFilter();
+  },
+
+  _toggleModeFilter(hasResult) {
+    const group = Utils.getElement('#analysis-filter-group');
+    if (group) group.style.display = hasResult && CONFIG.COLOR_BY !== 'infra' ? 'block' : 'none';
   },
 
   _setProgress(text) {
@@ -380,6 +403,7 @@ export const AnalysisPanel = {
     AnalysisService.areaContext = null;
     ['#analysis-facilities-group', '#analysis-settings-group', '#analysis-run-group',
      '#analysis-result', '#analysis-area-context', '#analysis-filter-group',
+     '#analysis-infra-controls', '#analysis-infra-legend',
      '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
       const el = Utils.getElement(sel);
       if (el) el.style.display = 'none';

@@ -9,7 +9,16 @@
 // Die früheren geometrischen Methoden (simple/lazyOverlap) wurden entfernt;
 // sie waren Workarounds für das Matching-Problem, das die Kanten-IDs exakt
 // lösen (siehe docs/AGGREGATION_PROBLEM.md).
+//
+// Infrastruktur (docs/INFRA_ANSICHT.md): Jede Kante führt zusätzlich je
+// Laufrichtung Zählung und Path-Detail-Werte (dir.ab / dir.ba). Die Geometrie
+// liegt immer in Schlüsselrichtung a→b; 'ab' heißt "entlang coords". Viele
+// Encoded Values sind richtungsabhängig (sidewalk = Gehweg rechts in
+// Laufrichtung, bicycle_infra, max_speed …), deshalb die Trennung.
 import { API } from '../domain/api.js';
+import { Geo } from '../domain/geo.js';
+
+const newDir = () => ({ count: 0, byProfile: {}, attrs: {} });
 
 export const AggregationService = {
   /**
@@ -27,7 +36,8 @@ export const AggregationService = {
    * (byProfile) und Quelle (bySource: residential/transit) gezählt.
    *
    * @param {Array} items - GH-Responses oder {response, profile?, startSource?}
-   * @returns {Array} - [{coords, count, byProfile, bySource}]
+   * @returns {Array} - [{key, coords, count, byProfile, bySource, edgeId?, lengthM?, dir?}]
+   *   dir = { ab: {count, byProfile, attrs}, ba: {…} } nur für GraphHopper-Kanten
    */
   aggregateRoutes(items) {
     const edgeMap = new Map(); // key -> {count, coords, byProfile, bySource}
@@ -37,7 +47,7 @@ export const AggregationService = {
     const bump = (key, coordsLatLng, profile, source, weight) => {
       let entry = edgeMap.get(key);
       if (!entry) {
-        entry = { count: 0, coords: coordsLatLng, byProfile: {}, bySource: {} };
+        entry = { key, count: 0, coords: coordsLatLng, byProfile: {}, bySource: {} };
         edgeMap.set(key, entry);
       }
       entry.count += weight;
@@ -79,14 +89,37 @@ export const AggregationService = {
         return;
       }
 
+      // Werte der übrigen Path Details je edge_id-Intervall (Infrastruktur)
+      const detailsAt = API.makeDetailCursor(resp.paths[0].details);
+
       for (const [from, to, edgeId] of intervals) {
         if (!(to > from)) continue;
         const slice = coords.slice(from, to + 1);
         const a = `${rnd(slice[0][0])},${rnd(slice[0][1])}`;
         const b = `${rnd(slice[slice.length - 1][0])},${rnd(slice[slice.length - 1][1])}`;
-        const key = a < b ? `${edgeId}:${a}:${b}` : `${edgeId}:${b}:${a}`;
+        // Läuft die Route in Schlüsselrichtung (a→b)? Dann entspricht ihre
+        // Laufrichtung der gespeicherten Geometrie, sonst der Gegenrichtung.
+        const along = a < b;
+        const key = along ? `${edgeId}:${a}:${b}` : `${edgeId}:${b}:${a}`;
 
-        bump(key, slice.map(([lon, lat]) => [lat, lon]), profile, source, weight);
+        const latlng = slice.map(([lon, lat]) => [lat, lon]);
+        if (!along) latlng.reverse(); // Geometrie immer a→b
+        const entry = bump(key, latlng, profile, source, weight);
+
+        if (entry.edgeId === undefined) {
+          entry.edgeId = edgeId;
+          entry.lengthM = Geo.routeLengthMeters(entry.coords);
+          entry.dir = { ab: newDir(), ba: newDir() };
+        }
+        const d = along ? entry.dir.ab : entry.dir.ba;
+        d.count += weight;
+        if (profile) d.byProfile[profile] = (d.byProfile[profile] || 0) + weight;
+        // Werte sind je Kante und Richtung konstant; Fuß- und Rad-Routen
+        // liefern verschiedene Details → zusammenführen, erster Wert gilt
+        const values = detailsAt(from);
+        for (const k in values) {
+          if (!(k in d.attrs) && values[k] !== undefined) d.attrs[k] = values[k];
+        }
       }
     });
 

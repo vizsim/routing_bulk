@@ -23,6 +23,29 @@ export const ColormapUtils = {
     // Gewichtete Kombination
     return linearLevel * (1 - weight) + quantileLevel * weight;
   },
+
+  /**
+   * Wie calculateWeightedLevel, aber mit einmal vorsortierten Counts
+   * (aufsteigend) und binärer Suche — O(log n) statt O(n log n) je Segment.
+   * Liefert exakt dieselben Werte.
+   * @param {number} count
+   * @param {number} minCount
+   * @param {number} maxCount
+   * @param {Array<number>} sortedCounts - aufsteigend sortiert
+   * @param {number} weight
+   * @returns {number}
+   */
+  calculateWeightedLevelSorted(count, minCount, maxCount, sortedCounts, weight = 0.3) {
+    const linearLevel = (count - minCount) / (maxCount - minCount || 1);
+    // erster Index mit sortedCounts[i] >= count (wie findIndex oben)
+    let lo = 0, hi = sortedCounts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sortedCounts[mid] >= count) hi = mid; else lo = mid + 1;
+    }
+    const quantileLevel = lo < sortedCounts.length ? lo / sortedCounts.length : 1.0;
+    return linearLevel * (1 - weight) + quantileLevel * weight;
+  },
   
   /**
    * Gibt eine Farbe aus der Colormap für einen Wert zwischen 0 und 1 zurück

@@ -3,8 +3,10 @@
 // nicht mehr als einzelne Layer. drawRoute liefert eine Feature-ID als Handle;
 // die bestehenden "routePolylines"-Arrays im State speichern diese IDs.
 import { CONFIG } from '../core/config.js';
+import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { API } from '../domain/api.js';
+import { classInfo, formatCount, INFRA_ATTRS, modeCount, resolveView } from '../domain/infra.js';
 import { AggregationService } from '../services/aggregation-service.js';
 import { RouteService } from '../services/route-service.js';
 import { RouteWarning } from '../ui/route-warning.js';
@@ -105,36 +107,68 @@ export const RouteRenderer = {
 
   /**
    * Zeichnet aggregierte Routen (ersetzt den Inhalt des Aggregations-Layers).
+   *
+   * Farbe nach Anzahl (Colormap) oder – bei CONFIG.COLOR_BY = 'infra' – nach
+   * der Infrastruktur-Klasse des gewählten Modus und Merkmals (domain/infra.js).
+   * Die Linienbreite zeigt immer die Menge; im Infrastruktur-Modus die Wege
+   * dieses Modus, Segmente ohne solche Wege entfallen.
+   *
    * @param {Array} aggregatedSegments - Aggregierte Segmente
-   * @param {number} maxCount - Maximale Anzahl für Skalierung
+   * @param {number} maxCount - Maximale Anzahl (Signatur bleibt, Skalierung erfolgt intern)
+   * @param {Object} [options] - { unit: 'Wege/Tag' } (Gebietsanalyse)
    */
   drawAggregatedRoutes(aggregatedSegments, maxCount, options = {}) {
+    // Für Neuzeichnen bei Ansichtswechsel ohne Neuaggregation
+    this._lastAgg = { segments: aggregatedSegments, maxCount, options };
     const unit = options.unit || null; // z.B. 'Wege/Tag' (Gebietsanalyse)
-    // Berechne Min/Max und alle Counts für gewichtete Verteilung
-    const counts = aggregatedSegments.map(seg => seg.count);
-    const minCount = Math.min(...counts);
-    const maxCountValue = Math.max(...counts);
+    const view = resolveView(aggregatedSegments);
+    const infra = view.colorBy === 'infra' && !!view.mode;
+    const attrDef = infra ? INFRA_ATTRS[view.attr] : null;
 
-    const features = aggregatedSegments.map(seg => {
-      // Gewichtete Verteilung: 15% Quantil, 85% linear
-      const weightedLevel = ColormapUtils.calculateWeightedLevel(
-        seg.count,
-        minCount,
-        maxCountValue,
-        counts,
-        0.15
-      );
+    // Menge je Segment: alle Wege bzw. die des gewählten Modus
+    const items = [];
+    for (const seg of aggregatedSegments) {
+      const value = infra ? modeCount(seg.byProfile, view.mode) : seg.count;
+      if (infra && !(value > 0)) continue;
+      items.push({ seg, value });
+    }
+    // Gewichtete Verteilung: 15% Quantil, 85% linear (einmal sortieren)
+    const sorted = items.map(i => i.value).sort((a, b) => a - b);
+    const minCount = sorted.length ? sorted[0] : 0;
+    const maxCountValue = sorted.length ? sorted[sorted.length - 1] : 0;
+
+    const lookup = new Map(); // Feature-ID -> { seg, value, cls }
+    const stats = new Map(); // Klasse -> Weg-km (Legende)
+    const features = items.map(({ seg, value }, id) => {
+      const weightedLevel = ColormapUtils.calculateWeightedLevelSorted(value, minCount, maxCountValue, sorted, 0.15);
+      const countText = unit
+        ? `~${Math.round(value)} ${unit}`
+        : `${value} Route${value !== 1 ? 'n' : ''}`;
+      let color, label, cls = null;
+      let opacity = 0.7 + (weightedLevel * 0.7);
+      if (infra) {
+        cls = attrDef.classify(seg, view.mode);
+        const info = classInfo(view.attr, view.mode, cls);
+        color = info.color;
+        label = `${unit ? countText : formatCount(value)} · ${info.label}`;
+        opacity = 0.85 + (weightedLevel * 0.15); // Klassenfarben brauchen Deckkraft
+        stats.set(cls, (stats.get(cls) || 0) + value * (seg.lengthM || 0) / 1000);
+      } else {
+        color = ColormapUtils.getColorForCount(value, weightedLevel);
+        label = countText;
+      }
+      lookup.set(id, { seg, value, cls });
 
       return {
         type: 'Feature',
+        id,
         properties: {
-          count: seg.count,
+          count: value,
           weight: 2 + (weightedLevel * 10),   // 2-12px
-          opacity: 0.7 + (weightedLevel * 0.7),
-          color: ColormapUtils.getColorForCount(seg.count, weightedLevel),
-          label: unit
-            ? `~${Math.round(seg.count)} ${unit}`
-            : `${seg.count} Route${seg.count !== 1 ? 'n' : ''}`
+          opacity,
+          color,
+          label,
+          cls
         },
         geometry: {
           type: 'LineString',
@@ -143,7 +177,20 @@ export const RouteRenderer = {
       };
     });
 
-    MapRenderer.setAggregatedFeatures(features);
+    MapRenderer.setAggregatedFeatures(features, lookup);
+    EventBus.emit(Events.AGGREGATION_DRAWN, { view, stats, unit, infra });
+  },
+
+  /**
+   * Zeichnet die zuletzt aggregierten Segmente mit der aktuellen Ansicht neu
+   * (Färben nach / Modus / Merkmal / Colormap) — ohne neu zu aggregieren.
+   * @returns {boolean} true, wenn neu gezeichnet wurde
+   */
+  redrawAggregated() {
+    if (!this._lastAgg || !MapRenderer.isAggregatedShown()) return false;
+    const { segments, maxCount, options } = this._lastAgg;
+    this.drawAggregatedRoutes(segments, maxCount, options);
+    return true;
   },
 
   /**

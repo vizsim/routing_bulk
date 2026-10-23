@@ -14,8 +14,10 @@ import { ColormapSelector } from './ui/colormap-selector.js';
 import { toggleAggregationUI, updateBetaHint, updateConfigFromUI } from './ui/config-helpers.js';
 import { DemandSelector } from './ui/demand-selector.js';
 import { DistributionSelector } from './ui/distribution-selector.js';
+import { InfraControls } from './ui/infra-controls.js';
 import { initInfoHints } from './ui/info-hints.js';
 import { RouteWarning } from './ui/route-warning.js';
+import { SegmentPanel } from './ui/segment-panel.js';
 import { TargetsList } from './ui/targets-list.js';
 import { Geocoder } from './utils/geocoder.js';
 import { MapRenderer } from './visualization/map-renderer.js';
@@ -61,6 +63,10 @@ export const App = {
       this._handleGeocoderSelect(lat, lng, suggestion);
     });
     
+    // Infrastruktur-Ansicht: Bedienleiste/Legende und Infopanel
+    InfraControls.init();
+    SegmentPanel.init();
+
     // Initiale Aggregation-UI Sichtbarkeit setzen
     if (typeof toggleAggregationUI === 'function') {
       toggleAggregationUI();
@@ -167,6 +173,20 @@ export const App = {
     EventBus.on(Events.VISUALIZATION_UPDATE, () => {
       if (isRememberMode()) {
         RouteRenderer.drawAllTargetRoutes();
+      } else {
+        // z. B. Colormap-Wechsel: vorhandene Aggregation neu einfärben
+        RouteRenderer.redrawAggregated();
+      }
+    });
+
+    // Infrastruktur-Ansicht geändert (Färben nach / Modus / Merkmal):
+    // neu zeichnen aus den vorhandenen Segmenten, ohne neu zu rechnen
+    EventBus.on(Events.INFRA_VIEW_CHANGED, () => {
+      toggleAggregationUI();
+      if (State.isAnalysisMode()) {
+        AnalysisPanel.applyInfraView();
+      } else {
+        RouteRenderer.redrawAggregated();
       }
     });
     

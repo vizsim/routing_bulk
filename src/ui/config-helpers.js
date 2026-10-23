@@ -74,9 +74,19 @@ export function toggleAggregationUI() {
   const legend = Utils.getElement('#legend');
   const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
   const hideTargetPointsGroup = Utils.getElement('#hide-target-points-group');
+  const infraControls = Utils.getElement('#infra-controls');
+  const infraLegend = Utils.getElement('#infra-legend');
 
+  // Colormap-Legende nur bei „Färben nach Anzahl“; die Infrastruktur-Legende
+  // füllt InfraControls nach dem Zeichnen
   if (legend) {
-    legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+    legend.style.display = CONFIG.AGGREGATED && CONFIG.COLOR_BY !== 'infra' ? 'block' : 'none';
+  }
+  if (infraControls) {
+    infraControls.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+  }
+  if (infraLegend && !CONFIG.AGGREGATED) {
+    infraLegend.style.display = 'none';
   }
   if (hideStartPointsGroup) {
     hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';

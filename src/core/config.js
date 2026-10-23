@@ -23,6 +23,25 @@ export const CONFIG = {
   MAP_CENTER: [52.6858, 14.10078], // [lat, lon]
   MAP_ZOOM: 13,
   AGGREGATED: false, // Aggregierte Darstellung (exakt über GH edge_id, siehe aggregation-service.js)
+
+  // ---- Infrastruktur-Ansicht der aggregierten Darstellung (siehe docs/INFRA_ANSICHT.md) ----
+  // Farbe nach Anzahl (Colormap) oder nach Infrastruktur-Klasse; die Linienbreite
+  // zeigt in beiden Fällen die Menge.
+  COLOR_BY: 'count', // 'count' | 'infra'
+  INFRA_MODE: null, // 'foot' | 'bike' | null = aus Profil bzw. Daten ableiten
+  INFRA_ATTR: 'guidance', // Merkmal: 'guidance' | 'surface' | 'speed' | 'lit' | 'slope'
+  // Path Details je GraphHopper-Profil, zusätzlich zu edge_id. Kennt der Server
+  // ein Detail nicht (HTTP 400 "Cannot find the path details"), lässt
+  // API.fetchRoute es für die Sitzung weg und fragt erneut — so funktioniert
+  // 'backward_sidewalk' automatisch, sobald der Server-Patch läuft, und ohne
+  // Patch fällt es einfach weg.
+  INFRA_DETAILS: {
+    foot: ['sidewalk', 'backward_sidewalk', 'footway', 'road_class', 'max_speed', 'lit', 'crossing',
+           'surface', 'smoothness', 'foot_road_access', 'street_name', 'osm_way_id', 'mapillary_coverage'],
+    bike: ['bicycle_infra', 'cycleway', 'bike_road_access', 'road_class', 'max_speed', 'lanes',
+           'surface', 'smoothness', 'average_slope', 'lit', 'street_name', 'osm_way_id', 'mapillary_coverage'],
+    car: []
+  },
   HIDE_START_POINTS: false, // Startpunkte ausblenden
   HIDE_TARGET_POINTS: false, // Zielpunkte ausblenden
   COLORMAP: "viridis_r", // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"

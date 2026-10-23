@@ -15,6 +15,10 @@ import { CONFIG } from '../core/config.js';
 import { EventBus, Events } from '../core/events.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
+import { PolygonDraw } from '../ui/polygon-draw.js';
+
+// Klickbare Punkt-Layer, die Vorrang vor einem Segment-Klick haben
+const POI_LAYERS = ['analysis-facility-icons', 'schools-points', 'schools-polygon-icons', 'platforms-points', 'platforms-polygon-icons'];
 
 /** Attribution für Einwohner-Layer (Zensus/Destatis), wird in Karten-Attribution eingeblendet wenn Layer aktiv. */
 export const POPULATION_ATTRIBUTION = '© <a href="https://atlas.zensus2022.de/" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis)</a>';
@@ -96,6 +100,9 @@ export const MapRenderer = {
   _routeFeatures: new Map(), // featureId -> GeoJSON-Feature
   _routeIdCounter: 1,
   _aggFeatures: [],
+  _aggLookup: new Map(), // Feature-ID -> { seg, value, cls } (für Klick/Infopanel)
+  _aggShown: false, // zeigt der Aggregations-Layer gerade etwas an?
+  _selectedAggId: null,
 
   _hoverPopup: null,
   _populationHoverHandlers: null,
@@ -138,6 +145,9 @@ export const MapRenderer = {
     });
 
     map.on('click', (e) => {
+      // Infrastruktur-Ansicht: Klick auf ein Segment öffnet das Infopanel
+      // statt ein neues Ziel zu setzen
+      if (this._handleSegmentClick(e)) return;
       EventBus.emit(Events.MAP_CLICK, { latlng: { lat: e.lngLat.lat, lng: e.lngLat.lng } });
     });
 
@@ -171,6 +181,18 @@ export const MapRenderer = {
     const labelLayerId = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     this._labelLayerId = labelLayerId;
     map.addSource('agg-routes', { type: 'geojson', data: this._emptyFC() });
+    // Halo unter dem ausgewählten Segment (Infopanel), sichtbar über feature-state
+    map.addLayer({
+      id: 'agg-lines-selected',
+      type: 'line',
+      source: 'agg-routes',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#111827',
+        'line-width': ['+', ['get', 'weight'], 7],
+        'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.9, 0]
+      }
+    }, labelLayerId);
     map.addLayer({
       id: 'agg-lines',
       type: 'line',
@@ -259,10 +281,74 @@ export const MapRenderer = {
   /**
    * Setzt die aggregierten Segmente (ersetzt den kompletten Layer-Inhalt).
    * @param {Array} features - GeoJSON-Features mit {color, weight, opacity, count, label}
+   *   und numerischer Feature-ID
+   * @param {Map} [lookup] - Feature-ID -> { seg, value, cls } (Klick/Infopanel)
    */
-  setAggregatedFeatures(features) {
+  setAggregatedFeatures(features, lookup = new Map()) {
+    // Feature-IDs werden bei jedem Zeichnen neu vergeben: alten Auswahlzustand
+    // verwerfen, das Infopanel wählt anhand des Segment-Schlüssels neu aus
+    this._clearAggFeatureState();
     this._aggFeatures = features;
+    this._aggLookup = lookup;
+    this._aggShown = true;
     this._refreshAggSource();
+  },
+
+  /** Eintrag { seg, value, cls } zu einer Feature-ID des Aggregations-Layers. */
+  getAggregatedEntry(id) {
+    return this._aggLookup.get(id) || null;
+  },
+
+  /** Alle Einträge des Aggregations-Layers (Feature-ID -> { seg, value, cls }). */
+  getAggregatedEntries() {
+    return this._aggLookup;
+  },
+
+  /** Zeigt der Aggregations-Layer gerade Segmente (auch wenn alle gefiltert sind)? */
+  isAggregatedShown() {
+    return this._aggShown;
+  },
+
+  /**
+   * Hebt ein aggregiertes Segment hervor (null = keins).
+   * @param {number|null} id - Feature-ID
+   */
+  setSelectedSegment(id) {
+    const map = this._ready && this._map;
+    if (!map || !map.getSource('agg-routes')) { this._selectedAggId = id; return; }
+    if (this._selectedAggId != null && this._selectedAggId !== id) {
+      map.setFeatureState({ source: 'agg-routes', id: this._selectedAggId }, { selected: false });
+    }
+    if (id != null) map.setFeatureState({ source: 'agg-routes', id }, { selected: true });
+    this._selectedAggId = id;
+  },
+
+  _clearAggFeatureState() {
+    const map = this._ready && this._map;
+    if (map && map.getSource('agg-routes')) map.removeFeatureState({ source: 'agg-routes' });
+    this._selectedAggId = null;
+  },
+
+  /**
+   * Klick auf ein aggregiertes Segment im Infrastruktur-Modus abfangen.
+   * Punkt-Layer (Schulen, Haltestellen, Einrichtungen) und das Polygon-Zeichnen
+   * der Gebietsanalyse behalten Vorrang.
+   * @returns {boolean} true, wenn der Klick verbraucht wurde
+   */
+  _handleSegmentClick(e) {
+    if (CONFIG.COLOR_BY !== 'infra' || this._aggFeatures.length === 0 || PolygonDraw.isActive()) return false;
+    const map = this._map;
+    const pad = 6; // px Toleranz, vor allem für Touch
+    const box = [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]];
+    const poiLayers = POI_LAYERS.filter(id => map.getLayer(id));
+    if (poiLayers.length && map.queryRenderedFeatures(e.point, { layers: poiLayers }).length) return false;
+    const hits = map.queryRenderedFeatures(box, { layers: ['agg-lines'] });
+    if (hits.length === 0) return false;
+    // oben gezeichnet = höchste Menge (line-sort-key)
+    const hit = hits.reduce((best, f) => ((f.properties?.count ?? 0) > (best.properties?.count ?? 0) ? f : best), hits[0]);
+    if (hit.id == null) return false;
+    EventBus.emit(Events.SEGMENT_SELECTED, { id: hit.id, lngLat: e.lngLat });
+    return true;
   },
 
   /**
@@ -287,9 +373,14 @@ export const MapRenderer = {
    */
   clearRoutes() {
     this._routeFeatures.clear();
+    this._clearAggFeatureState();
     this._aggFeatures = [];
+    this._aggLookup = new Map();
+    const wasShown = this._aggShown;
+    this._aggShown = false;
     this._refreshRouteSource();
     this._refreshAggSource();
+    if (wasShown) EventBus.emit(Events.AGGREGATION_CLEARED);
   },
 
   // Hover-Tooltips für Routen (Routenlänge) und Aggregation (Anzahl Routen)
@@ -313,6 +404,13 @@ export const MapRenderer = {
     map.on('mouseleave', 'routes-line-walk', hide);
     map.on('mousemove', 'agg-lines', show('aggregated-route-tooltip'));
     map.on('mouseleave', 'agg-lines', hide);
+    // Im Infrastruktur-Modus sind Segmente klickbar (Infopanel)
+    map.on('mouseenter', 'agg-lines', () => {
+      if (CONFIG.COLOR_BY === 'infra' && !PolygonDraw.isActive()) map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'agg-lines', () => {
+      if (!PolygonDraw.isActive()) map.getCanvas().style.cursor = '';
+    });
   },
 
   // ---- Layer-Icons & Legenden ----

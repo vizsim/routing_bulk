@@ -13,6 +13,7 @@ Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startp
   Zum Schutz der Community-API: max. 30 Routen, 2 parallele Anfragen, Session-Cache
 - 📈 **Längenverteilung**: Verteilungsfunktionen für die Wohnort-Startpunkte (lognormal, uniform, normal, …) mit Live-Histogramm (Beeline oder echte Routenlänge)
 - 📊 **Exakte Aggregation**: Zählung pro Straßengraph-Kante über GraphHopper-`edge_id` (kein Geometrie-Matching), Farbcodierung über wählbare Colormaps (viridis, plasma, inferno, magma)
+- 🧭 **Infrastruktur-Ansicht** der aggregierten Darstellung: „Färben nach Anzahl | Infrastruktur“, je Modus (Fuß/Rad) und Merkmal (Führung, Untergrund, Tempo, Licht, Steigung) aus GraphHopper-Path-Details (`sidewalk`, `bicycle_infra`, `max_speed` …); Klick auf eine Linie zeigt die Infrastruktur des Abschnitts — Details in [docs/INFRA_ANSICHT.md](docs/INFRA_ANSICHT.md)
 - ⚡ **Schnell**: Requests über Concurrency-Pool, progressives Zeichnen mit Fortschrittsanzeige, Abbruch laufender Berechnungen bei neuem Klick
 - 🏫 **Kartenebenen**: deutschlandweite PMTiles-Layer für Schulen & Kindergärten sowie ÖPNV-Haltestellen (OpenStreetMap) und Einwohnerdichte (Zensus 2022)
 - 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
@@ -31,7 +32,11 @@ Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](htt
 npm install     # einmalig
 npm run dev     # Dev-Server mit Auto-Reload (Vite)
 npm run build   # Produktions-Build nach dist/
+npm test        # Unit-Tests (node --test)
 ```
+
+Ohne eigenen Routing-Server: `node tools/mock-graphhopper.mjs` startet einen
+Mock-GraphHopper auf Port 8989 (siehe [docs/INFRA_ANSICHT.md](docs/INFRA_ANSICHT.md)).
 
 Das Deployment auf GitHub Pages läuft automatisch: Jeder Push auf `main` baut
 und deployt über die GitHub Action (`.github/workflows/deploy.yml`).
@@ -61,11 +66,16 @@ routing_bulk/
 ├── docs/                   # Dokumentation
 │   ├── routing_bulk_review.md      # Review, Plan & Umsetzungsstand
 │   ├── AGGREGATION_PROBLEM.md      # (historisch) Geometrie-Aggregation
+│   ├── INFRA_ANSICHT.md            # Infrastruktur-Ansicht (v1)
 │   └── ...
+│
+├── tests/                  # Unit-Tests (node --test)
+├── tools/                  # mock-graphhopper.mjs (lokaler Test-Server)
 │
 └── src/
     ├── core/               # Konfiguration, State, Event-Bus, Utils
-    ├── domain/             # Geo-Funktionen, Verteilungen, GraphHopper-API
+    ├── domain/             # Geo-Funktionen, Verteilungen, GraphHopper-API,
+    │                       #   infra.js: Infrastruktur-Klassen, Labels, Farben
     ├── services/           # Business-Logik
     │   ├── route-service.js        # Routen-Berechnung (Pool, Abbruch, Profile)
     │   ├── demand-service.js       # Nachfragemodell (Kapazität, unter-18, ÖPNV-Mix)
@@ -83,6 +93,8 @@ routing_bulk/
     ├── ui/                 # Panel-Komponenten
     │   ├── accordion.js            # einklappbare Bereiche (mit localStorage)
     │   ├── demand-selector.js      # Bereich "Nachfragedetails"
+    │   ├── infra-controls.js       # Färben nach / Modus / Merkmal + Legende
+    │   ├── segment-panel.js        # Infopanel beim Klick auf ein Segment
     │   ├── info-hints.js           # ⓘ-Tooltips (fixed, Viewport-Klemmung)
     │   ├── targets-list.js / config-helpers.js / distribution-selector.js
     │   └── colormap-selector.js / route-warning.js

@@ -83,6 +83,12 @@ export const Events = {
   // Visualization Events
   VISUALIZATION_MODE_CHANGED: 'visualization:mode:changed',
   VISUALIZATION_UPDATE: 'visualization:update',
+
+  // Infrastruktur-Ansicht
+  INFRA_VIEW_CHANGED: 'infra:view:changed', // Färben nach / Modus / Merkmal geändert
+  AGGREGATION_DRAWN: 'aggregation:drawn', // aggregierte Linien neu gezeichnet ({ view, stats, unit, infra })
+  AGGREGATION_CLEARED: 'aggregation:cleared', // Aggregations-Layer geleert
+  SEGMENT_SELECTED: 'segment:selected', // Klick auf ein aggregiertes Segment ({ id })
   
   // Export Events
   EXPORT_REQUESTED: 'export:requested',
