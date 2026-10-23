@@ -83,7 +83,8 @@ export function toggleAggregationUI() {
     legend.style.display = CONFIG.AGGREGATED && CONFIG.COLOR_BY !== 'infra' ? 'block' : 'none';
   }
   if (infraControls) {
-    infraControls.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
+    // '' statt 'block': die Leiste ist per CSS ein Flex-Container (Zeilenabstand)
+    infraControls.style.display = CONFIG.AGGREGATED ? '' : 'none';
   }
   if (infraLegend && !CONFIG.AGGREGATED) {
     infraLegend.style.display = 'none';

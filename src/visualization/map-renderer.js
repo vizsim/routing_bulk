@@ -140,11 +140,14 @@ export const MapRenderer = {
     window.__map = map;
     window.__state = State;
 
-    // Wiederverwendetes Hover-Popup (Routen, Aggregation, Einwohner)
+    // Wiederverwendetes Hover-Popup (Routen, Aggregation, Einwohner). Breiter
+    // als MapLibres 240-px-Vorgabe: Infrastruktur-Labels sind lang und brechen
+    // erst darüber um (style.css, Hover-Tooltips).
     this._hoverPopup = new Popup({
       closeButton: false,
       closeOnClick: false,
-      offset: 10
+      offset: 10,
+      maxWidth: '320px'
     });
 
     map.on('click', (e) => {

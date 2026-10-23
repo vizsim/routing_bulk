@@ -1327,7 +1327,8 @@ select {
 .infra-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 16px; /* Abstand zum Schalter „Aggregierte Darstellung“ */
 }
 .infra-row {
   display: flex;
@@ -1349,6 +1350,7 @@ select {
 }
 .infra-seg-wrap {
   flex-wrap: wrap;
+  row-gap: 8px; /* umbrochene Chips (z. B. „Licht“) nicht enger als die Zeilen */
 }
 .infra-seg > .infra-btn {
   flex: 1;
@@ -1595,7 +1597,9 @@ select {
   font-weight: 600;
   line-height: 1.35;
   color: #fff;
-  white-space: nowrap;
+  /* Umbrechen statt nowrap: lange Labels (Infrastruktur-Klassen) liefen sonst
+     über die Box hinaus, deren Breite MapLibre begrenzt (maxWidth im MapRenderer) */
+  white-space: normal;
   background: var(--ui-tooltip);
   border: none;
   border-radius: 6px;

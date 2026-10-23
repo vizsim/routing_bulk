@@ -319,7 +319,8 @@ export const AnalysisPanel = {
         }
         resultEl.innerHTML = html;
       }
-      Utils.getElement('#analysis-infra-controls').style.display = result.segments.length ? 'block' : 'none';
+      // '' statt 'block': die Leiste ist per CSS ein Flex-Container (Zeilenabstand)
+      Utils.getElement('#analysis-infra-controls').style.display = result.segments.length ? '' : 'none';
       this._toggleModeFilter(result.segments.length > 0);
       Utils.getElement('#analysis-export-group').style.display = result.segments.length ? 'block' : 'none';
       Utils.getElement('#analysis-reset-group').style.display = 'block';
