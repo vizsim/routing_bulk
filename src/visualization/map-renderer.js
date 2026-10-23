@@ -86,6 +86,15 @@ const ZOOM_OFFSET = 1;
 /** Ab diesem MapLibre-Zoom tragen auch Flächen (Gelände, Bahnsteige) ein Badge. */
 const POLYGON_ICON_MINZOOM = 13;
 
+// Feature-Farbe ['get', 'color'] mit Weiß gemischt (share = Anteil der Farbe),
+// als MapLibre-Ausdruck. Für Glow und Abdunklung der Infrastruktur-Hervorhebung:
+// deckend statt line-opacity — sonst überblendet MapLibre die überlappenden
+// runden Kappen aneinanderstoßender Segmente doppelt (dunkle Punkte an jedem Übergang).
+function colorMixedWithWhite(share) {
+  const channel = (i) => ['+', ['*', share, ['at', i, ['var', 'c']]], 255 * (1 - share)];
+  return ['let', 'c', ['to-rgba', ['to-color', ['get', 'color']]], ['rgb', channel(0), channel(1), channel(2)]];
+}
+
 /** [lat,lng]-Array oder {lat,lng}-Objekt -> [lng,lat] für MapLibre */
 export function toLngLat(pos) {
   if (Array.isArray(pos)) return [pos[1], pos[0]];
@@ -187,6 +196,20 @@ export const MapRenderer = {
     const labelLayerId = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     this._labelLayerId = labelLayerId;
     map.addSource('agg-routes', { type: 'geojson', data: this._emptyFC() });
+    // Glow unter den Segmenten einer Infrastruktur-Klasse, solange ihr
+    // Legendeneintrag überfahren oder festgehalten ist (setHighlightedClass)
+    map.addLayer({
+      id: 'agg-lines-glow',
+      type: 'line',
+      source: 'agg-routes',
+      filter: ['==', ['get', 'cls'], ''],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': colorMixedWithWhite(0.55),
+        'line-width': ['+', ['get', 'weight'], 10],
+        'line-blur': 2
+      }
+    }, labelLayerId);
     // Halo unter dem ausgewählten Segment (Infopanel), sichtbar über feature-state
     map.addLayer({
       id: 'agg-lines-selected',
@@ -327,6 +350,24 @@ export const MapRenderer = {
     }
     if (id != null) map.setFeatureState({ source: 'agg-routes', id }, { selected: true });
     this._selectedAggId = id;
+  },
+
+  /**
+   * Glow für alle Segmente einer Infrastruktur-Klasse; die übrigen treten
+   * zurück (Legende überfahren/festgehalten). null = keine Hervorhebung.
+   * @param {string|null} cls - Klassen-Schlüssel wie in domain/infra.js
+   */
+  setHighlightedClass(cls) {
+    const map = this._ready && this._map;
+    if (!map || !map.getLayer('agg-lines-glow')) return;
+    const isCls = ['==', ['get', 'cls'], cls || ''];
+    map.setFilter('agg-lines-glow', isCls);
+    // Übrige Segmente blass statt durchscheinend: alles deckend, damit die
+    // Übergänge sauber bleiben (colorMixedWithWhite)
+    map.setPaintProperty('agg-lines', 'line-color', cls
+      ? ['case', isCls, ['get', 'color'], colorMixedWithWhite(0.3)]
+      : ['get', 'color']);
+    map.setPaintProperty('agg-lines', 'line-opacity', cls ? 1 : ['get', 'opacity']);
   },
 
   _clearAggFeatureState() {

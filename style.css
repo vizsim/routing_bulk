@@ -1372,9 +1372,21 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Hover-Fläche etwas breiter als der Inhalt, Ausrichtung bleibt */
+  margin: 0 -6px;
+  padding: 0 6px;
+  border-radius: 6px;
   font-size: 12px;
   line-height: 1.75;
   color: var(--ui-text);
+  cursor: pointer;
+}
+/* Überfahren bzw. festgehalten: Segmente leuchten auf der Karte (MapRenderer.setHighlightedClass) */
+.infra-legend-row:hover {
+  background: var(--ui-hover);
+}
+.infra-legend-row.is-pinned {
+  background: var(--ui-chip-active);
 }
 .infra-swatch {
   flex: 0 0 22px;
