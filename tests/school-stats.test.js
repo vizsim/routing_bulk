@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  landFromAgs, matchFacilities, normalizeSchoolName, officialTypeToFacilityType, osmRefFromProperties
+  applyOfficialSchool, excludeVocational, isVocationalSchool, landFromAgs, matchFacilities,
+  normalizeSchoolName, officialTypeToFacilityType, osmRefFromProperties
 } from '../src/domain/school-stats.js';
 
 test('landFromAgs: Ländercode aus dem Gemeindeschlüssel, auch ohne führende Null', () => {
@@ -64,4 +65,47 @@ test('matchFacilities: einziger Kandidat im Umkreis auch ohne Namensgleichheit, 
   const far = [{ name: 'Lemgo-Grundschule', type: 'grundschule', lat: 52.5020, lon: 13.4000, osmRefs: [] }];
   assert.equal(matchFacilities(near, schools)[0].school.id, 'BE-02G01');
   assert.equal(matchFacilities(far, schools)[0], null);
+});
+
+test('isVocationalSchool: berufliche Schulen an Schulart oder Name', () => {
+  for (const t of ['Oberstufenzentrum', 'Kombinierte berufliche Schule', 'Berufsschule', 'Berufsfachschule',
+    'Fachoberschule', 'Berufskolleg', 'Berufsbildende Schulen II', 'OSZ Banken, Immobilien und Versicherungen']) {
+    assert.equal(isVocationalSchool(t), true, t);
+  }
+  for (const t of ['Grundschule am Arkonaplatz', 'Gymnasium', 'Integrierte Sekundarschule', 'Gemeinschaftsschule', null]) {
+    assert.equal(isVocationalSchool(t), false, String(t));
+  }
+  assert.equal(isVocationalSchool('Schule', 'OSZ Gesundheit I'), true); // Name reicht
+});
+
+test('applyOfficialSchool: Schülerzahl und Schulart übernehmen', () => {
+  const f = { name: 'Schule Eduardstraße', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+  const ok = applyOfficialSchool(f, {
+    school: { id: 'HH-1', name: 'Schule Eduardstraße', type: 'Grundschule', pupils: 202, year: '2024', src: 'jedeschule-hh' },
+    mode: 'distance', distanceM: 40
+  });
+  assert.equal(ok, true);
+  assert.equal(f.type, 'grundschule');
+  assert.equal(f.osmType, 'schule');
+  assert.equal(f.trips, 202);
+  assert.equal(f.tripsSource.kind, 'official');
+  assert.equal(f.tripsSource.year, '2024');
+});
+
+test('applyOfficialSchool: berufliche Schule bleibt sichtbar, wird aber nicht gerechnet', () => {
+  const f = { name: 'OSZ Gesundheit I', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+  applyOfficialSchool(f, {
+    school: { id: 'BE-01B04', name: 'OSZ Gesundheit I', type: 'Oberstufenzentrum', pupils: 2902, year: '2024/25', src: 'be-svz' },
+    mode: 'osm', distanceM: 12
+  });
+  assert.equal(f.trips, 0);
+  assert.equal(f.type, 'weiterfuehrend');
+  assert.equal(f.tripsSource.kind, 'excluded');
+  assert.equal(f.tripsSource.pupils, 2902); // amtliche Zahl bleibt für den Hinweis erhalten
+});
+
+test('excludeVocational: auch ohne amtliche Daten (am OSM-Namen erkannt)', () => {
+  const f = { name: 'OSZ Banken', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+  excludeVocational(f);
+  assert.deepEqual([f.trips, f.type, f.tripsSource.kind], [0, 'weiterfuehrend', 'excluded']);
 });

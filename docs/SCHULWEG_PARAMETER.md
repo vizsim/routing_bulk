@@ -10,7 +10,8 @@ Tests: [`tests/school-trips.test.js`](../tests/school-trips.test.js).
 
 1. **Wege je Einrichtung = Schüler:innen = Hinwege je Schultag.** Die Rückwege
    sind etwa gleich viele auf denselben Kanten in Gegenrichtung (MiD 2008:
-   48,6 % der Schulwege sind Rückwege, Scheiner 2016). Vorbelegt aus amtlichen
+   knapp die Hälfte der Schulwege sind Rückwege — 49,6 % in der Gesamtstichprobe,
+   48,6 % in der Teilstichprobe des Begleitmodells, Scheiner 2016). Vorbelegt aus amtlichen
    Schülerzahlen, sonst Platzhalter — siehe
    [`preprocessing/schuelerzahlen`](../preprocessing/schuelerzahlen/README.md).
 2. **Modal Split** je Einrichtungstyp und Raumtyp (RegioStaR7) als Vorschlag,
@@ -76,7 +77,7 @@ als Autowege von Kindern insgesamt. Deshalb wird skaliert (siehe unten).
 ### forsa 2022 — Wie kommt das Kind (6–10 J.) zur Schule? (Eltern, %)
 
 forsa im Auftrag von Deutschem Kinderhilfswerk, VBE und VCD, 20.07.–16.08.2022,
-n = 500 Eltern, S. 15. ÖPNV = ÖPNV + Schulbus, Auto = Pkw + Fahrgemeinschaft,
+n = 500 Eltern, S. 14. ÖPNV = ÖPNV + Schulbus, Auto = Pkw + Fahrgemeinschaft,
 auf 100 % normiert (größter Rest).
 
 | Ortsgröße | Fuß | ÖPNV | Schulbus | Rad/Roller | Pkw | Fahrgem. | → Split Fuß/Rad/ÖPNV/Auto | Raumtyp-Gruppe |
@@ -172,7 +173,7 @@ gehen; folgt aus Split und Längenverteilungen):
 | --- | ---: | ---: | ---: |
 | unter 0,6 km | 91 % | 92 % | 85 % |
 | 0,6–1,2 km | 72 % | 78 % | rund 60 % |
-| 1,2–2,0 km | 42 % | 51 % | 34 % |
+| 1,2–2,0 km | 42 % | 51 % | 34 % (Scheiner: „ab 1,2 km“, ohne Obergrenze) |
 
 Verlauf passt, das Modell fällt aber langsamer ab: Bei mittleren Entfernungen
 (0,6–2 km) legt es Wege eher zu Fuß als die MiD-Auswertung. Vermutliche
@@ -203,7 +204,13 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 ## Grenzen
 
 - MiD-Werte sind bundesweit (Abb. 98, 100) bzw. nur nach Raumtyp (Tab. 43) —
-  keine Berlin-eigenen Schulweglängen.
+  keine Berlin-eigenen Schulweglängen. MiD ordnet einen Rückweg dem Zweck des
+  vorherigen Weges zu; die Schulweg-Werte enthalten also Hin- und Rückwege.
+- Berufliche Schulen (Oberstufenzentren, Berufs-, Fachschulen, Berufskollegs)
+  werden nicht gerechnet: Schüler:innen meist volljährig, Unterricht in der dualen
+  Ausbildung oft nur an einzelnen Tagen. Sie bleiben in der Liste („nicht
+  gerechnet“, 0 Wege), erkannt an der amtlichen Schulart oder am Namen; wer sie
+  doch berücksichtigen will, trägt eine Zahl ein (gerechnet als weiterführend).
 - forsa: Hauptverkehrsmittel laut Eltern, n = 500, Befragung im Sommer
   (mehr Rad, weniger Auto als im Winter).
 - Setzungen für Kindergarten, „Schule“ und weiterführende Schulen außerhalb der
@@ -218,14 +225,15 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
   November 2025, Tab. 43 (S. 179), Abb. 98 (S. 177), Abb. 100 (S. 179).
   <https://www.mobilitaet-in-deutschland.de/pdf/MiD2023_Ergebnisbericht.pdf>
 - forsa 2022: *Sicherer Schulweg*, Ergebnischarts, im Auftrag von Deutschem
-  Kinderhilfswerk, VBE und VCD, S. 15.
+  Kinderhilfswerk, VBE und VCD, S. 14.
   <https://www.dkhw.de/fileadmin/Redaktion/1_Unsere_Arbeit/2_Aktuelle_Projekte/6_Zu_Fuss_zur_Schule/Umfrage_Sicherer_Schulweg/forsa-Umfrage_2022_Sicherer_Schulweg_Ergebnischarts.pdf>
 - Scheiner, J., Huber, O., Lohmüller, S. (2019): Children's mode choice for
   trips to primary school: a case study in German suburbia. *Travel Behaviour &
   Society* 15, 15–27 (Fußanteil nach Entfernung aus eigener MiD-Auswertung).
   <https://ste.raumplanung.tu-dortmund.de/storages/ste-raumplanung/r/Dokumente/Publikation_Scheiner/Scheiner_et_al_Childrens_mode_choice_for_trips_to_primary_school_author_Version.pdf>
 - Scheiner, J. (2016): School trips in Germany: gendered escorting practices.
-  *Transportation Research Part A* 94, 76–92 (Rückwege 48,6 %).
+  *Transportation Research Part A* 94, 76–92 (Rückwege: 49,6 % der Gesamtstichprobe,
+  Tab. 3; 48,6 % in der Teilstichprobe des Begleitmodells, Tab. 2).
   <https://ste.raumplanung.tu-dortmund.de/storages/ste-raumplanung/r/Dokumente/Publikation_Scheiner/Scheiner_School_trips_in_Germany__author_version_.pdf>
 - Gieck, J. (2006): Probleme auf dem Schulweg – Räumliche Analyse der
   georeferenzierten Daten. Ergebnisse der Schülerbefragung an Stuttgarter

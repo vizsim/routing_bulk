@@ -20,7 +20,7 @@ import { API } from '../domain/api.js';
 import { Geo } from '../domain/geo.js';
 import { exportProperties } from '../domain/infra.js';
 import {
-  landFromAgs, matchFacilities, officialTypeToFacilityType, osmRefFromProperties
+  applyOfficialSchool, excludeVocational, isVocationalSchool, landFromAgs, matchFacilities, osmRefFromProperties
 } from '../domain/school-stats.js';
 import {
   drawDistribution, modelSourceIds, REGIOSTAR_LABELS, SOURCES, tripModel
@@ -189,7 +189,8 @@ export const AnalysisService = {
    */
   classify(props) {
     if (props.amenity === 'kindergarten') return 'kindergarten';
-    const isced = String(props['isced:level'] || '');
+    // Die Schul-Kacheln heißen das Feld isced_level (OSM-Tag isced:level)
+    const isced = String(props.isced_level ?? props['isced:level'] ?? '');
     const name = (props.name || '').toLowerCase();
     if (/[23]/.test(isced) || /gymnasium|oberschule|gesamtschule|sekundarschule|realschule|hauptschule|oberstufe/.test(name)) {
       return 'weiterfuehrend';
@@ -215,7 +216,7 @@ export const AnalysisService = {
     const mapped = features.map(f => {
       const type = this.classify(f.properties);
       const osmRef = osmRefFromProperties(f.properties, f.geomType);
-      return {
+      const facility = {
         lat: f.lat,
         lon: f.lon,
         name: f.properties.name || `${FACILITY_TYPES[type].label} (unbenannt)`,
@@ -224,6 +225,9 @@ export const AnalysisService = {
         tripsSource: { kind: 'placeholder' },
         osmRefs: osmRef ? [osmRef] : []
       };
+      // Berufliche Schulen schon am OSM-Namen erkennen (auch ohne amtliche Daten)
+      if (type !== 'kindergarten' && isVocationalSchool(f.properties.name)) excludeVocational(facility);
+      return facility;
     });
     // OSM-Doppel (Node + Gebäude-Way derselben Einrichtung) zusammenfassen:
     // gleicher Name + Typ im Nahbereich. Filialen einer Kita-Kette liegen
@@ -258,31 +262,12 @@ export const AnalysisService = {
     const matches = matchFacilities(facilities, data.schools);
     let matched = 0;
     facilities.forEach((f, i) => {
-      const m = matches[i];
-      if (!m || !Number.isFinite(m.school.pupils)) return;
-      const s = m.school;
-      const officialType = officialTypeToFacilityType(s.type);
-      if (officialType && officialType !== f.type) {
-        f.osmType = f.type;
-        f.type = officialType;
-      }
-      f.trips = Math.max(0, Math.round(s.pupils));
-      f.tripsSource = {
-        kind: 'official',
-        source: s.src || null,
-        year: s.year || null,
-        officialId: s.id,
-        officialName: s.name,
-        officialType: s.type || null,
-        match: m.mode,
-        distanceM: m.distanceM
-      };
-      matched++;
+      if (matches[i] && applyOfficialSchool(f, matches[i]) && f.tripsSource.kind === 'official') matched++;
     });
     this.sortFacilities(facilities);
     return {
       matched,
-      eligible: facilities.filter(f => f.type !== 'kindergarten').length,
+      eligible: facilities.filter(f => f.type !== 'kindergarten' && f.tripsSource.kind !== 'excluded').length,
       lands: data.lands
     };
   },

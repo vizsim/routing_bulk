@@ -1264,6 +1264,12 @@ select {
   background: var(--ui-accent-soft);
   border-color: #c7d2fe;
 }
+/* Berufliche Schule: in der Liste, aber nicht gerechnet */
+.analysis-facility-src.is-excluded {
+  color: var(--ui-text-muted);
+  background: var(--ui-hover);
+  border-color: var(--ui-border);
+}
 .analysis-facility .analysis-trips-input {
   width: 68px;
   justify-self: end;

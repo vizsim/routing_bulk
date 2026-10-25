@@ -8,14 +8,16 @@ Quellen:
 - OSM Schulabgleich (osmberlin): amtliche Schulen (Kennung, Name, Lage,
   Schulart) und das OSM-Objekt, das ihnen zugeordnet ist.
 - Berlin: Bildungsstatistik der Senatsverwaltung, Tabelle SVZ_Fakt5
-  (Schüler je Schule, Berliner Schulnummer BSN).
+  (Schüler je Schule, Berliner Schulnummer BSN). Die Seite ist seit
+  Oktober 2026 nicht mehr erreichbar — dann einen gespeicherten Abruf als
+  CSV angeben (--be-csv, Spalten Schuljahr;BSN;…;Schueler_gesamt;…).
 - Brandenburg, Hamburg (Standard) sowie Mecklenburg-Vorpommern, Bayern
   (nur auf Wunsch, Lizenz unklar): Schülerzahl aus den Rohdaten der
   Landesquellen, abgerufen über die JedeSchule-API.
 
 Nur Standardbibliothek. Aufruf aus der Repo-Wurzel:
 
-    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py
+    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-csv berlin_schuelerzahlen_2024-25.csv
     python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender BE --be-svz svz.html --matches-csv matches.csv
 """
 
@@ -100,9 +102,12 @@ def read_text(path_or_url: str) -> str:
         raw = Path(path_or_url).read_bytes()
         charset = "utf-8"
     try:
-        return raw.decode(charset)
+        text = raw.decode(charset)
     except UnicodeDecodeError:
-        return raw.decode("latin-1")
+        text = raw.decode("latin-1")
+    # Die Abgleichs-CSV beginnt mit einem BOM — sonst hieße die erste Spalte
+    # "﻿bundesland", und keine Zeile fände ihr Land
+    return text.lstrip("﻿")
 
 
 def first_int(value) -> int | None:
@@ -206,19 +211,41 @@ def parse_be_svz(html: str) -> dict[str, dict]:
     return out
 
 
+def parse_be_csv(text: str) -> dict[str, dict]:
+    """Gespeicherter Abruf von SVZ_Fakt5 als CSV (Spalten Schuljahr;BSN;…;Schueler_gesamt;…)
+    → {BSN: {pupils, year}} wie parse_be_svz."""
+    reader = csv.DictReader(io.StringIO(text), delimiter=";")
+    if not reader.fieldnames or "BSN" not in reader.fieldnames or "Schueler_gesamt" not in reader.fieldnames:
+        raise ValueError("Berliner CSV: Spalten 'BSN' und 'Schueler_gesamt' erwartet")
+    out = {}
+    for row in reader:
+        bsn = (row.get("BSN") or "").strip()
+        pupils = first_int(row.get("Schueler_gesamt"))
+        if not re.match(r"^\d{2}[A-Z]\d{2}$", bsn) or pupils is None:
+            continue
+        out[bsn] = {"pupils": pupils, "year": (row.get("Schuljahr") or "").strip() or None}
+    return out
+
+
 # ---------------------------------------------------------------- JedeSchule (raw)
 
 
-def fetch_jedeschule(land: str, api: str = JEDESCHULE_API, page: int = 500) -> list[dict]:
-    """Alle Schulen eines Landes mit raw-Feldern (Paginierung über skip/limit)."""
-    schools, skip = [], 0
+def fetch_jedeschule(land: str, api: str = JEDESCHULE_API, page: int = 10000) -> list[dict]:
+    """Alle Schulen eines Landes mit raw-Feldern.
+
+    Die API wertet skip nicht verlässlich aus (Oktober 2026: die zweite Seite
+    wiederholte die erste, in Brandenburg fehlte so die Hälfte der Schulen).
+    Darum große Seiten (ein Land passt in eine), doppelte Kennungen verwerfen
+    und abbrechen, sobald eine Seite nichts Neues bringt.
+    """
+    schools, seen, skip = [], set(), 0
     while True:
         url = f"{api}/schools/?state={land}&include_raw=true&limit={page}&skip={skip}"
         batch = json.loads(read_text(url))
-        if not batch:
-            return schools
-        schools.extend(batch)
-        if len(batch) < page:
+        new = [s for s in batch if s.get("id") not in seen]
+        seen.update(s.get("id") for s in new)
+        schools.extend(new)
+        if len(batch) < page or not new:
             return schools
         skip += page
 
@@ -288,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"Länder, Standard {','.join(DEFAULT_LAENDER)}; zusätzlich möglich: {','.join(OPT_IN_LAENDER)}")
     ap.add_argument("--matches-csv", default=MATCHES_CSV_URL, help="Pfad oder URL der Abgleichs-CSV")
     ap.add_argument("--be-svz", default=BE_SVZ_URL, help="Pfad oder URL der Berliner Tabelle SVZ_Fakt5")
+    ap.add_argument("--be-csv", help="gespeicherter Abruf von SVZ_Fakt5 als CSV (statt --be-svz)")
     ap.add_argument("--jedeschule-api", default=JEDESCHULE_API)
     ap.add_argument("--out", default="public/data/schuelerzahlen")
     args = ap.parse_args(argv)
@@ -305,26 +333,37 @@ def main(argv: list[str] | None = None) -> int:
     index = {"format": 1, "generated": today, "laender": {}, "sources": {"osm-schulabgleich": SOURCES["osm-schulabgleich"]}}
 
     for land in laender:
-        if land == "BE":
-            print(f"BE: {args.be_svz}")
-            svz = parse_be_svz(read_text(args.be_svz))
-            pupils = {f"BE-{bsn}": v for bsn, v in svz.items()}
-            districts = sorted({bsn[:2] for bsn in svz})
-            if len(districts) < 12:
-                print(f"  Warnung: nur Bezirke {', '.join(districts)} in der Tabelle — vollständig geladen?")
-            source_id = "be-svz"
-        else:
-            print(f"{land}: JedeSchule-API")
-            pupils = pupils_from_jedeschule(land, fetch_jedeschule(land, args.jedeschule_api))
-            source_id = f"jedeschule-{land.lower()}"
+        source = None
+        # Fällt eine Quelle aus, laufen die übrigen Länder weiter
+        try:
+            if land == "BE":
+                print(f"BE: {args.be_csv or args.be_svz}")
+                svz = parse_be_csv(read_text(args.be_csv)) if args.be_csv else parse_be_svz(read_text(args.be_svz))
+                pupils = {f"BE-{bsn}": v for bsn, v in svz.items()}
+                districts = sorted({bsn[:2] for bsn in svz})
+                if len(districts) < 12:
+                    print(f"  Warnung: nur Bezirke {', '.join(districts)} in der Tabelle — vollständig geladen?")
+                source_id = "be-svz"
+                if args.be_csv:
+                    source = {**SOURCES[source_id], "note": SOURCES[source_id]["note"] + " Aus einem gespeicherten Abruf (CSV)."}
+            else:
+                print(f"{land}: JedeSchule-API")
+                pupils = pupils_from_jedeschule(land, fetch_jedeschule(land, args.jedeschule_api))
+                source_id = f"jedeschule-{land.lower()}"
+        except (OSError, ValueError) as e:
+            hint = " Die Tabelle SVZ_Fakt5 ist seit Oktober 2026 nicht mehr erreichbar — gespeicherten Abruf mit --be-csv angeben." \
+                if land == "BE" and not args.be_csv else ""
+            print(f"  {land} übersprungen: {e}.{hint}")
+            continue
+        source = source or SOURCES[source_id]
         schools = build_land(land, officials.get(land, {}), pupils, source_id)
         with_osm = sum(1 for s in schools if s["osm"])
         data = {"format": 1, "land": land, "generated": today,
-                "sources": {source_id: SOURCES[source_id], "osm-schulabgleich": SOURCES["osm-schulabgleich"]},
+                "sources": {source_id: source, "osm-schulabgleich": SOURCES["osm-schulabgleich"]},
                 "schools": schools}
         (out_dir / f"{land}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         index["laender"][land] = {"file": f"{land}.json", "schools": len(schools), "withOsm": with_osm}
-        index["sources"][source_id] = SOURCES[source_id]
+        index["sources"][source_id] = source
         print(f"  {len(schools)} Schulen mit Schülerzahl, davon {with_osm} mit OSM-Zuordnung")
 
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")

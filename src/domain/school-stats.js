@@ -89,6 +89,68 @@ export function officialTypeToFacilityType(schoolType) {
   return null;
 }
 
+// Berufliche Schulen (OSZ, Berufsschule, Fachschule, Berufskolleg …): Schüler:innen
+// meist volljährig, Unterricht in der dualen Ausbildung oft nur an einzelnen
+// Tagen — das passt nicht zum Schulweg-Modell (unter 18-Jährige, ein Hinweg je
+// Schultag, Weglängen nach MiD). Ihre teils sehr großen Schülerzahlen würden
+// die Belastungskarte dominieren.
+const VOCATIONAL = /oberstufenzentrum|\bosz\b|berufsschul|beruflich|berufsfachschul|fachoberschul|fachschul|berufskolleg|berufsbildend|berufsoberschul/;
+
+/** Berufliche Schule laut amtlicher Schulart oder Name? */
+export function isVocationalSchool(...texts) {
+  return texts.some(t => VOCATIONAL.test(String(t || '').toLowerCase()));
+}
+
+/**
+ * Berufliche Schule: bleibt in der Liste, wird aber nicht gerechnet (0 Wege).
+ * Typ „weiterführend“, falls jemand doch eine Zahl einträgt.
+ * @param {Object} facility - Einrichtung der Gebietsanalyse (wird geändert)
+ * @param {Object|null} [official] - Angaben der amtlichen Schule, falls zugeordnet
+ */
+export function excludeVocational(facility, official = null) {
+  if (facility.type !== 'weiterfuehrend') {
+    facility.osmType = facility.osmType || facility.type;
+    facility.type = 'weiterfuehrend';
+  }
+  facility.trips = 0;
+  facility.tripsSource = { kind: 'excluded', reason: 'vocational', ...(official || {}) };
+}
+
+/**
+ * Übernimmt die zugeordnete amtliche Schule: Schülerzahl als Wege (eine
+ * Schülerin = ein Hinweg je Schultag) und die Schulart, wenn sie eindeutig ist.
+ * Berufliche Schulen werden ausgenommen (excludeVocational).
+ * @param {Object} facility - Einrichtung (wird geändert)
+ * @param {{school: Object, mode: string, distanceM: number}} match - aus matchFacilities
+ * @returns {boolean} true, wenn eine amtliche Schülerzahl vorlag
+ */
+export function applyOfficialSchool(facility, match) {
+  const s = match && match.school;
+  if (!s || !Number.isFinite(s.pupils)) return false;
+  const official = {
+    source: s.src || null,
+    year: s.year || null,
+    officialId: s.id,
+    officialName: s.name,
+    officialType: s.type || null,
+    pupils: Math.max(0, Math.round(s.pupils)),
+    match: match.mode,
+    distanceM: match.distanceM
+  };
+  if (isVocationalSchool(s.type, s.name)) {
+    excludeVocational(facility, official);
+    return true;
+  }
+  const officialType = officialTypeToFacilityType(s.type);
+  if (officialType && officialType !== facility.type) {
+    facility.osmType = facility.type;
+    facility.type = officialType;
+  }
+  facility.trips = official.pupils;
+  facility.tripsSource = { kind: 'official', ...official };
+  return true;
+}
+
 /**
  * Ordnet Einrichtungen amtliche Schulen zu.
  * @param {Array<{lat, lon, name, type, osmRefs?: string[]}>} facilities

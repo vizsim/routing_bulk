@@ -6,8 +6,8 @@ Analyse sie den OSM-Schulen aus `schools.pmtiles` zuordnen kann.
 
 ```bash
 # aus der Repo-Wurzel, nur Standardbibliothek (Python ≥ 3.10)
-python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py            # BE, BB, HH
-python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender BE,BB,HH,MV
+python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-csv berlin_schuelerzahlen_2024-25.csv   # BE, BB, HH
+python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender BB,HH,MV
 python3 -m unittest discover -s preprocessing/schuelerzahlen            # Tests ohne Netz
 ```
 
@@ -17,11 +17,16 @@ Vite kopiert `public/` in den Build, die App lädt die Dateien unter
 Dateien woanders ablegen (z. B. tiles.vizsim.de) und die URL in
 `src/core/config.js` anpassen. Fehlen die Dateien, bleiben Platzhalter stehen.
 
+Die erzeugten Dateien stehen in `.gitignore`, bis die Lizenzfragen unten geklärt
+sind: lokal (`npm run dev`, `npm run build`) werden sie genutzt, auf GitHub Pages
+noch nicht. Fällt eine Quelle aus, überspringt das Skript dieses Land und
+schreibt die übrigen.
+
 ## Quellen
 
 | Land | Schülerzahl | Stand | Lizenz |
 | --- | --- | --- | --- |
-| BE | [Bildungsstatistik Berlin, SVZ_Fakt5](https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx) — Schüler:innen je Schulnummer (BSN) | Schuljahr 2024/25 | laut daten.berlin.de CC BY (prüfen) |
+| BE | [Bildungsstatistik Berlin, SVZ_Fakt5](https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx) — Schüler:innen je Schulnummer (BSN). Seit Oktober 2026 nicht mehr erreichbar (404); gespeicherter Abruf vom 24./25.10.2026 als CSV über `--be-csv` (Bezirke 01–08, Neukölln bis 08G12) | Schuljahr 2024/25 | laut daten.berlin.de CC BY (prüfen) |
 | BB | WFS `Schul_Standorte` des MBJS, Feld `schueler` (über JedeSchule) | meist 2022 | dl-de/by-2-0 |
 | HH | Schulstammdaten Hamburg, `anzahl_schueler` je Standort (über JedeSchule) | 2024 | dl-de/by-2-0 |
 | MV | WFS Schulverzeichnis, `anzahl_schueler` (über JedeSchule) — nur mit `--laender` | unklar | unklar |
@@ -46,7 +51,11 @@ Rechtsberatung.
 
 - Berlin: nur Hauptstandorte. Filialen bleiben Platzhalter (oder werden von Hand
   angepasst); die Schülerzahl einer Schule mit mehreren Standorten landet am
-  Hauptstandort.
+  Hauptstandort. Der gespeicherte Abruf deckt nur die Bezirke 01–08 ab
+  (Neukölln bis 08G12); Treptow-Köpenick, Marzahn-Hellersdorf, Lichtenberg und
+  Reinickendorf fehlen — dort bleiben Platzhalter.
+- Berufliche Schulen (OSZ, Berufs-, Fachschulen) stehen in den Dateien, die App
+  rechnet sie aber nicht (siehe docs/SCHULWEG_PARAMETER.md, „Grenzen“).
 - Schuljahre unterscheiden sich je Land und Quelle; das Schuljahr steht je
   Schule in der Datei und in der App am Eintrag.
 - Kitas: keine Daten, Platzhalter.

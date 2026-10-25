@@ -37,6 +37,17 @@ export function tripsSourceInfo(facility, pupilSources = {}) {
   if (src.kind === 'manual') {
     return { kind: 'manual', label: 'eigener Wert', title: 'Von Hand eingetragen' };
   }
+  if (src.kind === 'excluded') {
+    const official = src.pupils != null
+      ? ` Amtlich ${src.pupils.toLocaleString('de-DE')} Schüler:innen${src.year ? ` (${src.year})` : ''}.`
+      : '';
+    return {
+      kind: 'excluded',
+      label: 'nicht gerechnet',
+      title: 'Berufliche Schule — Schüler:innen meist volljährig, Unterricht oft nur an einzelnen Tagen; '
+        + `passt nicht zum Schulweg-Modell (unter 18, ein Hinweg je Schultag).${official} Bei Bedarf eine Zahl eintragen.`
+    };
+  }
   const type = FACILITY_TYPES[facility.type];
   return {
     kind: 'placeholder',
@@ -250,11 +261,13 @@ export const AnalysisPanel = {
   _renderPupilInfo() {
     const el = Utils.getElement('#analysis-pupils-info');
     if (!el) return;
-    const schools = this._facilities.filter(f => f.type !== 'kindergarten');
+    const kind = (f) => (f.tripsSource && f.tripsSource.kind) || 'placeholder';
+    const schools = this._facilities.filter(f => f.type !== 'kindergarten' && kind(f) !== 'excluded');
     if (this._facilities.length === 0) { el.style.display = 'none'; return; }
-    const official = schools.filter(f => f.tripsSource && f.tripsSource.kind === 'official');
-    const manual = this._facilities.filter(f => f.tripsSource && f.tripsSource.kind === 'manual');
-    const placeholders = this._facilities.length - official.length - manual.length;
+    const official = schools.filter(f => kind(f) === 'official');
+    const manual = this._facilities.filter(f => kind(f) === 'manual');
+    const excluded = this._facilities.filter(f => kind(f) === 'excluded');
+    const placeholders = this._facilities.length - official.length - manual.length - excluded.length;
     const sourceLabels = [...new Set(official.map(f => {
       const meta = AnalysisService.pupilSources[f.tripsSource.source] || {};
       return `${meta.label || f.tripsSource.source}${f.tripsSource.year ? ` ${f.tripsSource.year}` : ''}`;
@@ -264,6 +277,7 @@ export const AnalysisPanel = {
     else if (schools.length) parts.push('Keine amtlichen Schülerzahlen für diesen Bereich gefunden');
     if (manual.length) parts.push(`${manual.length} ${manual.length === 1 ? 'eigener Wert' : 'eigene Werte'}`);
     if (placeholders) parts.push(`${placeholders} Platzhalter`);
+    if (excluded.length) parts.push(`${excluded.length} berufliche ${excluded.length === 1 ? 'Schule' : 'Schulen'} nicht gerechnet`);
     el.innerHTML = `${parts.join(' · ')}. Eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag; Rückwege gleich viele.`;
     el.style.display = 'block';
   },

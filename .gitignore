@@ -60,3 +60,6 @@ schrott/
 # Python
 __pycache__/
 *.pyc
+# Erzeugte Schülerzahlen: erst nach Klärung der Lizenzen veröffentlichen
+# (preprocessing/schuelerzahlen/README.md)
+public/data/schuelerzahlen/

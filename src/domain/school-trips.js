@@ -58,7 +58,7 @@ export const SOURCES = {
   forsa2022: {
     label: 'forsa 2022',
     title: 'Sicherer Schulweg – Befragung von Eltern 6- bis 10-jähriger Kinder',
-    citation: 'forsa im Auftrag von Deutschem Kinderhilfswerk, VBE und VCD, Juli/August 2022, n = 500 Eltern, S. 15',
+    citation: 'forsa im Auftrag von Deutschem Kinderhilfswerk, VBE und VCD, Juli/August 2022, n = 500 Eltern, S. 14',
     url: 'https://www.dkhw.de/fileadmin/Redaktion/1_Unsere_Arbeit/2_Aktuelle_Projekte/6_Zu_Fuss_zur_Schule/Umfrage_Sicherer_Schulweg/forsa-Umfrage_2022_Sicherer_Schulweg_Ergebnischarts.pdf',
     note: 'Hauptverkehrsmittel laut Eltern nach Ortsgröße; ÖPNV inkl. Schulbus, Auto inkl. Fahrgemeinschaft; '
       + 'auf 100 % normiert. Zuordnung Raumtyp → Ortsgröße ist eine Annahme.'
@@ -127,7 +127,7 @@ export const MID2023_ABB100_KM = {
   '11-17': { foot: 1.5, bike: 2.9, transit: 8.5, car: 9.9, ausbildung: 6.0 }
 };
 
-/** forsa 2022, S. 15: Wie kommt das Kind (6–10 J.) zur Schule? Elternangaben in %. */
+/** forsa 2022, S. 14: Wie kommt das Kind (6–10 J.) zur Schule? Elternangaben in %. */
 export const FORSA2022_GS = {
   gesamt: { fuss: 47, oepnv: 13, schulbus: 8, rad: 14, pkw: 15, fahrgemeinschaft: 2 },
   unter20k: { fuss: 38, oepnv: 15, schulbus: 13, rad: 13, pkw: 17, fahrgemeinschaft: 2 },
