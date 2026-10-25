@@ -1,11 +1,23 @@
 // ==== Verteilungsfunktionen ====
 import { State } from '../core/state.js';
+import { lognormalCdf } from './stats.js';
+
+/**
+ * Parametrische Verteilung (Gebietsanalyse): { type: 'lognormal-param',
+ * medianM, sigma } — Median der Luftlinie in Metern und σ. Unabhängig vom
+ * Radius; der Radius kappt nur (siehe calculateDistribution).
+ */
+function isParamLognormal(type) {
+  return !!type && typeof type === 'object' && type.type === 'lognormal-param'
+    && type.medianM > 0 && type.sigma > 0;
+}
 
 export const Distribution = {
   /**
    * Gibt das Distanz-Gewicht für einen einzelnen Abstand r (in m) zurück.
    * Wird z. B. mit Einwohner-Gewichtung kombiniert: weight = population * getDistanceWeight(...).
-   * @param {string} type - 'lognormal' | 'uniform' | 'near' | 'far' | 'normal'
+   * @param {string|Object} type - 'lognormal' | 'uniform' | 'near' | 'far' | 'normal'
+   *   oder { type: 'lognormal-param', medianM, sigma }
    * @param {number} distanceM - Abstand in Metern
    * @param {number} radiusM - Radius in Metern
    * @returns {number} - nicht-negatives Gewicht (≥ 0)
@@ -13,6 +25,13 @@ export const Distribution = {
   getDistanceWeight(type, distanceM, radiusM) {
     if (radiusM <= 0 || distanceM < 0) return 0;
     const r = Math.min(distanceM, radiusM);
+    if (isParamLognormal(type)) {
+      // Dichte der Lognormalverteilung (Median, σ)
+      if (r <= 0.1) return 0.01;
+      const z = Math.log(r / type.medianM) / type.sigma;
+      const w = Math.exp(-(z * z) / 2) / (r * type.sigma * Math.sqrt(2 * Math.PI));
+      return isFinite(w) && w > 0 ? w : 0;
+    }
     switch (type) {
       case 'uniform':
         return 1;
@@ -45,7 +64,20 @@ export const Distribution = {
   calculateDistribution(type, numBins, radiusM, totalPoints) {
     const binSize = radiusM / numBins;
     const expectedBins = new Array(numBins).fill(0);
-    
+
+    if (isParamLognormal(type)) {
+      // Anteil je Ring aus der Verteilungsfunktion. Die Masse jenseits des
+      // Radius landet im äußersten Ring (Kappung statt Umverteilung): Wege
+      // von weiter her erreichen das Gebiet über dessen Rand.
+      let previous = 0;
+      for (let i = 0; i < numBins; i++) {
+        const upper = i === numBins - 1 ? 1 : lognormalCdf((i + 1) * binSize, type.medianM, type.sigma);
+        expectedBins[i] = Math.max(0, upper - previous) * totalPoints;
+        previous = upper;
+      }
+      return expectedBins;
+    }
+
     switch (type) {
       case 'uniform':
         // Gleichmäßig: gleich viele Punkte in jedem Bin

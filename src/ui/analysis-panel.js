@@ -6,23 +6,61 @@
 import { CONFIG } from '../core/config.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
-import { AnalysisService, FACILITY_TYPES, MODES } from '../services/analysis-service.js';
+import { SOURCES, SIGMA, DETOUR_FACTOR, modelSourceIds } from '../domain/school-trips.js';
+import {
+  AnalysisService, FACILITY_TYPES, MODES, TRIP_UNIT, typeSettingsFor
+} from '../services/analysis-service.js';
 import { MapRenderer } from '../visualization/map-renderer.js';
 import { RouteRenderer } from '../visualization/route-renderer.js';
 import { DrawBar } from './draw-bar.js';
 import { MobileLayout } from './mobile-layout.js';
 import { PolygonDraw } from './polygon-draw.js';
 
+const fmtKm = (km) => km.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Kurzlabel und Tooltip für die Herkunft der Wegezahl einer Einrichtung. */
+export function tripsSourceInfo(facility, pupilSources = {}) {
+  const src = facility.tripsSource || { kind: 'placeholder' };
+  if (src.kind === 'official') {
+    const meta = pupilSources[src.source] || {};
+    const year = src.year ? ` ${src.year}` : '';
+    const how = src.match === 'osm'
+      ? 'über den OSM-Abgleich (osm-schulabgleich) zugeordnet'
+      : `räumlich zugeordnet (${src.distanceM} m entfernt)`;
+    return {
+      kind: 'official',
+      label: `amtlich${src.year ? ` ${String(src.year).replace(/^20(\d\d)\/(\d\d)$/, '$1/$2')}` : ''}`,
+      title: `${meta.label || src.source || 'Amtliche Statistik'}${year}: ${src.officialName || ''}`
+        + ` (${src.officialId}) · ${how}`
+    };
+  }
+  if (src.kind === 'manual') {
+    return { kind: 'manual', label: 'eigener Wert', title: 'Von Hand eingetragen' };
+  }
+  const type = FACILITY_TYPES[facility.type];
+  return {
+    kind: 'placeholder',
+    label: 'Platzhalter',
+    title: facility.type === 'kindergarten'
+      ? `Platzhalter für ${type.label} — für Kitas gibt es keine Daten. Bitte anpassen.`
+      : `Platzhalter für ${type.label} — keine amtliche Schülerzahl gefunden. Bitte anpassen.`
+  };
+}
+
 export const AnalysisPanel = {
   _polygon: null,
   _facilities: [],
-  // Bearbeitbare Kopie der Typ-Defaults (Radius + Split je Typ)
+  // Bearbeitbare Kopie der Typ-Defaults (Radius + Split + Weglängenmodell je Typ)
   _typeSettings: null,
   // Raumtyp/Gemeinde des Bereichs (RegioStaR7 aus den Zensus-Zellen)
   _areaContext: null,
-  // Sobald der Nutzer einen Split angefasst hat, wird der RegioStaR7-Vorschlag
-  // nicht mehr automatisch angewendet (nur noch per Knopf)
+  // Sobald der Nutzer Split bzw. Radius angefasst hat, wird der Vorschlag für
+  // den Raumtyp dort nicht mehr automatisch angewendet (nur noch per Knopf).
+  // Die Weglängen je Verkehrsmittel folgen immer dem Raumtyp.
   _splitsEdited: false,
+  _radiusEdited: false,
+  // Ergebnis der Schülerzahl-Vorbelegung (für die Zusammenfassung)
+  _pupilInfo: null,
 
   init() {
     this._typeSettings = JSON.parse(JSON.stringify(FACILITY_TYPES));
@@ -134,28 +172,52 @@ export const AnalysisPanel = {
     this._facilities = facilities;
     this._areaContext = areaContext;
     AnalysisService.areaContext = areaContext;
+    // Amtliche Schülerzahlen vorbelegen (vor dem Zeichnen: kann den Typ schärfen
+    // und damit die Reihenfolge ändern)
+    this._pupilInfo = await AnalysisService.prefillPupils(this._facilities, areaContext)
+      .catch(err => { Utils.logError('AnalysisPanel', err); return null; });
     MapRenderer.setAnalysisFacilities(this._facilities, {
       onHover: (index) => this._highlightRow(index)
     });
     if (this._facilities.length === 0) {
       listEl.innerHTML = '<div class="config-hint">Keine Schulen oder Kindergärten im Bereich gefunden.</div>';
+      this._renderPupilInfo();
       return;
     }
 
-    listEl.innerHTML = this._facilities.map((f, i) => `
+    listEl.innerHTML = this._facilities.map((f, i) => {
+      const src = tripsSourceInfo(f, AnalysisService.pupilSources);
+      return `
       <div class="analysis-facility" data-index="${i}">
         <span class="analysis-facility-name" title="${Utils.escapeHtml(f.name)} — Klick zentriert die Karte">${Utils.escapeHtml(f.name)}</span>
         <span class="analysis-facility-type">${FACILITY_TYPES[f.type].label}</span>
-        <input type="number" min="0" max="5000" step="10" value="${f.trips}" data-facility="${i}" class="analysis-trips-input" />
-      </div>`).join('');
+        <span class="analysis-facility-src is-${src.kind}" title="${Utils.escapeHtml(src.title)}">${Utils.escapeHtml(src.label)}</span>
+        <input type="number" min="0" max="5000" step="10" value="${f.trips}" data-facility="${i}" class="analysis-trips-input"
+          aria-label="${f.type === 'kindergarten' ? 'Kinder' : 'Schüler:innen'} (Hinwege je Schultag)" />
+      </div>`;
+    }).join('');
     listEl.querySelectorAll('.analysis-trips-input').forEach(input => {
       input.addEventListener('change', () => {
         const i = Number(input.dataset.facility);
-        this._facilities[i].trips = Utils.validateNumber(input.value, 0, 5000, this._facilities[i].trips);
-        input.value = this._facilities[i].trips;
+        const f = this._facilities[i];
+        const value = Utils.validateNumber(input.value, 0, 5000, f.trips);
+        if (value !== f.trips) {
+          f.trips = value;
+          f.tripsSource = { kind: 'manual', previous: f.tripsSource || null };
+          const chip = input.parentElement.querySelector('.analysis-facility-src');
+          const src = tripsSourceInfo(f, AnalysisService.pupilSources);
+          if (chip) {
+            chip.className = `analysis-facility-src is-${src.kind}`;
+            chip.textContent = src.label;
+            chip.title = src.title;
+          }
+        }
+        input.value = f.trips;
+        this._renderPupilInfo();
         this._updateEstimate();
       });
     });
+    this._renderPupilInfo();
     // Hover Panel → Karte (Halo am Icon); Klick auf den Namen zentriert die Karte
     listEl.querySelectorAll('.analysis-facility').forEach(row => {
       const i = Number(row.dataset.index);
@@ -174,9 +236,9 @@ export const AnalysisPanel = {
       });
     });
 
-    // Split-Vorschlag nach Raumtyp anwenden — aber nur, solange der Nutzer
-    // die Splits noch nicht selbst angefasst hat
-    if (!this._splitsEdited) this._applySplitSuggestion();
+    // Vorschlag für den Raumtyp anwenden: Weglängen immer, Split und Radius
+    // nur, solange der Nutzer sie noch nicht selbst angefasst hat
+    this._applyAreaSuggestion({ splits: !this._splitsEdited, radius: !this._radiusEdited });
     this._renderTypeSettings();
     this._renderAreaContext();
     Utils.getElement('#analysis-settings-group').style.display = 'block';
@@ -184,14 +246,42 @@ export const AnalysisPanel = {
     this._updateEstimate();
   },
 
-  /** Überträgt den RegioStaR7-Vorschlag in die editierbaren Typ-Einstellungen. */
-  _applySplitSuggestion() {
-    const suggestion = this._areaContext && AnalysisService.suggestSplits(this._areaContext.regioStaR7);
-    if (!suggestion) return false;
+  /** Zeile unter der Liste: woher die Schülerzahlen kommen. */
+  _renderPupilInfo() {
+    const el = Utils.getElement('#analysis-pupils-info');
+    if (!el) return;
+    const schools = this._facilities.filter(f => f.type !== 'kindergarten');
+    if (this._facilities.length === 0) { el.style.display = 'none'; return; }
+    const official = schools.filter(f => f.tripsSource && f.tripsSource.kind === 'official');
+    const manual = this._facilities.filter(f => f.tripsSource && f.tripsSource.kind === 'manual');
+    const placeholders = this._facilities.length - official.length - manual.length;
+    const sourceLabels = [...new Set(official.map(f => {
+      const meta = AnalysisService.pupilSources[f.tripsSource.source] || {};
+      return `${meta.label || f.tripsSource.source}${f.tripsSource.year ? ` ${f.tripsSource.year}` : ''}`;
+    }))];
+    const parts = [];
+    if (official.length) parts.push(`${official.length} von ${schools.length} Schulen mit amtlicher Schülerzahl (${sourceLabels.map(Utils.escapeHtml).join(', ')})`);
+    else if (schools.length) parts.push('Keine amtlichen Schülerzahlen für diesen Bereich gefunden');
+    if (manual.length) parts.push(`${manual.length} ${manual.length === 1 ? 'eigener Wert' : 'eigene Werte'}`);
+    if (placeholders) parts.push(`${placeholders} Platzhalter`);
+    el.innerHTML = `${parts.join(' · ')}. Eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag; Rückwege gleich viele.`;
+    el.style.display = 'block';
+  },
+
+  /**
+   * Überträgt den Vorschlag für den Raumtyp (ohne Raumtyp: bundesweit) in die
+   * editierbaren Typ-Einstellungen. Die Weglängen folgen immer dem Raumtyp.
+   */
+  _applyAreaSuggestion({ splits = true, radius = true } = {}) {
+    const suggestion = (this._areaContext && AnalysisService.suggestTypeSettings(this._areaContext.regioStaR7))
+      || typeSettingsFor(null);
     for (const type of Object.keys(this._typeSettings)) {
-      if (suggestion[type]) this._typeSettings[type].split = { ...suggestion[type] };
+      const s = suggestion[type];
+      if (!s) continue;
+      this._typeSettings[type].model = s.model;
+      if (splits) this._typeSettings[type].split = { ...s.split };
+      if (radius) this._typeSettings[type].radiusM = s.radiusM;
     }
-    return true;
   },
 
   /** Zeile „Gebiet: Gemeinde · Raumtyp" über der Split-Tabelle. */
@@ -202,16 +292,17 @@ export const AnalysisPanel = {
     if (!ctx) { el.style.display = 'none'; return; }
     el.style.display = 'block';
     const place = [ctx.gemeinde, ctx.label].filter(Boolean).map(Utils.escapeHtml).join(' · ');
-    const hasSuggestion = !!AnalysisService.suggestSplits(ctx.regioStaR7);
+    const hasSuggestion = !!AnalysisService.suggestTypeSettings(ctx.regioStaR7);
     if (!hasSuggestion) {
       el.innerHTML = `Gebiet: ${place}`;
-    } else if (!this._splitsEdited) {
-      el.innerHTML = `Gebiet: ${place} — Split-Vorschlag für diesen Raumtyp angewendet (anpassbar).`;
+    } else if (!this._splitsEdited && !this._radiusEdited) {
+      el.innerHTML = `Gebiet: ${place} — Vorschlag für diesen Raumtyp angewendet (anpassbar, Quellen unten).`;
     } else {
-      el.innerHTML = `Gebiet: ${place} · <button type="button" id="analysis-apply-split-btn" class="analysis-inline-btn">Split-Vorschlag anwenden</button>`;
+      el.innerHTML = `Gebiet: ${place} · <button type="button" id="analysis-apply-split-btn" class="analysis-inline-btn">Vorschlag anwenden</button>`;
       Utils.getElement('#analysis-apply-split-btn')?.addEventListener('click', () => {
-        this._applySplitSuggestion();
+        this._applyAreaSuggestion();
         this._splitsEdited = false;
+        this._radiusEdited = false;
         this._renderTypeSettings();
         this._renderAreaContext();
         this._updateEstimate();
@@ -240,7 +331,8 @@ export const AnalysisPanel = {
         <tbody>
         ${typesPresent.map(type => {
           const s = this._typeSettings[type];
-          return `<tr data-type="${type}">
+          const sum = MODES.reduce((acc, m) => acc + (s.split[m.key] || 0), 0);
+          return `<tr data-type="${type}"${sum !== 100 ? ' class="analysis-split-invalid"' : ''}>
             <td class="analysis-settings-type">${FACILITY_TYPES[type].label}</td>
             <td><input type="number" min="200" max="10000" step="100" value="${s.radiusM}" data-field="radiusM" /></td>
             ${MODES.map(m => `<td><input type="number" min="0" max="100" step="5" value="${s.split[m.key]}" data-field="${m.key}" /></td>`).join('')}
@@ -248,13 +340,15 @@ export const AnalysisPanel = {
         }).join('')}
         </tbody>
       </table>
-      <p class="config-hint">Radius in Metern · Split-Summe je Zeile sollte 100 % sein.
+      <p class="config-hint">Radius in Metern — nur Kappung: Wege von weiter her
+      starten am Rand. Split-Summe je Zeile sollte 100 % sein. Die Weglänge hängt
+      vom Verkehrsmittel ab (MiD 2023): Fußwege kurz, Radwege mittel, Autowege lang.
       ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
-      Anfragen gehen an den eigenen Routing-Server). Distanzverhalten je Modus:
-      Fuß startet im halben Radius (kurze Wege), Auto gleichverteilt im vollen
-      Radius, Rad dazwischen. Einzugsgrenzen: Kita/Grundschule nur aus der
-      eigenen Gemeinde; weiterführende Schulen bevorzugt aus dem eigenen
-      Landkreis (außerhalb stark abgewertet, anderes Bundesland noch stärker).</p>`;
+      Anfragen gehen an den eigenen Routing-Server). Einzugsgrenzen: Kita/Grundschule
+      nur aus der eigenen Gemeinde; weiterführende Schulen bevorzugt aus dem eigenen
+      Landkreis (außerhalb stark abgewertet, anderes Bundesland noch stärker).</p>
+      <div id="analysis-sources-slot">${this._sourcesHtml(typesPresent)}</div>`;
+    this._bindSourcesToggle();
 
     el.querySelectorAll('input').forEach(input => {
       input.addEventListener('change', () => {
@@ -264,6 +358,10 @@ export const AnalysisPanel = {
         if (field === 'radiusM') {
           s.radiusM = Utils.validateNumber(input.value, 200, 10000, s.radiusM);
           input.value = s.radiusM;
+          if (!this._radiusEdited) {
+            this._radiusEdited = true;
+            this._renderAreaContext();
+          }
         } else {
           s.split[field] = Utils.validateNumber(input.value, 0, 100, s.split[field]);
           input.value = s.split[field];
@@ -274,9 +372,75 @@ export const AnalysisPanel = {
             this._renderAreaContext();
           }
         }
+        const slot = Utils.getElement('#analysis-sources-slot');
+        if (slot) {
+          slot.innerHTML = this._sourcesHtml(typesPresent);
+          this._bindSourcesToggle();
+        }
         this._updateEstimate();
       });
     });
+  },
+
+  /** Merkt sich, ob „Annahmen & Quellen“ aufgeklappt ist (übersteht Neuzeichnen). */
+  _bindSourcesToggle() {
+    const details = document.querySelector('#analysis-sources-slot details');
+    if (details) details.addEventListener('toggle', () => { this._sourcesOpen = details.open; });
+  },
+
+  /**
+   * „Annahmen & Quellen“: je Einrichtungstyp, woher Split und Weglängen
+   * stammen, plus die Literaturliste — dieselben Angaben stehen im Export.
+   */
+  _sourcesHtml(types) {
+    const ids = new Set();
+    const esc = Utils.escapeHtml;
+    const typeItems = types.map(type => {
+      const s = this._typeSettings[type];
+      const m = s.model;
+      if (!m) return '';
+      modelSourceIds(m).forEach(id => ids.add(id));
+      const edited = MODES.some(x => (s.split[x.key] || 0) !== (m.split[x.key] || 0));
+      const suggested = MODES.map(x => m.split[x.key]).join('/');
+      const splitText = edited
+        ? `eigene Werte (Vorschlag ${suggested} % nach ${esc(SOURCES[m.splitSource].label)})`
+        : `${suggested} % nach ${esc(SOURCES[m.splitSource].label)} (${esc(m.splitNote)})`;
+      const lengths = MODES.map(x => `${x.label} ${fmtKm(m.modes[x.key].meanKm)}`).join(' · ');
+      const radiusNote = s.radiusM === m.radiusM ? '' : ` — eingestellt: ${fmtKm(s.radiusM / 1000)} km`;
+      return `<li><strong>${esc(FACILITY_TYPES[type].label)}</strong>
+        <div>Modal Split (Fuß/Rad/ÖPNV/Auto): ${splitText}</div>
+        <div>Ø Weg ${fmtKm(m.meanKm)} km nach ${esc(SOURCES[m.meanSource].label)} (${esc(m.meanNote)})</div>
+        <div>Ø je Verkehrsmittel: ${lengths} km — ${esc(SOURCES[m.modeSource].label)}, auf diesen Wert skaliert</div>
+        <div>Radius-Vorschlag ${fmtKm(m.radiusM / 1000)} km = ${Math.round(m.radiusQuantile * 100)} % der Fuß-, Rad- und Autowege (Luftlinie)${radiusNote}</div>
+      </li>`;
+    }).join('');
+
+    const link = (title, url) => (url
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>`
+      : esc(title));
+    const sourceItems = [...ids].map(id => {
+      const src = SOURCES[id];
+      return `<li><strong>${esc(src.label)}:</strong> ${link(src.title, src.url)}. ${esc(src.citation)}.
+        <span class="analysis-sources-note">${esc(src.note)}</span></li>`;
+    });
+    const pupilIds = [...new Set(this._facilities
+      .filter(f => f.tripsSource && f.tripsSource.kind === 'official' && f.tripsSource.source)
+      .map(f => f.tripsSource.source))];
+    for (const id of pupilIds) {
+      const src = AnalysisService.pupilSources[id] || { label: id, title: id };
+      sourceItems.push(`<li><strong>${esc(src.label || id)}:</strong> ${link(src.title || id, src.url)}.
+        ${src.license ? `Lizenz: ${esc(src.license)}.` : ''}
+        <span class="analysis-sources-note">${esc(src.note || '')}</span></li>`);
+    }
+    const de = (v) => v.toLocaleString('de-DE');
+    return `<details class="analysis-sources"${this._sourcesOpen ? ' open' : ''}>
+      <summary>Annahmen &amp; Quellen</summary>
+      <ul class="analysis-sources-types">${typeItems}</ul>
+      <p>Annahmen: Weglängen lognormal mit Streuung σ Fuß ${de(SIGMA.foot)}, Rad ${de(SIGMA.bike)},
+      ÖPNV ${de(SIGMA.transit)}, Auto ${de(SIGMA.car)}; Umwegfaktor Netz/Luftlinie ${de(DETOUR_FACTOR)};
+      eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag.</p>
+      <ul class="analysis-sources-list">${sourceItems.join('')}</ul>
+    </details>`;
   },
 
   _updateEstimate() {
@@ -284,7 +448,7 @@ export const AnalysisPanel = {
     if (!el) return;
     const n = AnalysisService.estimateRoutes(this._facilities, this._typeSettings);
     const trips = this._facilities.reduce((s, f) => s + f.trips, 0);
-    el.textContent = `${trips.toLocaleString('de-DE')} Wege/Tag → ~${n.toLocaleString('de-DE')} Routen werden am eigenen Routing-Server gerechnet.`;
+    el.textContent = `${trips.toLocaleString('de-DE')} ${TRIP_UNIT} → ~${n.toLocaleString('de-DE')} Routen werden am eigenen Routing-Server gerechnet.`;
   },
 
   // ---- Berechnung & Ergebnis ----
@@ -312,8 +476,9 @@ export const AnalysisPanel = {
       }
       if (resultEl) {
         const s = result.stats;
-        let html = `<div>${s.facilities} Einrichtungen · ${s.totalTrips.toLocaleString('de-DE')} Wege/Tag `
-          + `· ${s.ok.toLocaleString('de-DE')} Routen gerechnet${s.fail ? ` (${s.fail} fehlgeschlagen)` : ''}</div>`;
+        let html = `<div>${s.facilities} Einrichtungen · ${s.totalTrips.toLocaleString('de-DE')} ${TRIP_UNIT} `
+          + `· ${s.ok.toLocaleString('de-DE')} Routen gerechnet${s.fail ? ` (${s.fail} fehlgeschlagen)` : ''}</div>`
+          + '<div class="demand-info-sub">Karte zeigt die Hinwege; Rückwege etwa gleich viele auf denselben Kanten in Gegenrichtung.</div>';
         if (s.capacityLimited > 0) {
           html += `<div class="demand-info-warn">Bei ${s.capacityLimited} Einrichtung/Modus-Kombinationen gab es weniger unter 18-Jährige im Radius als Stichproben-Routen — Gewichte wurden entsprechend angehoben.</div>`;
         }
@@ -360,7 +525,7 @@ export const AnalysisPanel = {
     // ÖPNV-Zubringer | Rad), die Checkboxen gelten nur für „Färben nach Anzahl“
     if (CONFIG.COLOR_BY === 'infra') {
       MapRenderer.clearRoutes();
-      RouteRenderer.drawAggregatedRoutes(result.segments, 0, { unit: 'Wege/Tag' });
+      RouteRenderer.drawAggregatedRoutes(result.segments, 0, { unit: TRIP_UNIT });
       return;
     }
     const active = [...document.querySelectorAll('#analysis-mode-filter input:checked')]
@@ -374,7 +539,7 @@ export const AnalysisPanel = {
     MapRenderer.clearRoutes();
     if (segments.length === 0) return;
     const maxCount = Math.max(...segments.map(s => s.count));
-    RouteRenderer.drawAggregatedRoutes(segments, maxCount, { unit: 'Wege/Tag' });
+    RouteRenderer.drawAggregatedRoutes(segments, maxCount, { unit: TRIP_UNIT });
   },
 
   /**
@@ -413,8 +578,10 @@ export const AnalysisPanel = {
     this._facilities = [];
     this._setProgress(null);
     this._areaContext = null;
+    this._pupilInfo = null;
     AnalysisService.areaContext = null;
-    ['#analysis-facilities-group', '#analysis-settings-group', '#analysis-run-group',
+    AnalysisService.pupilSources = {};
+    ['#analysis-facilities-group', '#analysis-pupils-info', '#analysis-settings-group', '#analysis-run-group',
      '#analysis-result', '#analysis-area-context', '#analysis-filter-group',
      '#analysis-infra-controls', '#analysis-infra-legend',
      '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {

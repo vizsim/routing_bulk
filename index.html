@@ -373,16 +373,18 @@
         <h4 id="block-analyse-heading" class="config-block-title">Gebietsanalyse</h4>
         <div class="beta-hint">
           <strong>Experimentell.</strong> Bereich zeichnen → Schulen &amp; Kitas darin
-          finden → Wege je Einrichtung und Modal Split annehmen → alle Wege als
-          Belastungskarte rechnen (unter 18-Jährige, eigener Routing-Server).
+          finden → Schülerzahlen (amtlich, sonst Platzhalter) und Modal Split
+          annehmen → alle Schulwege als Belastungskarte rechnen (unter 18-Jährige,
+          Weglängen nach MiD 2023, eigener Routing-Server).
         </div>
         <div class="config-group">
           <!-- Während des Zeichnens erklärt die Leiste oben (src/ui/draw-bar.js), was zu tun ist -->
           <button id="analysis-draw-btn" class="analysis-btn" type="button">Bereich zeichnen</button>
         </div>
         <div class="config-group" id="analysis-facilities-group" style="display: none;">
-          <label class="config-group-label">Einrichtungen im Bereich (Wege/Tag editierbar):</label>
+          <label class="config-group-label">Einrichtungen im Bereich (Schüler:innen = Hinwege je Schultag, editierbar):</label>
           <div id="analysis-facilities"></div>
+          <p class="config-hint" id="analysis-pupils-info" style="display: none;"></p>
         </div>
         <div class="config-group" id="analysis-settings-group" style="display: none;">
           <label class="config-group-label">Einzugsradius &amp; Modal Split je Typ (%):</label>

@@ -56,12 +56,15 @@ Raumtyp vorschlagen (Quelle: MiD 2017, Wege von Schüler:innen nach RegioStaR7).
   „Gebiet: Berlin, Stadt · Metropole — Split-Vorschlag angewendet“ über der
   Tabelle. Hat der Nutzer Splits schon angefasst, wird nichts überschrieben;
   stattdessen erscheint ein Knopf „Split-Vorschlag anwenden“.
-- Vorschlagstabelle (`SPLIT_SUGGESTIONS` in `analysis-service.js`): die 7
-  RegioStaR7-Typen sind zu 4 Gruppen zusammengefasst (71 Metropole ·
-  72 Regiopole/Großstadt · 73/75/76 städtisch · 74/77 ländlich); Zahlen sind
-  an die MiD 2017 angelehnte, dokumentierte Setzungen — z. B. Grundschule
-  Metropole 55/20/10/15, ländlich 30/15/25/30 (Schulbus). In der UI bleibt
-  alles editierbar; der Raumtyp steht im Export unter `metadata.areaContext`.
+- Vorschlagstabelle: die 7 RegioStaR7-Typen sind zu 4 Gruppen zusammengefasst
+  (71 Metropole · 72 Regiopole/Großstadt · 73/75/76 städtisch · 74/77 ländlich).
+  In der UI bleibt alles editierbar; der Raumtyp steht im Export unter
+  `metadata.areaContext`.
+- **Aktualisiert 2026-10-25:** Werte jetzt mit Quelle in
+  `src/domain/school-trips.js` — Grundschule nach forsa 2022 (Ortsgröße),
+  weiterführende Schulen in Metropole/Großstadt nach MiD 2023 Abb. 98; nur
+  Kita, „Schule“ und ländliche weiterführende Schulen bleiben Setzungen.
+  Details: `docs/SCHULWEG_PARAMETER.md`.
 
 ## 3. Distanzverhalten je Modus ✅ (umgesetzt 2026-08-11)
 
@@ -74,6 +77,12 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
   Haltestellen-Modell. Werte stehen im Export unter `metadata.modeBehavior`.
 - Kombiniert sich gut mit Idee 1 (AGS-Grenze schneidet den Auto-Radius
   plausibel ab).
+- **Ersetzt 2026-10-25:** Die alte Lognormalverteilung (Median R/4, σ = 2)
+  legte ein Drittel der Fußwege in den innersten Ring und machte Radwege so
+  kurz wie Fußwege. Jetzt hat jedes Verkehrsmittel eine eigene Verteilung
+  (Mittelwerte MiD 2023 Abb. 100, skaliert auf Tab. 43 je Raumtyp), entkoppelt
+  vom Radius; der Radius kappt nur noch (Rest im äußersten Ring). Herleitung
+  und Prüfung: `docs/SCHULWEG_PARAMETER.md`.
 
 ## 4. Darstellung & Auswertung
 
@@ -95,9 +104,13 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 
 ## 5. Nachfrage-Daten verbessern
 
-- **Echte Schülerzahlen statt Typ-Pauschalen**: Schulverzeichnisse der Länder
-  (teils Open Data) → `trips` je Schule vorbelegen. Matching über Name/Adresse
-  ist Fleißarbeit; ggf. erst mal nur für ein Bundesland. Aufwand: **mittel–groß**.
+- **Echte Schülerzahlen statt Typ-Pauschalen** ✅ (umgesetzt 2026-10-25 für
+  BE, BB, HH; MV/BY optional): `preprocessing/schuelerzahlen/` erzeugt
+  `public/data/schuelerzahlen/<LAND>.json`, die Zuordnung zu OSM kommt aus
+  osm-schulabgleich (OSM-ID), sonst räumlich (150 m). Wege je Schule =
+  Schüler:innen = Hinwege je Schultag; die Herkunft steht am Eintrag
+  (amtlich/Platzhalter/eigener Wert) und im Export. Die amtliche Schulart
+  schärft zugleich den Einrichtungstyp. Offen: NRW, ST, SN, HB, TH anbinden.
 - **Altersschärfe**: Kita braucht 1–6-Jährige, Grundschule 6–10 — der Zensus
   liefert nur `Unter18` gesamt. Pragmatisch: fester Faktor je Typ
   (z. B. Kita ≈ ⅓ der U18) — ändert die Gewichte kaum, aber die
@@ -124,7 +137,8 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | 1 | AGS-Einzugsgrenze je Typ ✅ | klein | hoch (ländlicher Raum) |
 | 2 | RegioStaR7-Split-Vorschlag ✅ | klein | hoch |
 | 4a | Modus-Filter Karte ✅ | klein | hoch |
-| 3 | Distanzverhalten je Modus ✅ | klein | mittel |
+| 3 | Distanzverhalten je Modus ✅ (2026-10-25 auf MiD 2023 umgestellt) | klein | mittel |
+| 5a | Echte Schülerzahlen ✅ (BE, BB, HH) | mittel–groß | hoch |
 | 5b | Altersfaktor je Typ | klein | klein–mittel |
 | 4b | Unfall-Overlay | mittel | sehr hoch |
 | 6c | Analyse speichern/laden + Seed | klein–mittel | mittel |

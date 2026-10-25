@@ -1,9 +1,13 @@
 // ==== Analysis-Service: Gebietsanalyse (experimentell) ====
 //
 // Mini-Verkehrsmodell für einen gezeichneten Bereich:
-// 1. Erzeugung: Schulen/Kitas im Polygon, Wege je Einrichtung (editierbar)
+// 1. Erzeugung: Schulen/Kitas im Polygon. Wege je Einrichtung = Schüler:innen
+//    = Hinwege je Schultag (Rückwege gleich viele, Gegenrichtung) — vorbelegt
+//    aus amtlichen Schülerzahlen (SchoolStatsService), sonst Platzhalter.
 // 2. Aufteilung: Modal Split je Einrichtungstyp (Fuß/Rad/ÖPNV/Auto)
-// 3. Umlegung: gewichtete Stichprobe — pro Einrichtung×Modus werden höchstens
+// 3. Verteilung: Weglänge je Verkehrsmittel nach MiD 2023 (domain/school-trips.js,
+//    alle Werte mit Quelle) — Fußwege kurz, Radwege mittel, Autowege lang.
+// 4. Umlegung: gewichtete Stichprobe — pro Einrichtung×Modus werden höchstens
 //    CONFIG.ANALYSIS_MAX_SAMPLE Routen gerechnet, jede Route trägt das Gewicht
 //    Wege ÷ Stichprobengröße; die Kanten-Aggregation summiert Gewichte.
 //
@@ -15,11 +19,23 @@ import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
 import { Geo } from '../domain/geo.js';
 import { exportProperties } from '../domain/infra.js';
+import {
+  landFromAgs, matchFacilities, officialTypeToFacilityType, osmRefFromProperties
+} from '../domain/school-stats.js';
+import {
+  drawDistribution, modelSourceIds, REGIOSTAR_LABELS, SOURCES, tripModel
+} from '../domain/school-trips.js';
 import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
 import { PopulationService } from './population-service.js';
+import { SchoolStatsService } from './school-stats-service.js';
 
-// Defaults je Einrichtungstyp: Wege/Tag, Einzugsradius, Modal Split (%).
+/** Einheit der Belastungskarte: Wege je Einrichtung = Hinwege je Schultag. */
+export const TRIP_UNIT = 'Hinwege/Schultag';
+
+// Defaults je Einrichtungstyp. trips = Platzhalter, wenn keine amtliche
+// Schülerzahl vorliegt; split/radiusM/model = bundesweiter Vorschlag aus
+// domain/school-trips.js (beim Zeichnen durch den Raumtyp ersetzt).
 //
 // boundary = Einzugsgrenze über den Amtlichen Gemeindeschlüssel der
 // Zensus-Zellen (2 Stellen Land · 5 Kreis · 8 Gemeinde):
@@ -29,37 +45,39 @@ import { PopulationService } from './population-service.js';
 //   (×BOUNDARY_PENALTY_OUTSIDE, in einem anderen Bundesland
 //   ×BOUNDARY_PENALTY_OUTSIDE_LAND) — weiterführende Schulen haben
 //   legitime Einzugsbereiche über die Kreisgrenze, nur eben seltener
-export const FACILITY_TYPES = {
+const TYPE_BASE = {
   kindergarten: {
     label: 'Kindergarten',
     trips: 50,
-    radiusM: 1000,
-    split: { foot: 50, bike: 10, transit: 5, car: 35 },
     boundary: { level: 'gemeinde', mode: 'hard' }
   },
   grundschule: {
     label: 'Grundschule',
     trips: 200,
-    radiusM: 2000,
-    split: { foot: 50, bike: 20, transit: 10, car: 20 },
     boundary: { level: 'gemeinde', mode: 'hard' }
   },
   weiterfuehrend: {
     label: 'Weiterführende Schule',
     trips: 500,
-    radiusM: 4000,
-    split: { foot: 25, bike: 25, transit: 35, car: 15 },
     boundary: { level: 'kreis', mode: 'penalty' }
   },
   schule: {
     label: 'Schule',
     trips: 200,
-    radiusM: 2000,
-    split: { foot: 50, bike: 20, transit: 10, car: 20 },
     // Typ unbekannt (kann auch weiterführend sein) → weich statt hart
     boundary: { level: 'gemeinde', mode: 'penalty' }
   }
 };
+
+/** Vorschlag je Typ für einen Raumtyp (null = bundesweit): Split, Radius, Weglängenmodell. */
+export function typeSettingsFor(regioStaR7) {
+  return Object.fromEntries(Object.entries(TYPE_BASE).map(([type, base]) => {
+    const model = tripModel(type, regioStaR7);
+    return [type, { ...base, boundary: { ...base.boundary }, split: { ...model.split }, radiusM: model.radiusM, model }];
+  }));
+}
+
+export const FACILITY_TYPES = typeSettingsFor(null);
 
 // Abwertungsfaktoren für 'penalty'-Grenzen (wirken auf die Personenzahl der
 // Zelle, also auf Zieh-Wahrscheinlichkeit UND Kapazität)
@@ -67,65 +85,15 @@ const BOUNDARY_PENALTY_OUTSIDE = 0.3;
 const BOUNDARY_PENALTY_OUTSIDE_LAND = 0.1;
 const AGS_PREFIX = { gemeinde: 8, kreis: 5, land: 2 };
 
-// Distanzverhalten je Modus: Fußwege sind kurz (halber Radius, lognormal),
-// Auto fährt auch weit (voller Radius, gleichverteilt statt nah-lastig).
-// ÖPNV hat kein Distanzverhalten — er startet an den zielnächsten Haltestellen.
+// Verkehrsmittel der Gebietsanalyse. Die Weglänge je Modus kommt aus dem
+// Schulweg-Modell (typeSettings[typ].model.modes); ÖPNV hat keine eigene
+// Längenverteilung — er startet an den zielnächsten Haltestellen.
 export const MODES = [
-  { key: 'foot', label: 'Fuß', ghProfile: 'foot', radiusFactor: 0.5, distType: 'lognormal' },
-  { key: 'bike', label: 'Rad', ghProfile: 'bike', radiusFactor: 1, distType: 'lognormal' },
+  { key: 'foot', label: 'Fuß', ghProfile: 'foot' },
+  { key: 'bike', label: 'Rad', ghProfile: 'bike' },
   { key: 'transit', label: 'ÖPNV', ghProfile: 'foot' }, // Zubringer: zu Fuß ab Haltestelle
-  { key: 'car', label: 'Auto', ghProfile: 'car', radiusFactor: 1, distType: 'uniform' }
+  { key: 'car', label: 'Auto', ghProfile: 'car' }
 ];
-
-// ---- RegioStaR7: Raumtyp der Zensus-Zellen → Modal-Split-Vorschlag ----
-//
-// Die Zensus-Kacheln tragen je Zelle die Regionalstatistische Raumtypologie
-// (Feld RegioStaR7, "71" Metropole … "77" ländlich). Für die Vorschläge werden
-// die 7 Typen zu 4 Gruppen zusammengefasst; die Zahlen sind an die MiD 2017
-// (Wege von Schüler:innen nach Raumtyp) angelehnte Setzungen — dokumentiert
-// in docs/GEBIETSANALYSE_IDEEN.md, in der UI bleiben sie editierbar.
-const REGIOSTAR_LABELS = {
-  71: 'Metropole',
-  72: 'Regiopole/Großstadt',
-  73: 'Mittelstadt (Stadtregion)',
-  74: 'Kleinstädtisch/dörflich (Stadtregion)',
-  75: 'Zentrale Stadt (ländlich)',
-  76: 'Mittelstadt (ländliche Region)',
-  77: 'Kleinstädtisch/dörflich (ländlich)'
-};
-
-const REGIOSTAR_GROUP = {
-  71: 'metro', 72: 'gross',
-  73: 'staedtisch', 75: 'staedtisch', 76: 'staedtisch',
-  74: 'laendlich', 77: 'laendlich'
-};
-
-const SPLIT_SUGGESTIONS = {
-  metro: {
-    kindergarten: { foot: 60, bike: 10, transit: 5, car: 25 },
-    grundschule: { foot: 55, bike: 20, transit: 10, car: 15 },
-    weiterfuehrend: { foot: 20, bike: 20, transit: 45, car: 15 },
-    schule: { foot: 45, bike: 20, transit: 20, car: 15 }
-  },
-  gross: {
-    kindergarten: { foot: 55, bike: 10, transit: 5, car: 30 },
-    grundschule: { foot: 50, bike: 20, transit: 10, car: 20 },
-    weiterfuehrend: { foot: 20, bike: 25, transit: 40, car: 15 },
-    schule: { foot: 40, bike: 20, transit: 20, car: 20 }
-  },
-  staedtisch: {
-    kindergarten: { foot: 45, bike: 10, transit: 5, car: 40 },
-    grundschule: { foot: 45, bike: 20, transit: 10, car: 25 },
-    weiterfuehrend: { foot: 20, bike: 30, transit: 35, car: 15 },
-    schule: { foot: 35, bike: 25, transit: 20, car: 20 }
-  },
-  laendlich: {
-    kindergarten: { foot: 30, bike: 5, transit: 5, car: 60 },
-    grundschule: { foot: 30, bike: 15, transit: 25, car: 30 },
-    weiterfuehrend: { foot: 10, bike: 20, transit: 50, car: 20 },
-    schule: { foot: 25, bike: 15, transit: 35, car: 25 }
-  }
-};
 
 export const AnalysisService = {
   _abortController: null,
@@ -133,12 +101,14 @@ export const AnalysisService = {
   lastResult: null,
   // Raumtyp/Gemeinde des zuletzt gezeichneten Bereichs (für Export)
   areaContext: null,
+  // Quellen der zuletzt vorbelegten Schülerzahlen (für Export)
+  pupilSources: {},
 
   /**
-   * Ermittelt Raumtyp (RegioStaR7) und Gemeinde des Bereichs — per Mehrheit
-   * über die Zensus-Zellen im Polygon (die Felder stehen in jeder Zelle).
+   * Ermittelt Raumtyp (RegioStaR7), Gemeinde und Länder des Bereichs — per
+   * Mehrheit über die Zensus-Zellen im Polygon (die Felder stehen in jeder Zelle).
    * @param {Array<[lat,lng]>} polygon
-   * @returns {Promise<{regioStaR7: string, label: string, gemeinde: string|null}|null>}
+   * @returns {Promise<{regioStaR7: string, label: string, gemeinde: string|null, lands: string[]}|null>}
    */
   async getAreaContext(polygon) {
     const url = (CONFIG.POPULATION_PMTILES_URL || '').trim();
@@ -149,12 +119,15 @@ export const AnalysisService = {
     if (cells.length === 0) return null;
     const rsCount = {};
     const gemCount = {};
+    const lands = new Set();
     for (const c of cells) {
       const p = c.properties || {};
       const rs = String(p.RegioStaR7 || '').trim();
       if (rs) rsCount[rs] = (rsCount[rs] || 0) + 1;
       const gem = String(p.name_23 || '').trim();
       if (gem) gemCount[gem] = (gemCount[gem] || 0) + 1;
+      const land = landFromAgs(p.ags != null ? p.ags : p.gem_23_str);
+      if (land) lands.add(land);
     }
     const top = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     const rs7 = top(rsCount);
@@ -162,14 +135,18 @@ export const AnalysisService = {
     return {
       regioStaR7: rs7,
       label: REGIOSTAR_LABELS[rs7] || `Raumtyp ${rs7}`,
-      gemeinde: top(gemCount)
+      gemeinde: top(gemCount),
+      lands: [...lands].sort()
     };
   },
 
-  /** Split-Vorschlag je Einrichtungstyp für einen RegioStaR7-Code (oder null). */
-  suggestSplits(regioStaR7) {
-    const group = REGIOSTAR_GROUP[String(regioStaR7)];
-    return group ? SPLIT_SUGGESTIONS[group] : null;
+  /**
+   * Vorschlag je Einrichtungstyp (Split, Kappungsradius, Weglängen) für einen
+   * RegioStaR7-Code — oder null, wenn der Code unbekannt ist.
+   */
+  suggestTypeSettings(regioStaR7) {
+    if (!REGIOSTAR_LABELS[String(regioStaR7 || '').trim()]) return null;
+    return typeSettingsFor(regioStaR7);
   },
 
   /** AGS der Zelle, in der die Einrichtung steht (nächstes Zell-Zentrum). */
@@ -225,9 +202,9 @@ export const AnalysisService = {
 
   /**
    * Findet Schulen/Kitas im Polygon (aus schools.pmtiles) und initialisiert
-   * die editierbaren Wegezahlen aus den Typ-Defaults.
+   * die editierbaren Wegezahlen mit dem Platzhalter des Typs.
    * @param {Array<[lat,lng]>} polygon
-   * @returns {Promise<Array<{lat, lon, name, type, trips}>>}
+   * @returns {Promise<Array<{lat, lon, name, type, trips, tripsSource, osmRefs}>>}
    */
   async findFacilities(polygon) {
     const url = (CONFIG.SCHOOLS_PMTILES_URL || '').trim();
@@ -235,15 +212,17 @@ export const AnalysisService = {
     const features = await PopulationService.readFeaturesInPolygon(
       url, CONFIG.SCHOOLS_LAYER_NAME || 'germany_osm_schools', polygon, 15
     );
-    const typeOrder = ['weiterfuehrend', 'grundschule', 'schule', 'kindergarten'];
     const mapped = features.map(f => {
       const type = this.classify(f.properties);
+      const osmRef = osmRefFromProperties(f.properties, f.geomType);
       return {
         lat: f.lat,
         lon: f.lon,
         name: f.properties.name || `${FACILITY_TYPES[type].label} (unbenannt)`,
         type,
-        trips: FACILITY_TYPES[type].trips
+        trips: FACILITY_TYPES[type].trips,
+        tripsSource: { kind: 'placeholder' },
+        osmRefs: osmRef ? [osmRef] : []
       };
     });
     // OSM-Doppel (Node + Gebäude-Way derselben Einrichtung) zusammenfassen:
@@ -254,28 +233,79 @@ export const AnalysisService = {
     for (const f of mapped) {
       const dup = deduped.find(d => d.name === f.name && d.type === f.type
         && Geo.distanceMeters(d.lat, d.lon, f.lat, f.lon) < DEDUP_M);
-      if (!dup) deduped.push(f);
+      if (dup) dup.osmRefs.push(...f.osmRefs);
+      else deduped.push(f);
     }
-    return deduped
-      .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type) || a.name.localeCompare(b.name, 'de'));
+    return this.sortFacilities(deduped);
+  },
+
+  /** Sortierung der Liste: weiterführend, Grundschule, Schule, Kita; dann Name. */
+  sortFacilities(facilities) {
+    const typeOrder = ['weiterfuehrend', 'grundschule', 'schule', 'kindergarten'];
+    return facilities.sort((a, b) =>
+      typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type) || a.name.localeCompare(b.name, 'de'));
   },
 
   /**
-   * Zerlegt Wege einer Einrichtung in (Modus, Stichprobe, Gewicht).
-   * @returns {Array<{mode, ghProfile, sample, weight, trips}>}
+   * Belegt die Wege je Einrichtung mit amtlichen Schülerzahlen vor (eine
+   * Schülerin = ein Hinweg je Schultag) und übernimmt die amtliche Schulart,
+   * wenn sie eindeutig ist. Ohne Daten bleibt der Platzhalter des Typs.
+   * @returns {Promise<{matched: number, eligible: number, lands: Object}>}
+   */
+  async prefillPupils(facilities, areaContext) {
+    const data = await SchoolStatsService.loadLands((areaContext && areaContext.lands) || []);
+    this.pupilSources = data.sources;
+    const matches = matchFacilities(facilities, data.schools);
+    let matched = 0;
+    facilities.forEach((f, i) => {
+      const m = matches[i];
+      if (!m || !Number.isFinite(m.school.pupils)) return;
+      const s = m.school;
+      const officialType = officialTypeToFacilityType(s.type);
+      if (officialType && officialType !== f.type) {
+        f.osmType = f.type;
+        f.type = officialType;
+      }
+      f.trips = Math.max(0, Math.round(s.pupils));
+      f.tripsSource = {
+        kind: 'official',
+        source: s.src || null,
+        year: s.year || null,
+        officialId: s.id,
+        officialName: s.name,
+        officialType: s.type || null,
+        match: m.mode,
+        distanceM: m.distanceM
+      };
+      matched++;
+    });
+    this.sortFacilities(facilities);
+    return {
+      matched,
+      eligible: facilities.filter(f => f.type !== 'kindergarten').length,
+      lands: data.lands
+    };
+  },
+
+  /**
+   * Zerlegt Wege einer Einrichtung in (Modus, Stichprobe, Gewicht) und hängt
+   * je Modus die Längenverteilung aus dem Schulweg-Modell an.
+   * @returns {Array<{mode, ghProfile, sample, weight, trips, dist}>}
    */
   _modePlan(facility, typeSettings) {
     const settings = typeSettings[facility.type];
     const cap = Math.max(1, CONFIG.ANALYSIS_MAX_SAMPLE || 150);
+    const modeModels = (settings.model && settings.model.modes) || {};
     const plan = [];
     for (const mode of MODES) {
       const pct = settings.split[mode.key] || 0;
       const trips = Math.round(facility.trips * pct / 100);
       if (trips <= 0) continue;
       const sample = Math.min(trips, cap);
+      const modeModel = modeModels[mode.key];
       plan.push({
         mode: mode.key, ghProfile: mode.ghProfile, sample, weight: trips / sample, trips,
-        radiusFactor: mode.radiusFactor || 1, distType: mode.distType || 'lognormal'
+        dist: mode.key !== 'transit' && modeModel ? drawDistribution(modeModel) : null
       });
     }
     return plan;
@@ -350,13 +380,10 @@ export const AnalysisService = {
           const stops = allStops.filter(s => inRadius(s.lat, s.lon, settings.radiusM));
           points = DemandService._drawFromStops(stops, target, p.sample, CONFIG.DEMAND_TRANSIT_STOPS || 3).points;
         } else {
-          // Distanzverhalten je Modus: eigener Radius (Fuß halbiert) und
-          // eigene Längenverteilung (Auto gleichverteilt statt nah-lastig)
-          const modeRadius = settings.radiusM * p.radiusFactor;
-          const modeCells = p.radiusFactor < 1
-            ? cells.filter(c => inRadius(c.center[0], c.center[1], modeRadius))
-            : cells;
-          const drawn = DemandService._drawFromCells(modeCells, target, modeRadius, p.sample, p.distType, 'under18');
+          // Weglänge je Verkehrsmittel aus dem Schulweg-Modell (MiD 2023):
+          // kurze Wege zu Fuß, mittlere mit dem Rad, lange mit dem Auto. Der
+          // Radius kappt nur — Wege von weiter her starten im äußersten Ring.
+          const drawn = DemandService._drawFromCells(cells, target, settings.radiusM, p.sample, p.dist || 'lognormal', 'under18');
           points = drawn.points;
           if (drawn.points.length < p.sample) capacityLimited++;
         }
@@ -459,21 +486,35 @@ export const AnalysisService = {
       };
     });
 
+    const usedTypes = [...new Set(result.facilities.map(f => f.type))];
+    const sourceIds = new Set();
+    for (const type of usedTypes) {
+      const model = result.typeSettings[type] && result.typeSettings[type].model;
+      if (model) modelSourceIds(model).forEach(id => sourceIds.add(id));
+    }
+    const pupilSourceIds = new Set(result.facilities
+      .filter(f => f.tripsSource && f.tripsSource.kind === 'official' && f.tripsSource.source)
+      .map(f => f.tripsSource.source));
+
     const geoJson = {
       type: 'FeatureCollection',
       features,
       metadata: {
         exportDate: new Date().toISOString(),
         mode: 'analysis',
-        note: 'Gewichtete Stichproben-Umlegung (trips = Wege/Tag, nicht Routen)',
+        note: 'Gewichtete Stichproben-Umlegung. trips = Hinwege je Schultag (eine Schülerin/ein Schüler = '
+          + 'ein Hinweg); Rückwege etwa gleich viele auf denselben Kanten in Gegenrichtung.',
+        tripUnit: TRIP_UNIT,
         polygon: polygon ? polygon.map(([lat, lng]) => [lng, lat]) : null,
-        facilities: result.facilities.map(f => ({ name: f.name, type: f.type, trips: f.trips })),
-        typeSettings: result.typeSettings,
+        facilities: result.facilities.map(f => ({
+          name: f.name, type: f.type, trips: f.trips, tripsSource: f.tripsSource || { kind: 'placeholder' }, osmRefs: f.osmRefs || []
+        })),
+        typeSettings: Object.fromEntries(usedTypes.map(t => [t, result.typeSettings[t]])),
         areaContext: this.areaContext,
         boundaryPenalties: { outside: BOUNDARY_PENALTY_OUTSIDE, outsideLand: BOUNDARY_PENALTY_OUTSIDE_LAND },
-        modeBehavior: Object.fromEntries(MODES.map(m => [m.key, m.distType
-          ? { radiusFactor: m.radiusFactor || 1, distType: m.distType }
-          : { model: 'zielnaechste-haltestellen' }])),
+        transitModel: 'zielnaechste-haltestellen',
+        sources: Object.fromEntries([...sourceIds].map(id => [id, SOURCES[id]])),
+        pupilSources: Object.fromEntries([...pupilSourceIds].map(id => [id, this.pupilSources[id] || null])),
         sampleCap: CONFIG.ANALYSIS_MAX_SAMPLE,
         stats: result.stats
       }

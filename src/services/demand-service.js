@@ -77,7 +77,10 @@ export const DemandService = {
     const capacity = pool.reduce((s, e) => s + e.remaining, 0);
     if (pool.length === 0 || numPoints <= 0) return { points: [], capacity, used: 0 };
 
-    const numBins = Math.min(15, Math.max(1, numPoints));
+    // Parametrische Verteilungen (Gebietsanalyse) brauchen bei großem Radius
+    // feinere Ringe (≤ 250 m), sonst rutschen kurze Fußwege nach außen
+    const ringsWanted = distType && typeof distType === 'object' ? Math.max(15, Math.ceil(radiusM / 250)) : 15;
+    const numBins = Math.min(ringsWanted, Math.max(1, numPoints));
     const bins = this._byDistanceBin(pool, e => e.cell.center[0], e => e.cell.center[1], target, radiusM, numBins);
     const targets = this._binTargets(numPoints, numBins, distType, radiusM);
 

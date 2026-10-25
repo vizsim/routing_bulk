@@ -66,6 +66,11 @@ export const CONFIG = {
   POPULATION_LAYER_VISIBLE: false, // Einwohnerlayer optional auf Karte anzeigen
   POPULATION_LAYER_MAX_NATIVE_ZOOM: 14, // Höchster Zoom im PMTiles; darüber wird überzoomed (Layer bleibt sichtbar)
 
+  // Schülerzahlen je Schule für die Gebietsanalyse (index.json + <LAND>.json,
+  // erzeugt von preprocessing/schuelerzahlen/build_schuelerzahlen.py).
+  // Relativ zur Seite; leer = keine Vorbelegung (Platzhalter je Schultyp).
+  SCHOOL_STATS_BASE_URL: "data/schuelerzahlen/",
+
   // Schulen & Kindergärten (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Suche)
   SCHOOLS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/schools.pmtiles", // leer = Toggle ausblenden
   SCHOOLS_LAYER_NAME: "germany_osm_schools", // Source-Layer im PMTiles

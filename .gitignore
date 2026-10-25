@@ -57,3 +57,6 @@ schrott/
 *.parquet
 *.pmtiles
 *.fgb
+# Python
+__pycache__/
+*.pyc

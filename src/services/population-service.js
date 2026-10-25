@@ -602,7 +602,8 @@ import { Utils } from '../core/utils.js';
             const key = p.osm_id || p.osm_way_id || `${lat.toFixed(6)},${lon.toFixed(6)}:${p.name || ""}`;
             if (seen.has(key)) continue;
             seen.add(key);
-            out.push({ lat, lon, properties: p });
+            // geomType (1 = Punkt, 3 = Fläche) unterscheidet osm_id als Knoten bzw. Relation
+            out.push({ lat, lon, properties: p, geomType: f.type });
           }
         }
       } catch (e) {

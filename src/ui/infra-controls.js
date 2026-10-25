@@ -152,7 +152,7 @@ export const InfraControls = {
       const classes = INFRA_ATTRS[attr].classes(mode);
       const stats = this._stats || new Map();
       const total = [...stats.values()].reduce((s, v) => s + v, 0);
-      const unitKm = this._unit ? 'Wege-km/Tag' : 'Routen-km';
+      const unitKm = this._unit ? 'Hinweg-km/Schultag' : 'Routen-km';
       const shown = classes.filter(c => (stats.get(c.key) || 0) > 0);
       // Hervorhebung nur innerhalb derselben Ansicht ('unknown' gibt es in
       // mehreren Merkmalen) und für Klassen, die es dort noch gibt
