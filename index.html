@@ -396,6 +396,16 @@
           <p class="config-hint" id="analysis-estimate"></p>
         </div>
         <div id="analysis-result" class="demand-info" style="display: none;"></div>
+        <div class="config-group" id="analysis-length-group" style="display: none;">
+          <div class="histogram-mode-row">
+            <span class="histogram-mode-label">Längenverteilung:</span>
+            <div class="histogram-mode-buttons">
+              <button type="button" class="length-metric-btn" data-metric="beeline" title="Luftlinie vom Startpunkt zur Einrichtung">Beeline</button>
+              <button type="button" class="length-metric-btn active" data-metric="route" title="Länge der gerechneten Route">Routenlänge</button>
+            </div>
+          </div>
+          <div id="analysis-length-chart" class="length-chart"></div>
+        </div>
         <div class="config-group infra-controls" id="analysis-infra-controls" style="display: none;"></div>
         <div id="analysis-infra-legend" class="legend infra-legend" style="display: none;"></div>
         <div class="config-group" id="analysis-filter-group" style="display: none;">

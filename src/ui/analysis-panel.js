@@ -10,6 +10,7 @@ import { SOURCES, SIGMA, DETOUR_FACTOR, modelSourceIds } from '../domain/school-
 import {
   AnalysisService, FACILITY_TYPES, MODES, TRIP_UNIT, typeSettingsFor
 } from '../services/analysis-service.js';
+import { LengthChart } from '../visualization/length-chart.js';
 import { MapRenderer } from '../visualization/map-renderer.js';
 import { RouteRenderer } from '../visualization/route-renderer.js';
 import { DrawBar } from './draw-bar.js';
@@ -86,6 +87,8 @@ export const AnalysisPanel = {
   _radiusEdited: false,
   // Ergebnis der Schülerzahl-Vorbelegung (für die Zusammenfassung)
   _pupilInfo: null,
+  // Längenverteilung: 'route' (Routenlänge) oder 'beeline' (Luftlinie)
+  _lengthMetric: 'route',
 
   init() {
     this._typeSettings = JSON.parse(JSON.stringify(FACILITY_TYPES));
@@ -149,6 +152,30 @@ export const AnalysisPanel = {
     Utils.getElement('#analysis-run-btn')?.addEventListener('click', () => this._run());
     Utils.getElement('#analysis-export-btn')?.addEventListener('click', () => AnalysisService.exportGeoJSON(this._polygon));
     Utils.getElement('#analysis-reset-btn')?.addEventListener('click', () => this._reset());
+    document.querySelectorAll('.length-metric-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._lengthMetric = btn.dataset.metric;
+        document.querySelectorAll('.length-metric-btn').forEach(b => b.classList.toggle('active', b === btn));
+        this._renderLengthChart();
+      });
+    });
+  },
+
+  /** Längenverteilung der zuletzt gerechneten Wege (gestapelt nach Verkehrsmittel). */
+  _renderLengthChart() {
+    const group = Utils.getElement('#analysis-length-group');
+    const result = AnalysisService.lastResult;
+    if (!group) return;
+    if (!result || !result.trips || result.trips.length === 0) {
+      group.style.display = 'none';
+      return;
+    }
+    group.style.display = 'block';
+    LengthChart.render(Utils.getElement('#analysis-length-chart'), result.trips, {
+      metric: this._lengthMetric,
+      modes: MODES.map(m => ({ key: m.key, label: m.label })),
+      note: 'ÖPNV = Fußweg ab der Haltestelle; die Fahrt mit Bus oder Bahn ist nicht enthalten.'
+    });
   },
 
   _startDrawing() {
@@ -529,6 +556,7 @@ export const AnalysisPanel = {
         }
         resultEl.innerHTML = html;
       }
+      this._renderLengthChart();
       // '' statt 'block': die Leiste ist per CSS ein Flex-Container (Zeilenabstand)
       Utils.getElement('#analysis-infra-controls').style.display = result.segments.length ? '' : 'none';
       this._toggleModeFilter(result.segments.length > 0);
@@ -627,7 +655,7 @@ export const AnalysisPanel = {
     AnalysisService.areaContext = null;
     AnalysisService.pupilSources = {};
     ['#analysis-facilities-group', '#analysis-pupils-info', '#analysis-settings-group', '#analysis-run-group',
-     '#analysis-result', '#analysis-area-context', '#analysis-filter-group',
+     '#analysis-result', '#analysis-length-group', '#analysis-area-context', '#analysis-filter-group',
      '#analysis-infra-controls', '#analysis-infra-legend',
      '#analysis-export-group', '#analysis-reset-group'].forEach(sel => {
       const el = Utils.getElement(sel);

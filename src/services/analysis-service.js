@@ -454,7 +454,21 @@ export const AnalysisService = {
       capacityLimited,
       totalTrips: facilities.reduce((s, f) => s + f.trips, 0)
     };
-    this.lastResult = { segments, stats, facilities, typeSettings };
+    // Länge je gerechneter Route (für die Längenverteilung): Routenlänge laut
+    // GraphHopper und Luftlinie Start → Einrichtung, mit dem Gewicht der Route
+    const trips = [];
+    results.forEach((r, i) => {
+      if (!r) return;
+      const path = r.response && r.response.paths && r.response.paths[0];
+      const job = jobs[i];
+      trips.push({
+        mode: job.mode,
+        weight: job.weight,
+        routeM: path && Number.isFinite(path.distance) ? path.distance : null,
+        beelineM: Geo.distanceMeters(job.start[0], job.start[1], job.target[0], job.target[1])
+      });
+    });
+    this.lastResult = { segments, stats, facilities, typeSettings, trips };
     return { segments, stats };
   },
 

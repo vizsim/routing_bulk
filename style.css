@@ -767,6 +767,7 @@ select {
 .dist-btn,
 .demand-basis-btn,
 .histogram-mode-btn,
+.length-metric-btn,
 .infra-btn {
   display: inline-flex;
   align-items: center;
@@ -787,6 +788,7 @@ select {
 .dist-btn:hover,
 .demand-basis-btn:hover,
 .histogram-mode-btn:hover,
+.length-metric-btn:hover,
 .infra-btn:hover:not(:disabled) {
   border-color: #c3c8d0;
   color: var(--ui-text-strong);
@@ -794,6 +796,7 @@ select {
 .dist-btn.active,
 .demand-basis-btn.active,
 .histogram-mode-btn.active,
+.length-metric-btn.active,
 .infra-btn.active {
   border-color: var(--ui-accent);
   background: var(--ui-chip-active);
@@ -803,6 +806,7 @@ select {
 .dist-btn:focus-visible,
 .demand-basis-btn:focus-visible,
 .histogram-mode-btn:focus-visible,
+.length-metric-btn:focus-visible,
 .infra-btn:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
@@ -1334,6 +1338,184 @@ select {
   margin: 0;
   cursor: pointer;
 }
+
+/* ───── Längenverteilung der Gebietsanalyse (src/visualization/length-chart.js) ───── */
+/* Farbe je Verkehrsmittel, feste Reihenfolge; gegen die Fläche #f9fafb geprüft
+   (dataviz-Validator: auch bei Farbsehschwäche unterscheidbar). Türkis und Gelb
+   haben unter 3:1 Kontrast — die Werte stehen deshalb auch in Legende, Tooltip
+   und Tabelle. */
+.length-chart,
+.lc-tooltip {
+  --lc-foot: #2a78d6;
+  --lc-bike: #eb6834;
+  --lc-transit: #1baf7a;
+  --lc-car: #eda100;
+}
+.lc-swatch--foot { background: var(--lc-foot); }
+.lc-swatch--bike { background: var(--lc-bike); }
+.lc-swatch--transit { background: var(--lc-transit); }
+.lc-swatch--car { background: var(--lc-car); }
+.lc-seg--foot { fill: var(--lc-foot); }
+.lc-seg--bike { fill: var(--lc-bike); }
+.lc-seg--transit { fill: var(--lc-transit); }
+.lc-seg--car { fill: var(--lc-car); }
+
+.lc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.lc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.lc-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.lc-legend-label {
+  font-weight: 500;
+  color: var(--ui-text);
+}
+.lc-legend-value {
+  color: var(--ui-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lc-plot {
+  padding: 6px 8px 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-field);
+}
+.lc-svg {
+  display: block;
+  font-family: var(--ui-font);
+}
+.lc-grid,
+.lc-baseline {
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.lc-grid { stroke: #e5e7eb; }
+.lc-baseline { stroke: #c9cdd3; }
+.lc-tick,
+.lc-caption {
+  font-size: 10px;
+  fill: var(--ui-text-muted);
+}
+.lc-tick { font-variant-numeric: tabular-nums; }
+.lc-tick-y {
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+.lc-caption { dominant-baseline: middle; }
+.lc-mean {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--ui-text-strong);
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+.lc-hit { fill: transparent; }
+.lc-col {
+  outline: none;
+  transition: opacity 0.12s;
+}
+.lc-svg.is-hovering .lc-col:not(.is-active) { opacity: 0.4; }
+.lc-col:focus-visible .lc-hit {
+  stroke: var(--ui-focus);
+  stroke-width: 2;
+}
+.lc-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ui-text-muted);
+}
+.lc-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 3000;
+  padding: 6px 9px;
+  font: 400 11.5px/1.45 var(--ui-font);
+  color: #fff;
+  background: var(--ui-tooltip);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 80ms ease, visibility 80ms ease;
+  pointer-events: none;
+}
+.lc-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+.lc-tt-head {
+  margin-bottom: 2px;
+  color: #d1d5db;
+}
+.lc-tt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lc-tt-row strong {
+  min-width: 28px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lc-tt-row span:last-child { color: #d1d5db; }
+.lc-tt-key {
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.lc-tt-total {
+  margin-top: 3px;
+  padding-top: 3px;
+  padding-left: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+.lc-table {
+  margin-top: 6px;
+  font-size: 11.5px;
+}
+.lc-table summary {
+  width: fit-content;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+.lc-table summary:hover { color: var(--ui-text); }
+.lc-table table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.lc-table th,
+.lc-table td {
+  padding: 2px 4px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ui-divider);
+}
+.lc-table thead th { color: var(--ui-text-muted); font-weight: 600; }
+.lc-table tbody th,
+.lc-table tfoot th {
+  text-align: left;
+  font-weight: 500;
+}
+.lc-table tfoot { color: var(--ui-text-strong); }
 
 #analysis-settings {
   overflow-x: auto; /* bei Browser-Zoom innen scrollen statt abschneiden */
