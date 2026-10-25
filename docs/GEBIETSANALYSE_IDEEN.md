@@ -105,12 +105,15 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 ## 5. Nachfrage-Daten verbessern
 
 - **Echte Schülerzahlen statt Typ-Pauschalen** ✅ (umgesetzt 2026-10-25 für
-  BE, BB, HH; MV/BY optional): `preprocessing/schuelerzahlen/` erzeugt
+  BE, BB, HH, BY; NW/MV/ST optional): `preprocessing/schuelerzahlen/` erzeugt
   `public/data/schuelerzahlen/<LAND>.json`, die Zuordnung zu OSM kommt aus
   osm-schulabgleich (OSM-ID), sonst räumlich (150 m). Wege je Schule =
   Schüler:innen = Hinwege je Schultag; die Herkunft steht am Eintrag
   (amtlich/Platzhalter/eigener Wert) und im Export. Die amtliche Schulart
-  schärft zugleich den Einrichtungstyp. Offen: NRW, ST, SN, HB, TH anbinden.
+  schärft zugleich den Einrichtungstyp. Offen: NW automatisch (Download-Server
+  am 25.10.2026 nicht erreichbar), SN (Webseite je Schule), HB (PDF), TH
+  (Format ungeprüft); HE prüfen. BW: JedeSchule hat nur für 414 von 6.094
+  Schulen alte Zahlen (2025) — nicht verwendet.
 - **Altersschärfe**: Kita braucht 1–6-Jährige, Grundschule 6–10 — der Zensus
   liefert nur `Unter18` gesamt. Pragmatisch: fester Faktor je Typ
   (z. B. Kita ≈ ⅓ der U18) — ändert die Gewichte kaum, aber die
@@ -138,7 +141,7 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 | 2 | RegioStaR7-Split-Vorschlag ✅ | klein | hoch |
 | 4a | Modus-Filter Karte ✅ | klein | hoch |
 | 3 | Distanzverhalten je Modus ✅ (2026-10-25 auf MiD 2023 umgestellt) | klein | mittel |
-| 5a | Echte Schülerzahlen ✅ (BE, BB, HH) | mittel–groß | hoch |
+| 5a | Echte Schülerzahlen ✅ (BE, BB, HH, BY; NW/MV/ST optional) | mittel–groß | hoch |
 | 5b | Altersfaktor je Typ | klein | klein–mittel |
 | 4b | Unfall-Overlay | mittel | sehr hoch |
 | 6c | Analyse speichern/laden + Seed | klein–mittel | mittel |

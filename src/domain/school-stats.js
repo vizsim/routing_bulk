@@ -66,6 +66,46 @@ function namesMatch(a, b) {
   return x === y || x.startsWith(`${y} `) || y.startsWith(`${x} `);
 }
 
+// Lockerer Namensvergleich für mehrere amtliche Schulen in Reichweite: Bayerns
+// Schulsuche schreibt „Grundschule München Herrnstraße 21“, OSM „Grundschule an
+// der Herrnstraße“. Es zählt ein gemeinsames Wort, das kein anderer Kandidat hat,
+// oder eine Schulart, die nur dieser Kandidat hat; widersprechen sich die
+// Schularten (Grundschule ↔ Förderschule), nie.
+const NAME_STOPWORDS = new Set(['an', 'am', 'auf', 'der', 'die', 'das', 'dem', 'den', 'des', 'im', 'in', 'und',
+  'zu', 'zum', 'zur', 'von', 'vom', 'fuer', 'bei', 'mit', 'schule', 'schulen', 'staatliche', 'staatl',
+  'staedtische', 'staedt', 'private', 'priv', 'privat', 'ev', 'evang', 'kath']);
+const NAME_TYPE_GROUPS = {
+  grund: /grundschul/,
+  mittel: /mittelschul|hauptschul|werkrealschul/,
+  real: /realschul/,
+  gymnasium: /gymnasi/,
+  foerder: /foerder|sonderpaed|sonderschul/,
+  beruf: /beruf|fachober|fachschul|fachakademie|oberstufenzentrum|\bosz\b/,
+  gesamt: /gesamtschul|gemeinschaftsschul|sekundarschul|stadtteilschul/
+};
+
+function nameTokens(name) {
+  return normalizeSchoolName(name).split(' ')
+    .filter(t => t.length >= 3 && !NAME_STOPWORDS.has(t) && !/^\d+$/.test(t));
+}
+
+function nameTypeGroups(name) {
+  const n = normalizeSchoolName(name);
+  return new Set(Object.keys(NAME_TYPE_GROUPS).filter(g => NAME_TYPE_GROUPS[g].test(n)));
+}
+
+/** Passt name zu candidate, gemessen an den übrigen Kandidaten in Reichweite? */
+export function namesSimilar(name, candidate, otherCandidates = []) {
+  const ga = nameTypeGroups(name);
+  const gb = nameTypeGroups(candidate);
+  if (ga.size && gb.size && ![...ga].some(g => gb.has(g))) return false;
+  const otherTokens = new Set(otherCandidates.flatMap(nameTokens));
+  const tb = new Set(nameTokens(candidate));
+  if (nameTokens(name).some(t => tb.has(t) && !otherTokens.has(t))) return true;
+  const otherGroups = new Set(otherCandidates.flatMap(n => [...nameTypeGroups(n)]));
+  return [...ga].some(g => gb.has(g) && !otherGroups.has(g));
+}
+
 function distanceM(lat1, lon1, lat2, lon2) {
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -74,34 +114,56 @@ function distanceM(lat1, lon1, lat2, lon2) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const PRIMARY = /grundschule|grund-|primarschule|primarstufe/;
-const SECONDARY = /gymnasium|sekundarschule|oberschule|gesamtschule|realschule|hauptschule|mittelschule|stadtteilschule|regionale schule|regelschule|werkrealschule|sekundarstufe/;
+// Schularten im Singular und Plural (bayerische Schulsuche: „Gymnasien“, „Realschulen“)
+const PRIMARY = /grundschul|grund-|primarschul|primarstufe/;
+const SECONDARY = /gymnasi|sekundarschul|oberschul|gesamtschul|realschul|hauptschul|mittelschul|stadtteilschul|regionale schul|regelschul|werkrealschul|wirtschaftsschul|sekundarstufe/;
+// Klassen 1–10/13 unter einem Dach (NRW: PRIMUS-Schule, Bayern/NRW: Volksschule)
+const ALL_GRADES = /gemeinschaftsschul|primus|volksschul|waldorf/;
+// Zweiter Bildungsweg (Abendgymnasium, Kolleg, Weiterbildungskolleg): Erwachsene,
+// oft abends — passt weder zum Schulweg-Modell noch zur Berufsschule; OSM-Einordnung bleibt
+const ADULT = /abend|kolleg|weiterbildung|zweiter bildungsweg|\bzbw\b/;
+// Bayern fasst Grund- und Mittelschulen in einer Kategorie zusammen; dort sagt
+// der Name, welche es ist („Grundschule Tüßling“, „Mittelschule Ebersberg“)
+const BY_PRIMARY_AND_MIDDLE = /grund- u\. mittel-\/hauptschul/;
 
 /**
  * Amtliche Schulart → Einrichtungstyp der Gebietsanalyse (oder null, wenn
  * nicht eindeutig — dann bleibt die Einordnung aus den OSM-Attributen).
  * Mehrere Schularten (Hamburg: „Berufsfachschule|Berufsschule|…“) zählen als
  * berufliche Schule nur, wenn keine allgemeinbildende Schulart dabei ist.
+ * @param {string} schoolType - amtliche Schulart
+ * @param {string} [name] - amtlicher Name, nur für Bayerns Sammelkategorie
  */
-export function officialTypeToFacilityType(schoolType) {
+export function officialTypeToFacilityType(schoolType, name = '') {
   const parts = String(schoolType || '').toLowerCase().split(/[|;]/).map(p => p.trim()).filter(Boolean);
   if (parts.length === 0) return null;
-  const general = parts.filter(p => !isVocationalPart(p));
+  const vocational = parts.filter(isVocationalPart);
+  const general = parts.filter(p => !isVocationalPart(p) && !ADULT.test(p));
   const any = (re) => general.some(p => re.test(p));
-  if (any(/gemeinschaftsschule/)) return 'schule'; // Klassen 1–10/13
+  if (any(ALL_GRADES)) return 'schule';
   const primary = any(PRIMARY);
   const secondary = any(SECONDARY);
+  if (primary && secondary && parts.length === 1 && BY_PRIMARY_AND_MIDDLE.test(parts[0])) {
+    const n = String(name || '').toLowerCase();
+    const isPrimary = PRIMARY.test(n);
+    const isSecondary = SECONDARY.test(n);
+    if (isPrimary !== isSecondary) return isPrimary ? 'grundschule' : 'weiterfuehrend';
+  }
   if (primary && secondary) return 'schule';
   if (primary) return 'grundschule';
   if (secondary) return 'weiterfuehrend';
-  if (general.length < parts.length) return 'beruflich';
+  if (vocational.length) return 'beruflich';
   return null;
 }
 
 // Berufliche Schulen (OSZ, Berufsschule, Fachschule, Berufskolleg …): eigener
 // Einrichtungstyp — Schüler:innen meist volljährig, in der dualen Ausbildung nur
-// an einzelnen Tagen in der Schule (siehe PRESENCE in school-trips.js).
-const VOCATIONAL = /oberstufenzentrum|\bosz\b|berufsschul|beruflich|berufsfachschul|fachoberschul|fachschul|berufskolleg|berufsbildend|berufsoberschul/;
+// an einzelnen Tagen in der Schule (siehe PRESENCE in school-trips.js). Bayern
+// kürzt ab („BFS … soziale Berufe“, „Teilzeit-Klassen an FOS/BOS“).
+const VOCATIONAL = new RegExp([
+  'oberstufenzentrum', '\\bosz\\b', 'berufsschul', 'beruflich', 'berufsfachs', '\\bbfs\\b', 'fachoberschul',
+  '\\bfos\\b', '\\bbos\\b', 'fachschul', 'fachakademie', 'berufskolleg', 'berufsbildend', 'berufsoberschul', 'berufe\\b'
+].join('|'));
 // Berufliche Bildungsgänge an allgemeinbildenden Schulen (Hamburg „Berufsfachschule
 // (allg. bild.)“, Berlin „Förderschwerp. einschl. beruflichem Teil“)
 const AT_GENERAL_SCHOOL = /allg\.\s*bild|allgemein\s*bild|einschl\.\s*beruflichem teil/;
@@ -128,7 +190,7 @@ export function applyOfficialSchool(facility, match) {
   const s = match && match.school;
   if (!s || !Number.isFinite(s.pupils)) return false;
   const officialType = s.type
-    ? officialTypeToFacilityType(s.type)
+    ? officialTypeToFacilityType(s.type, s.name)
     : (isVocationalSchool(s.name) ? 'beruflich' : null);
   if (officialType && officialType !== facility.type) {
     facility.osmType = facility.type;
@@ -179,7 +241,8 @@ export function matchFacilities(facilities, schools) {
     }
   });
 
-  // 2. Räumlich, nächste Paare zuerst
+  // 2. Räumlich: ein Kandidat im Umkreis, sonst gleicher Name, sonst ähnlicher
+  //    Name (namesSimilar); sichere Paare zuerst, dann die nächsten
   const pairs = [];
   facilities.forEach((f, i) => {
     if (results[i] || !eligible(f)) return;
@@ -187,10 +250,19 @@ export function matchFacilities(facilities, schools) {
       .filter(s => !claimed.has(s.id) && Number.isFinite(s.lat) && Number.isFinite(s.lon))
       .map(s => ({ s, d: distanceM(f.lat, f.lon, s.lat, s.lon) }))
       .filter(c => c.d <= MATCH_RADIUS_M);
-    const candidates = near.length === 1 ? near : near.filter(c => namesMatch(f.name, c.s.name));
-    for (const c of candidates) pairs.push({ i, s: c.s, d: c.d });
+    if (near.length === 1) {
+      pairs.push({ i, s: near[0].s, d: near[0].d, rank: 0 });
+      return;
+    }
+    for (const c of near) {
+      if (namesMatch(f.name, c.s.name)) {
+        pairs.push({ i, s: c.s, d: c.d, rank: 0 });
+      } else if (namesSimilar(f.name, c.s.name, near.filter(o => o !== c).map(o => o.s.name))) {
+        pairs.push({ i, s: c.s, d: c.d, rank: 1 });
+      }
+    }
   });
-  pairs.sort((a, b) => a.d - b.d);
+  pairs.sort((a, b) => a.rank - b.rank || a.d - b.d);
   for (const p of pairs) {
     if (results[p.i] || claimed.has(p.s.id)) continue;
     claimed.add(p.s.id);

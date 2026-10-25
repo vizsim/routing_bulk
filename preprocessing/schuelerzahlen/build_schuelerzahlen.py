@@ -8,17 +8,24 @@ Quellen:
 - OSM Schulabgleich (osmberlin): amtliche Schulen (Kennung, Name, Lage,
   Schulart) und das OSM-Objekt, das ihnen zugeordnet ist.
 - Berlin: Bildungsstatistik der Senatsverwaltung, Tabelle SVZ_Fakt5
-  (Schüler je Schule, Berliner Schulnummer BSN). Die Seite ist seit
-  Oktober 2026 nicht mehr erreichbar — dann einen gespeicherten Abruf als
-  CSV angeben (--be-csv, Spalten Schuljahr;BSN;…;Schueler_gesamt;…).
-- Brandenburg, Hamburg (Standard) sowie Mecklenburg-Vorpommern, Bayern
-  (nur auf Wunsch, Lizenz unklar): Schülerzahl aus den Rohdaten der
+  (Schüler je Schule, Berliner Schulnummer BSN) — als Webseite oder als
+  gesicherte CSV (die Seite ist seit Oktober 2026 nicht erreichbar).
+- Brandenburg, Hamburg, Bayern: Schülerzahl aus den Rohdaten der
   Landesquellen, abgerufen über die JedeSchule-API.
+- Nur auf Wunsch: Nordrhein-Westfalen (Open Data des Schulministeriums,
+  Gesamtzahl je Schulnummer; Download-Server zuletzt nicht erreichbar, Datei
+  von Hand übergeben) sowie Mecklenburg-Vorpommern (JedeSchule-API) und
+  Sachsen-Anhalt (Kartendienst des Statistischen Landesamts), deren
+  Landesquellen Vervielfältigung/Verbreitung einschränken.
+
+Das Skript beachtet robots.txt: Schließt eine Seite automatische Abrufe aus,
+die Datei im Browser speichern und als Pfad übergeben. Scheitert ein Land,
+bleibt dessen vorhandene Datei stehen; die übrigen Länder laufen weiter.
 
 Nur Standardbibliothek. Aufruf aus der Repo-Wurzel:
 
-    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-csv berlin_schuelerzahlen_2024-25.csv
-    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender BE --be-svz svz.html --matches-csv matches.csv
+    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-svz berlin_schuelerzahlen_2024-25.csv
+    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender NW --nw-anzahlen anzahlen.csv
 """
 
 from __future__ import annotations
@@ -28,19 +35,37 @@ import csv
 import datetime as dt
 import io
 import json
+import math
 import re
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
+import urllib.robotparser
 from html.parser import HTMLParser
 from pathlib import Path
 
 MATCHES_CSV_URL = "https://schulabgleich.osm-verkehrswende.org/datasets/schools_matches.csv"
 BE_SVZ_URL = "https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx"
+NW_ANZAHLEN_URL = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/SchuelerGesamtZahl/anzahlen.csv"
+# Der Dienst heißt je Schuljahr anders (…_2025_26_…); neuere Fassung mit --st-dienst
+ST_DIENST_URL = ("https://services-eu1.arcgis.com/3jNCHSftk0N4t7dd/arcgis/rest/services/"
+                 "SchulstandorteESPG25832_2025_26_Sicht/FeatureServer/45")
 JEDESCHULE_API = "https://jedeschule.codefor.de"
-DEFAULT_LAENDER = ["BE", "BB", "HH"]
-# Lizenz der Landesquelle unklar: nur mit --laender ausdrücklich anfordern
-OPT_IN_LAENDER = ["MV", "BY"]
-USER_AGENT = "routing_bulk-schuelerzahlen/1.0 (+https://github.com/vizsim/routing_bulk)"
+DEFAULT_LAENDER = ["BE", "BB", "HH", "BY"]
+# Nur mit --laender ausdrücklich anfordern:
+# - NW: der Download-Server des Schulministeriums war am 25.10.2026 nicht erreichbar;
+#   anzahlen.csv im Browser laden und mit --nw-anzahlen übergeben
+# - MV, ST: Landesquelle schränkt Vervielfältigung/Verbreitung ein
+OPT_IN_LAENDER = ["NW", "MV", "ST"]
+JEDESCHULE_LAENDER = ["BB", "HH", "MV", "BY"]
+USER_AGENT = "routing_bulk-schuelerzahlen/1.1 (+https://github.com/vizsim/routing_bulk)"
+
+# Wo ein Land die Datei von Hand bekommt, wenn der Abruf nicht geht
+MANUAL_HINT = {
+    "BE": "--be-svz DATEI (gespeicherte Seite SVZ_Fakt5 oder gesicherte CSV)",
+    "NW": "--nw-anzahlen DATEI (anzahlen.csv von schulministerium.nrw/open-data)",
+}
 
 SOURCES = {
     "osm-schulabgleich": {
@@ -54,8 +79,16 @@ SOURCES = {
         "label": "Bildungsstatistik Berlin",
         "title": "Schüler- und Lehrkräftezahlen je Schule (SVZ_Fakt5)",
         "url": BE_SVZ_URL,
-        "license": "laut daten.berlin.de CC BY, Senatsverwaltung für Bildung, Jugend und Familie (bitte prüfen)",
+        "license": "CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut daten.berlin.de; vor einer Veröffentlichung prüfen)",
         "note": "Schüler:innen insgesamt je Berliner Schulnummer (BSN); nur Hauptstandorte.",
+    },
+    "nw-msb": {
+        "label": "Schulministerium NRW",
+        "title": "Gesamtanzahl der Schülerinnen und Schüler je Schule (Open Data)",
+        "url": "https://www.schulministerium.nrw/open-data",
+        "license": "dl-de/by-2-0, Ministerium für Schule und Bildung NRW",
+        "note": ("Amtliche Schuldaten, Stichtag 15.10. des Vorjahres (Veröffentlichung jeweils zum 1.3.); "
+                 "Lage über Schulnummer aus den Schulgrunddaten (Abgleich bzw. JedeSchule)."),
     },
     "jedeschule-bb": {
         "label": "Schulverzeichnis Brandenburg",
@@ -71,6 +104,13 @@ SOURCES = {
         "license": "dl-de/by-2-0",
         "note": "Schüler:innen je Standort.",
     },
+    "jedeschule-by": {
+        "label": "Schulsuche Bayern",
+        "title": "Eckdaten je Schule des Kultusministeriums (über die JedeSchule-API)",
+        "url": "https://www.km.bayern.de/schule-und-mehr/schulsuche",
+        "license": "keine Angabe in der Schulsuche (vor einer Veröffentlichung prüfen)",
+        "note": "Schüler:innen gesamt im angegebenen Schuljahr; öffentliche und private Schulen.",
+    },
     "jedeschule-mv": {
         "label": "Schulverzeichnis Mecklenburg-Vorpommern",
         "title": "WFS Schulstandorte, Feld anzahl_schueler (über die JedeSchule-API)",
@@ -78,36 +118,87 @@ SOURCES = {
         "license": "unklar (Metadaten: nur auszugsweise Vervielfältigung mit Quellenangabe)",
         "note": "Bezugsschuljahr nicht angegeben.",
     },
-    "jedeschule-by": {
-        "label": "Schulsuche Bayern",
-        "title": "Eckdaten je Schule des Kultusministeriums (über die JedeSchule-API)",
-        "url": "https://www.km.bayern.de/",
-        "license": "keine Angabe",
-        "note": "Schüler:innen gesamt im angegebenen Schuljahr.",
+    "st-stala": {
+        "label": "Statistisches Landesamt Sachsen-Anhalt",
+        "title": "Schulstandorte allgemeinbildender Schulen, Feld „Anzahl der Schüler/-innen“ (ArcGIS-Dienst)",
+        "url": "https://stala-sa.maps.arcgis.com/apps/instant/nearby/index.html?appid=2472e79115b04fd38f9c6e7d362d6efa",
+        "license": ("unklar: die Web-Anwendung nennt dl-de/by-2-0, der Dienst nur „© Statistisches Landesamt "
+                    "Sachsen-Anhalt“, der Vorjahresdienst untersagte Vervielfältigung und Verbreitung "
+                    "(vor einer Veröffentlichung klären)"),
+        "note": "Nur allgemeinbildende Schulen, ohne Schulnummer; Zuordnung über Lage und Name.",
     },
 }
+
+SOURCE_ID = {"BE": "be-svz", "NW": "nw-msb", "ST": "st-stala",
+             **{land: f"jedeschule-{land.lower()}" for land in JEDESCHULE_LAENDER}}
 
 
 # ---------------------------------------------------------------- Laden
 
 
+class FetchRefused(RuntimeError):
+    """Abruf laut robots.txt nicht erwünscht (oder robots.txt nicht abrufbar)."""
+
+
+_ROBOTS: dict[str, urllib.robotparser.RobotFileParser] = {}
+
+
+def robots_parser(lines: list[str] | None = None, status: int | None = None) -> urllib.robotparser.RobotFileParser:
+    """Regeln aus robots.txt nach RFC 9309: Datei fehlt (4xx) → alles erlaubt; Serverfehler → nichts erlaubt."""
+    rp = urllib.robotparser.RobotFileParser()
+    if status is not None:
+        if 400 <= status < 500:
+            rp.allow_all = True
+        else:
+            rp.disallow_all = True
+    else:
+        rp.parse(lines or [])
+    return rp
+
+
+def robots_allows(url: str) -> bool:
+    """Darf dieses Skript die URL abrufen? robots.txt je Host wird einmal gelesen."""
+    parts = urllib.parse.urlsplit(url)
+    root = f"{parts.scheme}://{parts.netloc}"
+    rp = _ROBOTS.get(root)
+    if rp is None:
+        req = urllib.request.Request(f"{root}/robots.txt", headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                rp = robots_parser(resp.read().decode("utf-8", "replace").splitlines())
+        except urllib.error.HTTPError as err:
+            rp = robots_parser(status=err.code)
+        _ROBOTS[root] = rp
+    return rp.can_fetch(USER_AGENT, url)
+
+
+def decode_bytes(raw: bytes, charset: str = "utf-8") -> str:
+    """Text aus Bytes: angegebener Zeichensatz, sonst Windows-1252, sonst Latin-1.
+
+    Ohne BOM — die Abgleichs-CSV beginnt mit einem, sonst hieße ihre erste
+    Spalte „\\ufeffbundesland“ und keine Zeile fände ihr Land.
+    """
+    for enc in (charset, "cp1252"):
+        try:
+            return raw.decode(enc).lstrip("\ufeff")
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("latin-1").lstrip("\ufeff")
+
+
+def is_url(path_or_url: str) -> bool:
+    return bool(re.match(r"^https?://", str(path_or_url)))
+
+
 def read_text(path_or_url: str) -> str:
-    """Datei oder URL als Text (UTF-8, sonst Latin-1)."""
-    if re.match(r"^https?://", path_or_url):
+    """Datei oder URL als Text. URLs nur, wenn robots.txt den Abruf erlaubt."""
+    if is_url(path_or_url):
+        if not robots_allows(path_or_url):
+            raise FetchRefused(f"{path_or_url}: robots.txt erlaubt keinen automatischen Abruf (oder ist nicht abrufbar)")
         req = urllib.request.Request(path_or_url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=120) as resp:
-            raw = resp.read()
-            charset = resp.headers.get_content_charset() or "utf-8"
-    else:
-        raw = Path(path_or_url).read_bytes()
-        charset = "utf-8"
-    try:
-        text = raw.decode(charset)
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1")
-    # Die Abgleichs-CSV beginnt mit einem BOM — sonst hieße die erste Spalte
-    # "﻿bundesland", und keine Zeile fände ihr Land
-    return text.lstrip("﻿")
+            return decode_bytes(resp.read(), resp.headers.get_content_charset() or "utf-8")
+    return decode_bytes(Path(path_or_url).read_bytes())
 
 
 def first_int(value) -> int | None:
@@ -118,6 +209,57 @@ def first_int(value) -> int | None:
         return int(value) if value >= 0 else None
     m = re.search(r"\d[\d.]*", str(value))
     return int(m.group(0).replace(".", "")) if m else None
+
+
+def school_year(value) -> str | None:
+    """Schuljahr vereinheitlichen: '2025/2026' → '2025/26', Stichtag '15.10.2025' → '2025/26', '2025_26' → '2025/26'."""
+    s = str(value or "")
+    m = re.search(r"(?<!\d)(20\d{2})\s*[/_-]\s*(\d{4}|\d{2})(?!\d)", s)
+    if m:
+        return f"{m.group(1)}/{m.group(2)[-2:]}"
+    m = re.search(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(20\d{2})(?!\d)", s)
+    if m:
+        year = int(m.group(3)) if int(m.group(2)) >= 8 else int(m.group(3)) - 1
+        return f"{year}/{(year + 1) % 100:02d}"
+    m = re.search(r"(?<!\d)(20\d{2})(?!\d)", s)
+    return m.group(1) if m else None
+
+
+def _csv_rows(text: str) -> list[list[str]]:
+    """CSV-Zeilen; Trennzeichen aus der Zeile 'sep=;' oder geschätzt (; , Tab)."""
+    lines = text.lstrip("\ufeff").splitlines()
+    delimiter = None
+    if lines and lines[0].strip().lower().startswith("sep="):
+        delimiter = lines[0].strip()[4:5] or ";"
+        lines = lines[1:]
+    if delimiter is None:
+        sample = "\n".join(lines[:20])
+        delimiter = max([";", ",", "\t"], key=sample.count)
+    return [[c.strip() for c in row] for row in csv.reader(lines, delimiter=delimiter) if any(c.strip() for c in row)]
+
+
+def _norm_header(cell: str) -> str:
+    s = cell.lower().replace("ü", "ue").replace("ä", "ae").replace("ö", "oe").replace("ß", "ss")
+    return re.sub(r"[^a-z0-9/]+", " ", s).strip()
+
+
+def _haversine_m(lat1, lon1, lat2, lon2) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = (math.sin((p2 - p1) / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 6371000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def normalize_school_name(name) -> str:
+    """Wie in der App: klein, Umlaute aufgelöst, ohne Klammerzusätze und Satzzeichen."""
+    s = re.sub(r"\([^)]*\)", " ", str(name or "").lower())
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", s).split())
+
+
+def names_match(a, b) -> bool:
+    x, y = normalize_school_name(a), normalize_school_name(b)
+    return bool(x and y) and (x == y or x.startswith(f"{y} ") or y.startswith(f"{x} "))
 
 
 # ---------------------------------------------------------------- OSM Schulabgleich
@@ -187,20 +329,27 @@ class _TableRows(HTMLParser):
             self._cell.append(data)
 
 
-def parse_be_svz(html: str) -> dict[str, dict]:
-    """Berliner Tabelle SVZ_Fakt5 → {BSN: {pupils, year}}."""
-    parser = _TableRows()
-    parser.feed(html)
-    header_index = next((i for i, r in enumerate(parser.rows)
+def parse_be_svz(text: str) -> dict[str, dict]:
+    """Berliner Tabelle SVZ_Fakt5 (gespeicherte Seite oder CSV) → {BSN: {pupils, year}}."""
+    if re.search(r"<table", text, re.I):
+        parser = _TableRows()
+        parser.feed(text)
+        rows = parser.rows
+    else:
+        rows = _csv_rows(text)
+    header_index = next((i for i, r in enumerate(rows)
                          if any(c.strip().upper() == "BSN" for c in r)), None)
     if header_index is None:
         raise ValueError("SVZ_Fakt5: keine Kopfzeile mit 'BSN' gefunden")
-    header = [c.lower() for c in parser.rows[header_index]]
-    col_bsn = next(i for i, c in enumerate(header) if c.strip() == "bsn")
-    col_pupils = next(i for i, c in enumerate(header) if c.startswith("schüler") and "m/w/d" in c)
+    header = [_norm_header(c) for c in rows[header_index]]
+    col_bsn = header.index("bsn")
+    col_pupils = next((i for i, c in enumerate(header)
+                       if c.startswith("schueler") and ("m/w/d" in c or "gesamt" in c)), None)
+    if col_pupils is None:
+        raise ValueError("SVZ_Fakt5: keine Spalte 'Schüler (m/w/d)' bzw. 'Schueler_gesamt'")
     col_year = next((i for i, c in enumerate(header) if "schuljahr" in c), None)
     out = {}
-    for row in parser.rows[header_index + 1:]:
+    for row in rows[header_index + 1:]:
         if len(row) <= max(col_bsn, col_pupils):
             continue
         bsn = row[col_bsn].strip()
@@ -211,43 +360,169 @@ def parse_be_svz(html: str) -> dict[str, dict]:
     return out
 
 
-def parse_be_csv(text: str) -> dict[str, dict]:
-    """Gespeicherter Abruf von SVZ_Fakt5 als CSV (Spalten Schuljahr;BSN;…;Schueler_gesamt;…)
-    → {BSN: {pupils, year}} wie parse_be_svz."""
-    reader = csv.DictReader(io.StringIO(text), delimiter=";")
-    if not reader.fieldnames or "BSN" not in reader.fieldnames or "Schueler_gesamt" not in reader.fieldnames:
-        raise ValueError("Berliner CSV: Spalten 'BSN' und 'Schueler_gesamt' erwartet")
-    out = {}
-    for row in reader:
-        bsn = (row.get("BSN") or "").strip()
-        pupils = first_int(row.get("Schueler_gesamt"))
-        if not re.match(r"^\d{2}[A-Z]\d{2}$", bsn) or pupils is None:
+# ---------------------------------------------------------------- Nordrhein-Westfalen
+
+
+def parse_nw_anzahlen(text: str) -> tuple[dict[str, dict], dict]:
+    """NRW 'Gesamtanzahl der Schülerinnen und Schüler je Schule' → ({NW-Schulnummer: {pupils, year}}, Spalten).
+
+    Der Spaltenaufbau ist nicht dokumentiert; erkannt werden eine Spalte mit
+    der Schulnummer und eine Zahlspalte (bevorzugt „gesamt“, sonst „Anzahl“
+    bzw. „Schüler“). Mehrere Zeilen je Schule werden addiert, bei einer
+    Schuljahresspalte zählt das jüngste Schuljahr.
+    """
+    rows = _csv_rows(text)
+    is_nr = re.compile(r"^(schul ?n(ummer|r)|snr)\b")
+    header_index = next((i for i, r in enumerate(rows)
+                         if any(is_nr.match(_norm_header(c)) for c in r)), None)
+    if header_index is None:
+        raise ValueError("NRW-Schülerzahlen: keine Kopfzeile mit 'Schulnummer' gefunden")
+    header = [_norm_header(c) for c in rows[header_index]]
+    col_nr = next(i for i, c in enumerate(header) if is_nr.match(c))
+    col_year = next((i for i, c in enumerate(header) if re.search(r"schuljahr|stichtag", c)), None)
+    # Spalten nach Geschlecht ('weiblich', 'Schüler (w)') nie als Gesamtzahl nehmen
+    candidates = [i for i in range(len(header)) if i not in (col_nr, col_year)
+                  and not re.search(r"weibl|maennl|divers|(^|\s)[wmd]$", header[i])]
+    col_count = None
+    for pattern in (r"gesamt", r"anzahl", r"schueler|\bsus\b"):
+        col_count = next((i for i in candidates if re.search(pattern, header[i])), None)
+        if col_count is not None:
+            break
+    if col_count is None:
+        # sonst die Zahlspalte mit dem größten Median (Schulform-Schlüssel wie '02' sind klein)
+        sample = rows[header_index + 1:header_index + 51]
+        numeric = [i for i in candidates if sample and all(
+            i < len(r) and re.fullmatch(r"\d[\d.]*", r[i]) for r in sample)]
+        if numeric:
+            col_count = max(numeric, key=lambda i: sorted(first_int(r[i]) for r in sample)[len(sample) // 2])
+    if col_count is None:
+        raise ValueError(f"NRW-Schülerzahlen: keine Zahlspalte in {rows[header_index]}")
+    columns = {"schulnummer": rows[header_index][col_nr], "anzahl": rows[header_index][col_count],
+               "schuljahr": rows[header_index][col_year] if col_year is not None else None}
+
+    out: dict[str, dict] = {}
+    for row in rows[header_index + 1:]:
+        if len(row) <= max(col_nr, col_count):
             continue
-        out[bsn] = {"pupils": pupils, "year": (row.get("Schuljahr") or "").strip() or None}
+        digits = re.search(r"\d+", row[col_nr])
+        pupils = first_int(row[col_count])
+        if not digits or pupils is None:
+            continue
+        sid = f"NW-{digits.group(0).zfill(6)}"
+        year = school_year(row[col_year]) if col_year is not None and col_year < len(row) else None
+        prev = out.get(sid)
+        if prev is None or (year or "") > (prev["year"] or ""):
+            out[sid] = {"pupils": pupils, "year": year}
+        elif (year or "") == (prev["year"] or ""):
+            prev["pupils"] += pupils
+    return out, columns
+
+
+def nw_year_from_rule(reference: dt.date) -> str:
+    """Schuljahr der NRW-Datei: ab 1.3. eines Jahres gilt der Stichtag 15.10. des Vorjahres."""
+    year = reference.year - 1 if (reference.month, reference.day) >= (3, 1) else reference.year - 2
+    return f"{year}/{(year + 1) % 100:02d}"
+
+
+# ---------------------------------------------------------------- Sachsen-Anhalt (ArcGIS)
+
+
+def fetch_arcgis_features(layer_url: str, page: int = 1000) -> list[dict]:
+    """Alle Objekte eines ArcGIS-FeatureServer-Layers in WGS84 (Paginierung über resultOffset)."""
+    features, offset = [], 0
+    while True:
+        query = urllib.parse.urlencode({
+            "where": "1=1", "outFields": "*", "outSR": "4326", "orderByFields": "OBJECTID",
+            "resultOffset": offset, "resultRecordCount": page, "f": "json",
+        })
+        data = json.loads(read_text(f"{layer_url.rstrip('/')}/query?{query}"))
+        if "error" in data:
+            raise ValueError(f"ArcGIS-Dienst: {data['error'].get('message') or data['error']}")
+        batch = data.get("features") or []
+        features.extend(batch)
+        if not batch or not data.get("exceededTransferLimit"):
+            return features
+        offset += len(batch)
+
+
+def pupils_from_st_features(features: list[dict], year: str | None) -> dict[str, dict]:
+    """ArcGIS-Objekte → {ST-STALA-<OBJECTID>: {pupils, year, name, type, lat, lon}}."""
+    out = {}
+    for feature in features:
+        attrs = feature.get("attributes") or {}
+        geom = feature.get("geometry") or {}
+        count = next((v for k, v in attrs.items()
+                      if k.lower().startswith("anzahl") and isinstance(v, (int, float))), None)
+        pupils = first_int(count if count is not None else attrs.get("Text_Schuelerzahl"))
+        if pupils is None or attrs.get("OBJECTID") is None:
+            continue
+        name = " ".join(str(attrs.get("Name") or "").split()) \
+            or " ".join(" ".join(filter(None, [attrs.get("Name1"), attrs.get("Name2")])).split())
+        out[f"ST-STALA-{attrs['OBJECTID']}"] = {
+            "pupils": pupils, "year": year, "name": name, "type": attrs.get("Schulform"),
+            "lat": _float(geom.get("y")), "lon": _float(geom.get("x")),
+        }
     return out
+
+
+def link_to_officials(pupils: dict[str, dict], officials: dict[str, dict], max_m: float = 100.0) -> dict[str, str]:
+    """{Kennung: Kennung im Abgleich} für Datensätze, deren Kennung der Abgleich nicht kennt.
+
+    Etwa Sachsen-Anhalt (Dienst ohne Schulnummer) oder Bayern, solange der
+    Abgleich noch die älteren JedeSchule-Kennungen führt. Gleicher Name im
+    Umkreis von max_m, nächste Paare zuerst; jede amtliche Schule höchstens
+    einmal und nicht, wenn sie schon über ihre Kennung belegt ist.
+    """
+    cell = 0.01  # Grad, größer als max_m
+    grid: dict[tuple[int, int], list[str]] = {}
+    for oid, o in officials.items():
+        if oid not in pupils and o.get("lat") is not None and o.get("lon") is not None:
+            grid.setdefault((int(o["lat"] // cell), int(o["lon"] // cell)), []).append(oid)
+    pairs = []
+    for pid, p in pupils.items():
+        if pid in officials or p.get("lat") is None or p.get("lon") is None:
+            continue
+        gy, gx = int(p["lat"] // cell), int(p["lon"] // cell)
+        for oid in (oid for dy in (-1, 0, 1) for dx in (-1, 0, 1) for oid in grid.get((gy + dy, gx + dx), [])):
+            o = officials[oid]
+            d = _haversine_m(p["lat"], p["lon"], o["lat"], o["lon"])
+            if d <= max_m and names_match(p.get("name"), o.get("name")):
+                pairs.append((d, pid, oid))
+    linked: dict[str, str] = {}
+    used: set[str] = set()
+    for _, pid, oid in sorted(pairs):
+        if pid not in linked and oid not in used:
+            linked[pid] = oid
+            used.add(oid)
+    return linked
 
 
 # ---------------------------------------------------------------- JedeSchule (raw)
 
 
-def fetch_jedeschule(land: str, api: str = JEDESCHULE_API, page: int = 10000) -> list[dict]:
-    """Alle Schulen eines Landes mit raw-Feldern.
+def fetch_jedeschule(land: str, api: str = JEDESCHULE_API, page: int = 50000, include_raw: bool = True) -> list[dict]:
+    """Alle Schulen eines Landes, auf Wunsch mit raw-Feldern.
 
-    Die API wertet skip nicht verlässlich aus (Oktober 2026: die zweite Seite
-    wiederholte die erste, in Brandenburg fehlte so die Hälfte der Schulen).
-    Darum große Seiten (ein Land passt in eine), doppelte Kennungen verwerfen
-    und abbrechen, sobald eine Seite nichts Neues bringt.
+    Ein Land passt in eine Seite (Bayern hat gut 10.500 Einträge): Die API
+    sortiert zwischen Anfragen nicht stabil — im Oktober 2026 brachte die
+    zweite Seite nur schon Bekanntes, in Brandenburg fehlte so die Hälfte der
+    Schulen, in Bayern ein Teil. Falls doch geblättert werden muss, werden
+    doppelte Kennungen verworfen und es gibt einen Hinweis.
     """
     schools, seen, skip = [], set(), 0
+    raw = "true" if include_raw else "false"
     while True:
-        url = f"{api}/schools/?state={land}&include_raw=true&limit={page}&skip={skip}"
+        url = f"{api}/schools/?state={land}&include_raw={raw}&limit={page}&skip={skip}"
         batch = json.loads(read_text(url))
         new = [s for s in batch if s.get("id") not in seen]
         seen.update(s.get("id") for s in new)
         schools.extend(new)
-        if len(batch) < page or not new:
+        if len(batch) < page:
             return schools
-        skip += page
+        if not new:
+            print(f"  Hinweis: JedeSchule lieferte ab {skip} nur Bekanntes — Liste womöglich unvollständig")
+            return schools
+        skip += len(batch)
 
 
 def pupils_from_raw(land: str, raw: dict) -> tuple[int | None, str | None]:
@@ -284,11 +559,17 @@ def pupils_from_jedeschule(land: str, records: list[dict]) -> dict[str, dict]:
 # ---------------------------------------------------------------- Zusammenführen
 
 
-def build_land(land: str, officials: dict[str, dict], pupils: dict[str, dict], source_id: str) -> list[dict]:
-    """Schulen mit Schülerzahl, ergänzt um Lage/Schulart/OSM aus dem Abgleich."""
+def build_land(land: str, officials: dict[str, dict], pupils: dict[str, dict], source_id: str,
+               links: dict[str, str] | None = None) -> list[dict]:
+    """Schulen mit Schülerzahl, ergänzt um Lage/Schulart/OSM aus dem Abgleich.
+
+    links: Zuordnung über Lage und Name (link_to_officials) für Kennungen,
+    die der Abgleich nicht kennt; die eigene Kennung bleibt erhalten.
+    """
+    links = links or {}
     schools = []
     for official_id, p in pupils.items():
-        o = officials.get(official_id, {})
+        o = officials.get(official_id) or officials.get(links.get(official_id), {})
         lat, lon = o.get("lat", p.get("lat")), o.get("lon", p.get("lon"))
         if lat is None or lon is None:
             lat, lon = p.get("lat"), p.get("lon")
@@ -309,13 +590,71 @@ def build_land(land: str, officials: dict[str, dict], pupils: dict[str, dict], s
     return sorted(schools, key=lambda s: s["id"])
 
 
+def collect_pupils(land: str, args, officials: dict[str, dict]) -> dict[str, dict]:
+    """Schülerzahlen eines Landes aus seiner Quelle: {official_id: {pupils, year, …}}."""
+    if land == "BE":
+        print(f"  Quelle: {args.be_svz}")
+        svz = parse_be_svz(read_text(args.be_svz))
+        districts = sorted({bsn[:2] for bsn in svz})
+        if len(districts) < 12:
+            print(f"  Warnung: nur Bezirke {', '.join(districts)} in der Tabelle — vollständig?")
+        return {f"BE-{bsn}": v for bsn, v in svz.items()}
+
+    if land == "NW":
+        print(f"  Quelle: {args.nw_anzahlen}")
+        counts, columns = parse_nw_anzahlen(read_text(args.nw_anzahlen))
+        print(f"  Spalten: Schulnummer = {columns['schulnummer']!r}, Anzahl = {columns['anzahl']!r}"
+              + (f", Schuljahr = {columns['schuljahr']!r}" if columns["schuljahr"] else ""))
+        if args.nw_schuljahr:
+            fallback_year = school_year(args.nw_schuljahr) or args.nw_schuljahr
+        else:
+            ref = dt.date.today() if is_url(args.nw_anzahlen) \
+                else dt.date.fromtimestamp(Path(args.nw_anzahlen).stat().st_mtime)
+            fallback_year = nw_year_from_rule(ref)
+        pupils = {sid: {"pupils": v["pupils"], "year": v["year"] or fallback_year} for sid, v in counts.items()}
+        missing = [sid for sid in pupils if sid not in officials]
+        if missing:
+            # Lage der Schulen, die der Abgleich nicht kennt, aus den Schulgrunddaten (JedeSchule)
+            try:
+                records = {r["id"]: r for r in fetch_jedeschule("NW", args.jedeschule_api, include_raw=False)}
+            except (OSError, ValueError, FetchRefused) as err:
+                print(f"  Hinweis: JedeSchule nicht erreichbar ({err}); {len(missing)} Schulen ohne Lage")
+                records = {}
+            for sid in missing:
+                rec = records.get(sid)
+                if rec:
+                    pupils[sid].update(name=rec.get("name"), type=rec.get("school_type"),
+                                       lat=rec.get("latitude"), lon=rec.get("longitude"))
+        return pupils
+
+    if land == "ST":
+        print(f"  Quelle: {args.st_dienst}")
+        features = fetch_arcgis_features(args.st_dienst)
+        return pupils_from_st_features(features, school_year(args.st_dienst))
+
+    print("  Quelle: JedeSchule-API")
+    return pupils_from_jedeschule(land, fetch_jedeschule(land, args.jedeschule_api))
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--laender", default=",".join(DEFAULT_LAENDER),
                     help=f"Länder, Standard {','.join(DEFAULT_LAENDER)}; zusätzlich möglich: {','.join(OPT_IN_LAENDER)}")
     ap.add_argument("--matches-csv", default=MATCHES_CSV_URL, help="Pfad oder URL der Abgleichs-CSV")
-    ap.add_argument("--be-svz", default=BE_SVZ_URL, help="Pfad oder URL der Berliner Tabelle SVZ_Fakt5")
-    ap.add_argument("--be-csv", help="gespeicherter Abruf von SVZ_Fakt5 als CSV (statt --be-svz)")
+    # --be-csv: früherer Name, als gleichwertige Angabe weiter erlaubt
+    ap.add_argument("--be-svz", "--be-csv", dest="be_svz", default=BE_SVZ_URL,
+                    help="Berlin: URL oder gespeicherte Seite SVZ_Fakt5 (HTML) bzw. gesicherte CSV")
+    ap.add_argument("--nw-anzahlen", default=NW_ANZAHLEN_URL, help="NRW: URL oder Pfad von anzahlen.csv")
+    ap.add_argument("--nw-schuljahr", default=None,
+                    help="NRW: Schuljahr, falls die Datei keines nennt (Standard: aus dem Veröffentlichungsrhythmus)")
+    ap.add_argument("--st-dienst", default=ST_DIENST_URL, help="Sachsen-Anhalt: URL des ArcGIS-Layers")
     ap.add_argument("--jedeschule-api", default=JEDESCHULE_API)
     ap.add_argument("--out", default="public/data/schuelerzahlen")
     args = ap.parse_args(argv)
@@ -326,48 +665,69 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(f"keine Schülerzahl-Quelle für: {', '.join(unknown)}")
 
     print(f"Abgleichs-CSV: {args.matches_csv}")
-    officials = parse_matches_csv(read_text(args.matches_csv))
+    try:
+        officials = parse_matches_csv(read_text(args.matches_csv))
+    except (OSError, ValueError, FetchRefused) as err:
+        print(f"  Warnung: Abgleich nicht verfügbar ({err}) — ohne OSM-Zuordnung, Berlin ohne Lage")
+        officials = {}
+
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
+    previous = _load_json(out_dir / "index.json")
     today = dt.date.today().isoformat()
     index = {"format": 1, "generated": today, "laender": {}, "sources": {"osm-schulabgleich": SOURCES["osm-schulabgleich"]}}
+    # Länder, die diesmal nicht laufen, bleiben im Index
+    for land, entry in (previous.get("laender") or {}).items():
+        if land not in laender and (out_dir / entry.get("file", f"{land}.json")).exists():
+            index["laender"][land] = entry
+            index["sources"].update(_load_json(out_dir / entry.get("file", f"{land}.json")).get("sources") or {})
 
+    failed = []
     for land in laender:
-        source = None
-        # Fällt eine Quelle aus, laufen die übrigen Länder weiter
+        print(f"{land}:")
+        source_id = SOURCE_ID[land]
         try:
-            if land == "BE":
-                print(f"BE: {args.be_csv or args.be_svz}")
-                svz = parse_be_csv(read_text(args.be_csv)) if args.be_csv else parse_be_svz(read_text(args.be_svz))
-                pupils = {f"BE-{bsn}": v for bsn, v in svz.items()}
-                districts = sorted({bsn[:2] for bsn in svz})
-                if len(districts) < 12:
-                    print(f"  Warnung: nur Bezirke {', '.join(districts)} in der Tabelle — vollständig geladen?")
-                source_id = "be-svz"
-                if args.be_csv:
-                    source = {**SOURCES[source_id], "note": SOURCES[source_id]["note"] + " Aus einem gespeicherten Abruf (CSV)."}
-            else:
-                print(f"{land}: JedeSchule-API")
-                pupils = pupils_from_jedeschule(land, fetch_jedeschule(land, args.jedeschule_api))
-                source_id = f"jedeschule-{land.lower()}"
-        except (OSError, ValueError) as e:
-            hint = " Die Tabelle SVZ_Fakt5 ist seit Oktober 2026 nicht mehr erreichbar — gespeicherten Abruf mit --be-csv angeben." \
-                if land == "BE" and not args.be_csv else ""
-            print(f"  {land} übersprungen: {e}.{hint}")
+            land_officials = officials.get(land, {})
+            pupils = collect_pupils(land, args, land_officials)
+            links = link_to_officials(pupils, land_officials)
+            if links:
+                print(f"  {len(links)} Schulen ohne gemeinsame Kennung über Lage und Name dem Abgleich zugeordnet")
+            schools = build_land(land, land_officials, pupils, source_id, links)
+            if not schools:
+                raise ValueError("keine Schule mit Schülerzahl und Lage")
+        except (OSError, ValueError, FetchRefused) as err:
+            failed.append(land)
+            print(f"  Fehler: {err}")
+            if land in MANUAL_HINT:
+                print(f"  Datei im Browser speichern und übergeben: {MANUAL_HINT[land]}")
+            old = (previous.get("laender") or {}).get(land)
+            old_file = out_dir / (old or {}).get("file", f"{land}.json")
+            if old and old_file.exists():
+                index["laender"][land] = old
+                index["sources"].update(_load_json(old_file).get("sources") or {})
+                print(f"  Vorhandene Datei bleibt: {old_file} (Stand {old.get('generated', '?')})")
             continue
-        source = source or SOURCES[source_id]
-        schools = build_land(land, officials.get(land, {}), pupils, source_id)
+        source = SOURCES[source_id]
+        if land == "BE" and not is_url(args.be_svz):
+            # Die Seite ist offline; die Zahlen stammen aus einem gesicherten Abruf
+            source = {**source, "note": f"{source['note']} Aus einem gesicherten Abruf ({Path(args.be_svz).name})."}
         with_osm = sum(1 for s in schools if s["osm"])
         data = {"format": 1, "land": land, "generated": today,
                 "sources": {source_id: source, "osm-schulabgleich": SOURCES["osm-schulabgleich"]},
                 "schools": schools}
         (out_dir / f"{land}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        index["laender"][land] = {"file": f"{land}.json", "schools": len(schools), "withOsm": with_osm}
+        index["laender"][land] = {"file": f"{land}.json", "schools": len(schools), "withOsm": with_osm,
+                                  "source": source_id, "generated": today}
         index["sources"][source_id] = source
-        print(f"  {len(schools)} Schulen mit Schülerzahl, davon {with_osm} mit OSM-Zuordnung")
+        years = sorted({s["year"] for s in schools if s["year"]})
+        print(f"  {len(schools)} Schulen mit Schülerzahl, davon {with_osm} mit OSM-Zuordnung"
+              + (f"; Schuljahr {', '.join(years)}" if years else ""))
 
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Geschrieben: {out_dir}")
+    if failed:
+        print(f"Nicht aktualisiert: {', '.join(failed)}")
+        return 1
     return 0
 
 

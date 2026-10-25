@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  applyOfficialSchool, isVocationalSchool, landFromAgs, matchFacilities,
+  applyOfficialSchool, isVocationalSchool, landFromAgs, matchFacilities, namesSimilar,
   normalizeSchoolName, officialTypeToFacilityType, osmRefFromProperties
 } from '../src/domain/school-stats.js';
 import { presenceShare } from '../src/domain/school-trips.js';
@@ -47,6 +47,46 @@ test('officialTypeToFacilityType: berufliche Bildungsgänge an allgemeinbildende
   assert.equal(officialTypeToFacilityType('Kombinierte allg./berufl. Schule'), null);
 });
 
+test('officialTypeToFacilityType: Bayern (Plural) und NRW', () => {
+  assert.equal(officialTypeToFacilityType('Gymnasien'), 'weiterfuehrend');
+  assert.equal(officialTypeToFacilityType('Realschulen'), 'weiterfuehrend');
+  assert.equal(officialTypeToFacilityType('Mittelschulen'), 'weiterfuehrend');
+  assert.equal(officialTypeToFacilityType('Wirtschaftsschulen'), 'weiterfuehrend'); // Klassen 6–10
+  assert.equal(officialTypeToFacilityType('Realschulen zur sonderpädog. Förderung'), 'weiterfuehrend');
+  assert.equal(officialTypeToFacilityType('Grundschulen'), 'grundschule');
+  // Bayerns Sammelkategorie: der Name entscheidet, sonst „Schule“
+  const byVolks = 'Grund- u. Mittel-/Hauptschulen';
+  assert.equal(officialTypeToFacilityType(byVolks), 'schule');
+  assert.equal(officialTypeToFacilityType(byVolks, 'Grundschule Tüßling'), 'grundschule');
+  assert.equal(officialTypeToFacilityType(byVolks, 'Mittelschule Ebersberg'), 'weiterfuehrend');
+  assert.equal(officialTypeToFacilityType(byVolks, 'Private Montessori-Volksschule Neu-Ulm (Grundschule und Hauptschule)'), 'schule');
+  assert.equal(officialTypeToFacilityType(byVolks, 'Sokrates-Schule Priv. Volksschule'), 'schule');
+  // echte Kombischulen bleiben kombiniert, auch wenn der Name nur eine Stufe nennt
+  assert.equal(officialTypeToFacilityType('Grund- und Oberschule', 'Oberschule Beispielstadt'), 'schule');
+  assert.equal(officialTypeToFacilityType('Förderzentren'), null);
+  assert.equal(officialTypeToFacilityType('Freie Waldorfschulen'), 'schule');
+  assert.equal(officialTypeToFacilityType('Primus (Schulversuch)'), 'schule');
+  assert.equal(officialTypeToFacilityType('Volksschule'), 'schule');
+  assert.equal(officialTypeToFacilityType('Förderschule im Bereich des Gymnasiums'), 'weiterfuehrend');
+});
+
+test('officialTypeToFacilityType: berufliche Schulen in Bayern und NRW', () => {
+  for (const t of ['Berufskolleg', 'Förderschule im Bereich des Berufskollegs', 'Berufsschulen',
+    'Berufsfachschulen des Gesundheitswesens', 'BFS hausw., gastgew. und soziale Berufe',
+    'Berufsfachs. f. Hauswirtschaft u. Sozialberufe', 'Gewerbliche Fachschulen', 'Fachakademien',
+    'Berufliche Oberschulen (FOS und BOS)', 'Teilzeit-Klassen an FOS/BOS', 'Fachoberschulen',
+    'Berufsoberschulen', 'Berufliches Gymnasium']) {
+    assert.equal(officialTypeToFacilityType(t), 'beruflich', t);
+  }
+});
+
+test('officialTypeToFacilityType: Zweiter Bildungsweg behält die OSM-Einordnung', () => {
+  for (const t of ['Abendgymnasium', 'Abendgymnasien', 'Abendrealschulen', 'Kollegs', 'Studienkollegs',
+    'Weiterbildungskolleg', 'ZBW an VHS und anderen Schulformen']) {
+    assert.equal(officialTypeToFacilityType(t), null, t);
+  }
+});
+
 test('normalizeSchoolName: Klammerzusätze und Umlaute', () => {
   assert.equal(normalizeSchoolName('Hermann-Boddin-Schule (Grundschule)'), 'hermann boddin schule');
   assert.equal(normalizeSchoolName('Schule am Weißensee'), 'schule am weissensee');
@@ -83,6 +123,31 @@ test('matchFacilities: einziger Kandidat im Umkreis auch ohne Namensgleichheit, 
   const far = [{ name: 'Lemgo-Grundschule', type: 'grundschule', lat: 52.5020, lon: 13.4000, osmRefs: [] }];
   assert.equal(matchFacilities(near, schools)[0].school.id, 'BE-02G01');
   assert.equal(matchFacilities(far, schools)[0], null);
+});
+
+test('matchFacilities: abweichende Namen bei mehreren Schulen am selben Punkt (Bayern)', () => {
+  // München, Herrnstraße 21: Schulsuche und OSM benennen die Schulen verschieden
+  const at = (id, name, type) => ({ id, name, type, lat: 48.13671, lon: 11.58147, pupils: 100, osm: [] });
+  const schools = [
+    at('BY-2192', 'Grundschule München Herrnstraße 21', 'Grund- u. Mittel-/Hauptschulen'),
+    at('BY-1995', 'Sonderpädagogisches Förderzentrum München Mitte 2 An der Isar', 'Förderzentren')
+  ];
+  const facilities = [
+    { name: 'Förderschule an der Herrnstraße', type: 'schule', lat: 48.13675, lon: 11.5815, osmRefs: [] },
+    { name: 'Grundschule an der Herrnstraße', type: 'grundschule', lat: 48.13668, lon: 11.5814, osmRefs: [] },
+    { name: 'Schulverbund München', type: 'schule', lat: 48.1367, lon: 11.5815, osmRefs: [] }
+  ];
+  const res = matchFacilities(facilities, schools);
+  assert.equal(res[0].school.id, 'BY-1995'); // einzige Förderschule in Reichweite
+  assert.equal(res[1].school.id, 'BY-2192'); // „Herrnstraße“ hat nur sie
+  assert.equal(res[2], null); // „München“ haben alle — kein Unterscheidungsmerkmal
+});
+
+test('namesSimilar: Schularten dürfen sich nicht widersprechen', () => {
+  assert.equal(namesSimilar('Förderschule an der Herrnstraße', 'Grundschule München Herrnstraße 21', []), false);
+  assert.equal(namesSimilar('Goethe-Gymnasium', 'Goethe-Grundschule', []), false);
+  assert.equal(namesSimilar('Goethe-Schule', 'Goethe-Gymnasium Musterstadt', ['Schiller-Grundschule']), true);
+  assert.equal(namesSimilar('Gymnasium Nord', 'Gymnasium Süd', ['Gymnasium Mitte']), false);
 });
 
 test('isVocationalSchool: berufliche Schulen an Schulart oder Name', () => {
