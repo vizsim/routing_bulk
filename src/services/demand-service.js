@@ -238,7 +238,7 @@ export const DemandService = {
         ? PopulationService.readPointFeaturesInRadius(
             CONFIG.PLATFORMS_PMTILES_URL.trim(),
             CONFIG.PLATFORMS_LAYER_NAME || 'germany_osm_platforms',
-            target[0], target[1], radiusM
+            target[0], target[1], radiusM, CONFIG.PLATFORMS_READ_ZOOM
           )
         : Promise.resolve([])
     ]);

@@ -329,13 +329,16 @@ export const AnalysisService = {
       Geo.distanceMeters(center[0], center[1], f.lat, f.lon) + typeSettings[f.type].radiusM
     ));
     if (onProgress) onProgress({ phase: 'prepare', done: 0, total: facilities.length });
-    const allCells = await PopulationService.getPopulationFeaturesInRadius(center[0], center[1], coverRadius);
-    const allStops = platformsUrl
-      ? DemandService._dedupeStops(await PopulationService.readPointFeaturesInRadius(
-          platformsUrl, CONFIG.PLATFORMS_LAYER_NAME || 'germany_osm_platforms',
-          center[0], center[1], coverRadius
-        ))
-      : [];
+    const [allCells, rawStops] = await Promise.all([
+      PopulationService.getPopulationFeaturesInRadius(center[0], center[1], coverRadius),
+      platformsUrl
+        ? PopulationService.readPointFeaturesInRadius(
+            platformsUrl, CONFIG.PLATFORMS_LAYER_NAME || 'germany_osm_platforms',
+            center[0], center[1], coverRadius, CONFIG.PLATFORMS_READ_ZOOM
+          )
+        : []
+    ]);
+    const allStops = DemandService._dedupeStops(rawStops);
     if (signal.aborted) return null;
 
     // 1. Jobs erzeugen: je Einrichtung×Modus Startpunkte ziehen

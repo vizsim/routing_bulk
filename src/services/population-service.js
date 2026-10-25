@@ -284,6 +284,30 @@ import { Utils } from '../core/utils.js';
     return inst;
   }
 
+  // Kacheln parallel holen statt nacheinander: jede ist eine eigene HTTP-Anfrage,
+  // und bei großen Einzugsradien sind es Hunderte (Gebietsanalyse: 14 s nur für
+  // die Haltestellen). Die Reihenfolge bleibt; fehlgeschlagene Kacheln → null.
+  const TILE_FETCH_CONCURRENCY = 8;
+
+  async function fetchTiles(pm, tiles) {
+    const out = new Array(tiles.length).fill(null);
+    let next = 0;
+    const worker = async () => {
+      while (next < tiles.length) {
+        const i = next++;
+        const [z, x, y] = tiles[i];
+        try {
+          const resp = await pm.getZxy(z, x, y);
+          out[i] = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        } catch (e) {
+          if (typeof Utils !== "undefined" && Utils.logError) Utils.logError("PopulationService", e);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(TILE_FETCH_CONCURRENCY, tiles.length) }, worker));
+    return out;
+  }
+
   function getPMTiles() {
     return pmtilesFor((typeof CONFIG !== "undefined" && CONFIG.POPULATION_PMTILES_URL) || "");
   }
@@ -327,11 +351,12 @@ import { Utils } from '../core/utils.js';
     const zoom = Math.min(desiredZoom != null ? desiredZoom : maxZoom, maxZoom);
 
     const tiles = bboxToTileRange(circleToBBox(lat, lon, radiusM), zoom);
+    const tileData = await fetchTiles(pm, tiles);
     const out = [];
-    for (const [z, tileX, tileY] of tiles) {
+    for (let t = 0; t < tiles.length; t++) {
+      const [z, tileX, tileY] = tiles[t];
       try {
-        const resp = await pm.getZxy(z, tileX, tileY);
-        const data = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        const data = tileData[t];
         if (!data) continue;
         const layers = parseMVT(data);
         for (const lname of getLayerKeysForTile(layers, layerName)) {
@@ -427,12 +452,13 @@ import { Utils } from '../core/utils.js';
 
     const bbox = circleToBBox(lat, lon, radiusM);
     const tiles = bboxToTileRange(bbox, zoom);
+    const tileData = await fetchTiles(pm, tiles);
     const results = [];
 
-    for (const [z, tileX, tileY] of tiles) {
+    for (let t = 0; t < tiles.length; t++) {
+      const [z, tileX, tileY] = tiles[t];
       try {
-        const resp = await pm.getZxy(z, tileX, tileY);
-        const data = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        const data = tileData[t];
         if (!data) continue;
         const layers = parseMVT(data);
         const layerKeys = getLayerKeysForTile(layers, layerName);
@@ -567,13 +593,14 @@ import { Utils } from '../core/utils.js';
     const lons = polygon.map(p => p[1]);
     const bbox = [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
     const tiles = bboxToTileRange(bbox, zoom);
+    const tileData = await fetchTiles(pm, tiles);
 
     const out = [];
     const seen = new Set();
-    for (const [z, tileX, tileY] of tiles) {
+    for (let t = 0; t < tiles.length; t++) {
+      const [z, tileX, tileY] = tiles[t];
       try {
-        const resp = await pm.getZxy(z, tileX, tileY);
-        const data = resp && (resp.data != null ? resp.data : (resp instanceof ArrayBuffer ? resp : null));
+        const data = tileData[t];
         if (!data) continue;
         const layers = parseMVT(data);
         for (const lname of getLayerKeysForTile(layers, layerName)) {

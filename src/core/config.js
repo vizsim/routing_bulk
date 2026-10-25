@@ -79,6 +79,9 @@ export const CONFIG = {
   // ÖPNV-Haltestellen (PMTiles aus der unfallkarte-Pipeline, ersetzt die Overpass-Livesuche)
   PLATFORMS_PMTILES_URL: "https://tiles.vizsim.de/file/unfallkarte-data-v2/osm/platforms.pmtiles", // leer = Toggle ausblenden
   PLATFORMS_LAYER_NAME: "germany_osm_platforms", // Source-Layer im PMTiles
+  // Zoom zum Auslesen der Haltestellen: Punkte sind ab z9 vollständig (tippecanoe
+  // --drop-rate=0, verworfen werden nur winzige Flächen); z13 braucht 1/16 der Kacheln von z15
+  PLATFORMS_READ_ZOOM: 13,
   PLATFORMS_LAYER_VISIBLE: false, // Haltestellen-Layer initial anzeigen
 
   // Kartenebenen aus der Unfallkarte: dieselben PMTiles, hier zurückhaltender
