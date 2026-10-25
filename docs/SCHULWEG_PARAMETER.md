@@ -28,6 +28,10 @@ Tests: [`tests/school-trips.test.js`](../tests/school-trips.test.js).
    äußersten Ring — sie erreichen das Gebiet über dessen Rand. ÖPNV startet
    weiterhin an den zielnächsten Haltestellen.
 
+Berufliche Schulen (Oberstufenzentren, Berufs-, Fachschulen) sind ein eigener
+Typ mit Werten für Auszubildende und anteiliger Anwesenheit — siehe
+[Berufliche Schulen](#berufliche-schulen).
+
 ## Eingangsdaten
 
 ### MiD 2023, Tab. 43 — Kita- und Schulweglängen nach Raumtyp und Altersgruppe (km)
@@ -103,7 +107,7 @@ In der Oberfläche als „Setzung“ gekennzeichnet.
 | Umwegfaktor Netz/Luftlinie | 1,3 | übliche Größenordnung 1,2–1,4 |
 | Fuß und Rad höchstens so lang wie bundesweit | k_aktiv = min(k, 1) | Kinder gehen auch auf dem Land nicht weiter zu Fuß; längere Wege tragen ÖPNV und Auto |
 | Radius-Vorschlag | 90 %-Quantil der Fuß-, Rad- und Autowege, 1–8 km | Rechenaufwand begrenzen; der Rest startet am Rand |
-| Ein Hinweg je Schüler:in und Schultag | — | Anwesenheit (Krankheit u. Ä.) vernachlässigt |
+| Ein Hinweg je Schüler:in und Schultag | — | Anwesenheit (Krankheit u. Ä.) vernachlässigt; berufliche Schulen anteilig (siehe [Berufliche Schulen](#berufliche-schulen)) |
 
 ## Ableitung je Einrichtungstyp und Raumtyp
 
@@ -164,6 +168,90 @@ Erzeugt aus dem Code (`tripModel`); „Radius“ ist der Vorschlag in Luftlinie.
 „Schule“ (Art unbekannt) verwendet die Längen der Grundschule mit den
 bisherigen Setzungen für den Split (siehe Code).
 
+## Berufliche Schulen
+
+Oberstufenzentren, Berufs-, Berufsfach-, Fachober- und Fachschulen, berufliche
+Gymnasien, Berufskollegs: erkannt an der amtlichen Schulart oder, ohne amtliche
+Daten, am Namen. Mehrere Schularten (Hamburg) zählen als beruflich, wenn keine
+allgemeinbildende dabei ist; berufliche Bildungsgänge an allgemeinbildenden
+Schulen („Berufsfachschule (allg. bild.)“, „Förderschwerpunkt einschl.
+beruflichem Teil“) bleiben allgemeinbildend.
+
+Die Schüler:innen sind meist volljährig (Auszubildende), Tab. 43 endet mit
+17 Jahren. Deshalb eigene Werte:
+
+| Baustein | Wert | Quelle |
+| --- | --- | --- |
+| Modal Split bundesweit | Fuß 18,5 · Rad 6,5 · ÖPNV 28 · Auto 47 (Männer 21/7/22/37+12, Frauen 16/6/34/35+10) → 19/6/28/47 | MiD 2023, Abb. 78 (S. 156): Auszubildende 18–29 Jahre, alle Wegezwecke; aus der Grafik abgelesen |
+| Raumtyp-Faktor | Anteil im Raumtyp ÷ bundesweit, je Verkehrsmittel; danach neu normiert | MiD 2023, Tab. 8 (S. 47): alle Wege nach RegioStaR7 — Annahme: der Raumtyp wirkt bei Auszubildenden wie bei allen Wegen |
+| mittlere Weglänge | 15,15 km (Männer 18,1, Frauen 12,2) | MiD 2023, Tab. 38 (S. 154): Auszubildende 18–29 Jahre, alle Wegezwecke |
+| Weglänge je Verkehrsmittel | Verhältnis wie bei 11- bis 17-Jährigen, auf 15,15 km skaliert (Fuß und Rad höchstens ×1) | MiD 2023, Abb. 100 |
+| Startpunkte | ganze Bevölkerung der Zensus-Zellen statt unter 18-Jährige | Annahme |
+| Einzugsgrenze | eigener Kreis bevorzugt (wie weiterführende Schulen), in Berlin die ganze Stadt | Annahme |
+| Platzhalter ohne amtliche Zahl | 800 Schüler:innen | Annahme (Berlin: Median aller beruflichen Schulen 392, große OSZ 2.000–4.000) |
+
+MiD 2023 Tab. 8, Hauptverkehrsmittel aller Wege (%):
+
+| | Fuß | Rad | ÖV | MIV-Fahrt | MIV-Mitfahrt |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| gesamt | 26 | 11 | 11 | 40 | 13 |
+| 71 Metropole | 31 | 15 | 21 | 25 | 8 |
+| 72 Regiopole und Großstadt | 29 | 15 | 14 | 32 | 11 |
+| 73 Mittelstadt, städtischer Raum (Stadtregion) | 25 | 11 | 9 | 42 | 14 |
+| 74 kleinstädtischer, dörflicher Raum (Stadtregion) | 21 | 9 | 8 | 47 | 15 |
+| 75 zentrale Stadt (ländliche Region) | 28 | 13 | 8 | 38 | 12 |
+| 76 Mittelstadt, städtischer Raum (ländliche Region) | 25 | 10 | 6 | 45 | 15 |
+| 77 kleinstädtischer, dörflicher Raum (ländliche Region) | 22 | 6 | 7 | 51 | 14 |
+| zum Vergleich: Berlin | 35 | 14 | 27 | 18 | 6 |
+
+Beispiel Metropole: Fuß 18,5 · 31/26, Rad 6,5 · 15/11, ÖPNV 28 · 21/11,
+Auto 47 · 33/53 → normiert 19/8/47/26.
+
+### Ergebnis berufliche Schule (Netzlänge in km)
+
+| Raumtyp | Split Fuß/Rad/ÖPNV/Auto (%) | Quelle Split | Ø Weg | Ø Fuß | Ø Rad | Ø ÖPNV | Ø Auto | Radius (90 %-Quantil) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 71 Metropole | 19/8/47/26 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 18,93 | 22,05 | 8,0 km (23,8) |
+| 72 Regiopole/Großstadt | 20/9/34/37 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 18,92 | 22,04 | 8,0 km (25,9) |
+| 73 Mittelstadt (Stadtregion) | 18/7/24/51 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 17,60 | 20,50 | 8,0 km (26,8) |
+| 74 Kleinstädtisch/dörflich (Stadtregion) | 16/6/21/57 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 16,86 | 19,64 | 8,0 km (26,8) |
+| 75 Zentrale Stadt (ländlich) | 22/8/22/48 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 18,73 | 21,81 | 8,0 km (27,1) |
+| 76 Mittelstadt (ländliche Region) | 19/6/17/58 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 17,37 | 20,24 | 8,0 km (27,1) |
+| 77 Kleinstädtisch/dörflich (ländlich) | 16/4/19/61 | Abb. 78 × Tab. 8 | 15,2 | 1,50 | 2,90 | 16,43 | 19,14 | 8,0 km (26,7) |
+| ohne Raumtyp (bundesweit) | 19/6/28/47 | MiD 2023, Abb. 78 | 15,2 | 1,50 | 2,90 | 17,76 | 20,68 | 8,0 km (26,6) |
+
+Der Radius greift hier immer als Obergrenze: Rund zwei Drittel der Autowege
+starten im äußersten Ring (Browser-Test OSZ Gesundheit I, Berlin: 39 von 60
+Auto-Startpunkten jenseits von 7,5 km). Für die Belastung im Gebiet zählt nur,
+von welcher Seite sie hereinkommen.
+
+### Anwesenheit: Wege je Schultag
+
+Wege je Schultag = Schüler:innen × Anteil, der an einem Schultag da ist. Die
+Berufsschule der dualen Ausbildung ist Teilzeitunterricht: mindestens
+12 Wochenstunden, „als Teilzeitunterricht, der auch als Blockunterricht erteilt
+werden kann“ (KMK-Rahmenvereinbarung Nr. 3.2 und 4.1), „in der Regel … an zwei
+Tagen in der Woche oder als Blockunterricht in zusammenhängenden Abschnitten in
+Vollzeitform“ (Destatis-Qualitätsbericht, S. 13). Blockunterricht ergibt im
+Jahresmittel ähnlich viel: rund 480 Stunden je Jahr bei 30–35 Stunden je Woche
+sind 14–16 von etwa 39 Schulwochen (35–40 %).
+
+| Schuljahr 2024/25 (Destatis, Tab. 21121-02) | Schüler:innen | davon Teilzeit | Anteil Teilzeit | an einem Schultag da |
+| --- | ---: | ---: | ---: | ---: |
+| Deutschland | 2.261.831 | 1.414.134 | 62,5 % | **62 %** (verwendet) |
+| Berlin | 77.854 | 49.654 | 63,8 % | 62 % |
+| Brandenburg | 42.962 | 28.482 | 66,3 % | 60 % |
+
+Anteil da = Vollzeit + Teilzeit × 2/5. Teilzeit sind fast nur Berufsschulen der
+dualen Ausbildung (Deutschland 1.295.323), dazu Fachschulen in Teilzeit (52.450,
+meist berufsbegleitend). Schulen des Gesundheitswesens zählt Destatis getrennt;
+sie sind fast alle Vollzeit. Fehlzeiten (Krankheit u. Ä.) bleiben wie bei allen
+Typen außen vor. Berlin und Brandenburg liegen nah am Bundeswert, deshalb gilt
+ein Wert für alle Länder.
+
+Beispiel OSZ Gesundheit I (Berlin, 2.902 Schüler:innen 2024/25): 1.813 Hinwege je
+Schultag. Ohne amtliche Zahl: Platzhalter 800 Schüler:innen → 500 Hinwege.
+
 ## Plausibilitätsprüfung
 
 **Fußanteil nach Entfernung** (Anteil der Wege im Entfernungsband, die zu Fuß
@@ -206,11 +294,12 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 - MiD-Werte sind bundesweit (Abb. 98, 100) bzw. nur nach Raumtyp (Tab. 43) —
   keine Berlin-eigenen Schulweglängen. MiD ordnet einen Rückweg dem Zweck des
   vorherigen Weges zu; die Schulweg-Werte enthalten also Hin- und Rückwege.
-- Berufliche Schulen (Oberstufenzentren, Berufs-, Fachschulen, Berufskollegs)
-  werden nicht gerechnet: Schüler:innen meist volljährig, Unterricht in der dualen
-  Ausbildung oft nur an einzelnen Tagen. Sie bleiben in der Liste („nicht
-  gerechnet“, 0 Wege), erkannt an der amtlichen Schulart oder am Namen; wer sie
-  doch berücksichtigen will, trägt eine Zahl ein (gerechnet als weiterführend).
+- Berufliche Schulen: Split und Weglänge der Auszubildenden gelten für alle
+  Wegezwecke, nicht nur für den Weg zur Berufsschule — dorthin dürften Fußwege
+  seltener und Wege länger sein. Die Anwesenheit ist ein Mittelwert über alle
+  beruflichen Schüler:innen; eine reine Berufsfachschule (Vollzeit) ist jeden Tag
+  voll da, eine reine Berufsschule (dual) seltener. Die Schülerzahl je Schule
+  enthält keine Aufteilung nach Voll- und Teilzeit.
 - forsa: Hauptverkehrsmittel laut Eltern, n = 500, Befragung im Sommer
   (mehr Rad, weniger Auto als im Winter).
 - Setzungen für Kindergarten, „Schule“ und weiterführende Schulen außerhalb der
@@ -222,8 +311,19 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 
 - MiD 2023: infas, DLR, IVT Research, infas 360: *Mobilität in Deutschland –
   MiD 2023. Ergebnisbericht*, im Auftrag des Bundesministeriums für Verkehr,
-  November 2025, Tab. 43 (S. 179), Abb. 98 (S. 177), Abb. 100 (S. 179).
+  November 2025, Tab. 8 (S. 47), Tab. 38 (S. 154), Abb. 78 (S. 156),
+  Tab. 43 (S. 179), Abb. 98 (S. 177), Abb. 100 (S. 179).
   <https://www.mobilitaet-in-deutschland.de/pdf/MiD2023_Ergebnisbericht.pdf>
+- Destatis: *Berufliche Schulen und Schulen des Gesundheitswesens – Grunddaten,
+  Schuljahr 2024/25*, Statistischer Bericht, Tab. 21121-02 (Schüler:innen nach
+  Zeitform des Unterrichts).
+  <https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bildung-Forschung-Kultur/Schulen/Publikationen/Downloads-Schulen/statistischer-bericht-berufliche-schulen-2110200257005.xlsx?__blob=publicationFile&v=2>
+- Destatis: *Qualitätsbericht Statistik der beruflichen Schulen*, erschienen am
+  21.10.2025, S. 13.
+  <https://www.destatis.de/DE/Methoden/Qualitaet/Qualitaetsberichte/Bildung/berufliche-schulen.pdf?__blob=publicationFile>
+- KMK: *Rahmenvereinbarung über die Berufsschule*, Beschluss vom 12.03.2015
+  i. d. F. vom 21.03.2024, Nr. 3.2 und 4.1.
+  <https://www.kmk.org/fileadmin/Dateien/veroeffentlichungen_beschluesse/2015/2015_03_12-RV-Berufsschule.pdf>
 - forsa 2022: *Sicherer Schulweg*, Ergebnischarts, im Auftrag von Deutschem
   Kinderhilfswerk, VBE und VCD, S. 14.
   <https://www.dkhw.de/fileadmin/Redaktion/1_Unsere_Arbeit/2_Aktuelle_Projekte/6_Zu_Fuss_zur_Schule/Umfrage_Sicherer_Schulweg/forsa-Umfrage_2022_Sicherer_Schulweg_Ergebnischarts.pdf>

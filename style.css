@@ -1211,7 +1211,7 @@ select {
 /* Zweizeilig: Name in voller Breite, darunter Typ-Chip, Herkunft der Zahl + Eingabe */
 .analysis-facility {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 8px;
   align-items: center;
   padding: 6px 6px;
@@ -1230,8 +1230,16 @@ select {
   cursor: pointer;
   color: var(--ui-text-strong);
 }
+/* Typ und Herkunft nebeneinander; wird es eng, rutscht die Herkunft in die nächste Zeile */
+.analysis-facility-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
 .analysis-facility-type {
-  justify-self: start;
+  white-space: nowrap;
   padding: 2px 7px;
   font-size: 10.5px;
   color: var(--ui-text-muted);
@@ -1263,12 +1271,6 @@ select {
   color: var(--ui-accent);
   background: var(--ui-accent-soft);
   border-color: #c7d2fe;
-}
-/* Berufliche Schule: in der Liste, aber nicht gerechnet */
-.analysis-facility-src.is-excluded {
-  color: var(--ui-text-muted);
-  background: var(--ui-hover);
-  border-color: var(--ui-border);
 }
 .analysis-facility .analysis-trips-input {
   width: 68px;

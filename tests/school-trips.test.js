@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Distribution } from '../src/domain/distribution.js';
 import {
-  DETOUR_FACTOR, drawDistribution, forsaSplit, FORSA2022_GS, MID2023_ABB100_KM, MID2023_ABB98_SCHOOL,
-  MODE_KEYS, modelSourceIds, modeShareInBand, normalizeSplit, SOURCES, splitSuggestion, tripModel
+  azubiSplit, DETOUR_FACTOR, drawDistribution, forsaSplit, FORSA2022_GS, MID2023_ABB100_KM, MID2023_ABB98_SCHOOL,
+  MODE_KEYS, modelSourceIds, modeShareInBand, normalizeSplit, presenceShare, RADIUS_MAX_M, SOURCES,
+  splitSuggestion, tripModel
 } from '../src/domain/school-trips.js';
 import { lognormalCdf, normCdf } from '../src/domain/stats.js';
 
@@ -67,8 +68,48 @@ test('Weiterführende Schule: Mittel aus 11–13 und 14–17; ohne Raumtyp bunde
   assert.equal(national.group, null);
 });
 
+test('Berufliche Schule: Split der Auszubildenden, je Raumtyp mit dem Faktor aller Wege', () => {
+  // Abb. 78, Männer und Frauen gemittelt: Fuß 18,5 · Rad 6,5 · ÖPNV 28 · Auto (Fahrt + Mitfahrt) 47
+  assert.deepEqual(azubiSplit(null), { foot: 19, bike: 6, transit: 28, car: 47 });
+  // Metropole (Tab. 8: 31/15/21/33 statt 26/11/11/53): 18,5·31/26 … neu normiert
+  assert.deepEqual(azubiSplit(71), { foot: 19, bike: 8, transit: 47, car: 26 });
+  // Dörflicher Raum, ländliche Region (22/6/7/65)
+  assert.deepEqual(azubiSplit(77), { foot: 16, bike: 4, transit: 19, car: 61 });
+  for (const rs of [71, 72, 73, 74, 75, 76, 77]) assert.equal(sum(azubiSplit(rs)), 100);
+  // Je weniger Auto im Raumtyp, desto weniger Auto bei den Auszubildenden
+  const car = [71, 72, 73, 74].map(rs => azubiSplit(rs).car);
+  assert.deepEqual([...car].sort((a, b) => a - b), car);
+  assert.equal(splitSuggestion('beruflich', 'metro', 71).factorSource, 'mid2023-tab8');
+  assert.equal(splitSuggestion('beruflich', null, null).factorSource, undefined);
+  assert.ok(modelSourceIds(tripModel('beruflich', 71)).includes('mid2023-tab8'));
+});
+
+test('Berufliche Schule: Auszubildende (MiD 2023 Tab. 38/Abb. 78), anteilige Anwesenheit', () => {
+  const m = tripModel('beruflich', 71);
+  assert.deepEqual(m.split, azubiSplit(71));
+  assert.equal(m.splitSource, 'mid2023-abb78');
+  // Tab. 38: Männer 18,1 km, Frauen 12,2 km
+  assert.ok(Math.abs(m.meanKm - 15.15) < 1e-9);
+  assert.equal(m.meanSource, 'mid2023-tab38');
+  assert.ok(Math.abs(meanOver(m) - 15.15) < 1e-9);
+  // Fuß und Rad nicht länger als bei 11- bis 17-Jährigen; lange Wege tragen ÖPNV und Auto
+  assert.equal(m.modes.foot.meanKm, MID2023_ABB100_KM['11-17'].foot);
+  assert.ok(m.modes.car.meanKm > 15);
+  // Der Radius kappt: das 90-%-Quantil liegt weit über der Obergrenze
+  assert.equal(m.radiusM, RADIUS_MAX_M);
+  assert.ok(m.radiusCapped && m.radiusQuantileM > RADIUS_MAX_M);
+  // Weglänge bundesweit, unabhängig vom Raumtyp
+  assert.equal(tripModel('beruflich', 77).meanKm, m.meanKm);
+  // Destatis 2024/25: 62,5 % in Teilzeit an 2 von 5 Tagen, Vollzeit täglich → 62 %
+  assert.equal(Math.round(m.presence * 100), 62);
+  assert.equal(m.presence, presenceShare('beruflich'));
+  assert.ok(SOURCES[m.presenceSource], 'Quelle der Anwesenheit');
+  assert.equal(presenceShare('grundschule'), 1);
+  assert.equal(tripModel('grundschule', 71).radiusCapped, false);
+});
+
 test('Jeder verwendete Wert hat eine Quelle', () => {
-  for (const type of ['kindergarten', 'grundschule', 'weiterfuehrend', 'schule']) {
+  for (const type of ['kindergarten', 'grundschule', 'weiterfuehrend', 'beruflich', 'schule']) {
     for (const rs of [null, 71, 72, 73, 74, 75, 76, 77]) {
       const m = tripModel(type, rs);
       for (const id of modelSourceIds(m)) {

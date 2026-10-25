@@ -20,6 +20,9 @@
 // 3. Startpunkte werden nach Luftlinie gezogen: Netzlänge ÷ Umwegfaktor.
 // 4. Der Radius ist nur noch die Kappung: Wege von weiter her starten im
 //    äußersten Ring (sie erreichen das Gebiet über dessen Rand).
+// 5. Berufliche Schulen: Split und mittlere Weglänge der Auszubildenden (MiD
+//    2023 Abb. 78, Tab. 38); Wege je Schultag = Schüler:innen × Anwesenheit
+//    (PRESENCE), weil Teilzeit-Berufsschüler:innen nur an einzelnen Tagen kommen.
 import { lognormalCdf, lognormalMedianFromMean } from './stats.js';
 
 export const MODE_KEYS = ['foot', 'bike', 'transit', 'car'];
@@ -54,6 +57,41 @@ export const SOURCES = {
     url: MID2023_URL,
     note: 'Durchschnittliche Weglänge je Verkehrsmittel über alle Zwecke sowie für Ausbildungswege; '
       + 'aus der Grafik abgelesen (Pixelmessung, ±0,05 km).'
+  },
+  'mid2023-tab38': {
+    label: 'MiD 2023, Tab. 38',
+    title: 'Mobilitätskennzahlen – junge Erwerbstätige, Auszubildende und Studierende',
+    citation: `${MID2023_CITATION}, S. 154`,
+    url: MID2023_URL,
+    note: 'Auszubildende 18–29 Jahre, alle Wegezwecke: durchschnittliche Weglänge Männer 18,1 km, Frauen 12,2 km; '
+      + 'gemittelt. Kein eigener Wert für Wege zur Berufsschule.'
+  },
+  'mid2023-abb78': {
+    label: 'MiD 2023, Abb. 78',
+    title: 'Modal Split der Wege – junge Erwerbstätige, Auszubildende und Studierende',
+    citation: `${MID2023_CITATION}, S. 156`,
+    url: MID2023_URL,
+    note: 'Auszubildende 18–29 Jahre, alle Wegezwecke; Männer und Frauen gemittelt, MIV-Fahrt und -Mitfahrt als Auto. '
+      + 'Aus der Grafik abgelesen (Textpositionen im PDF).'
+  },
+  'mid2023-tab8': {
+    label: 'MiD 2023, Tab. 8',
+    title: 'Hauptverkehrsmittel 2023 nach Bundesland und regionalstatistischem Raumtyp (RegioStaR7) nach Wegen',
+    citation: `${MID2023_CITATION}, S. 47`,
+    url: MID2023_URL,
+    note: 'Alle Personen und Wegezwecke; MIV-Fahrt und -Mitfahrt als Auto. Für berufliche Schulen als Raumtyp-Faktor '
+      + '(Anteil im Raumtyp ÷ bundesweit) auf den Split der Auszubildenden angewendet — Annahme: der Raumtyp '
+      + 'wirkt bei Auszubildenden wie bei allen Wegen.'
+  },
+  'destatis-beruflich': {
+    label: 'Destatis 2024/25',
+    title: 'Berufliche Schulen und Schulen des Gesundheitswesens – Grunddaten, Schuljahr 2024/25',
+    citation: 'Statistisches Bundesamt, Statistischer Bericht, Tab. 21121-02; Unterrichtsform laut Qualitätsbericht '
+      + '„Statistik der beruflichen Schulen“ (21.10.2025), S. 13',
+    url: 'https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bildung-Forschung-Kultur/Schulen/Publikationen/Downloads-Schulen/statistischer-bericht-berufliche-schulen-2110200257005.xlsx?__blob=publicationFile&v=2',
+    note: 'Deutschland: 1.414.134 von 2.261.831 Schüler:innen in Teilzeit (62,5 %). Teilzeitunterricht „in der Regel '
+      + '… an zwei Tagen in der Woche oder als Blockunterricht“ → an einem Schultag da: 37,5 % + 62,5 % × 2/5 ≈ 62 % '
+      + '(Berlin 62 %, Brandenburg 60 %). Fehlzeiten nicht berücksichtigt.'
   },
   forsa2022: {
     label: 'forsa 2022',
@@ -127,6 +165,27 @@ export const MID2023_ABB100_KM = {
   '11-17': { foot: 1.5, bike: 2.9, transit: 8.5, car: 9.9, ausbildung: 6.0 }
 };
 
+/** MiD 2023, Abb. 78: Modal Split der Wege von Auszubildenden (18–29 J., alle Zwecke) in %. Auto = MIV-Fahrt + -Mitfahrt. */
+export const MID2023_ABB78_AZUBI = {
+  maenner: { foot: 21, bike: 7, transit: 22, car: 37 + 12 },
+  frauen: { foot: 16, bike: 6, transit: 34, car: 35 + 10 }
+};
+
+/** MiD 2023, Tab. 38: durchschnittliche Weglänge (km) von Auszubildenden (18–29 J., alle Zwecke). */
+export const MID2023_TAB38_AZUBI_KM = { maenner: 18.1, frauen: 12.2 };
+
+/** MiD 2023, Tab. 8: Hauptverkehrsmittel aller Wege (%) bundesweit und je RegioStaR7. Auto = MIV-Fahrt + -Mitfahrt. */
+export const MID2023_TAB8_MODAL = {
+  gesamt: { foot: 26, bike: 11, transit: 11, car: 40 + 13 },
+  71: { foot: 31, bike: 15, transit: 21, car: 25 + 8 },   // Stadtregion – Metropole
+  72: { foot: 29, bike: 15, transit: 14, car: 32 + 11 },  // Stadtregion – Regiopole und Großstadt
+  73: { foot: 25, bike: 11, transit: 9, car: 42 + 14 },   // Stadtregion – Mittelstadt, städtischer Raum
+  74: { foot: 21, bike: 9, transit: 8, car: 47 + 15 },    // Stadtregion – kleinstädtischer, dörflicher Raum
+  75: { foot: 28, bike: 13, transit: 8, car: 38 + 12 },   // ländliche Region – zentrale Stadt
+  76: { foot: 25, bike: 10, transit: 6, car: 45 + 15 },   // ländliche Region – Mittelstadt, städtischer Raum
+  77: { foot: 22, bike: 6, transit: 7, car: 51 + 14 }     // ländliche Region – kleinstädtischer, dörflicher Raum
+};
+
 /** forsa 2022, S. 14: Wie kommt das Kind (6–10 J.) zur Schule? Elternangaben in %. */
 export const FORSA2022_GS = {
   gesamt: { fuss: 47, oepnv: 13, schulbus: 8, rad: 14, pkw: 15, fahrgemeinschaft: 2 },
@@ -169,6 +228,35 @@ const SETZUNG = {
 export const SIGMA = { foot: 0.6, bike: 0.6, transit: 0.7, car: 0.9 };
 /** Netzlänge ÷ Luftlinie. */
 export const DETOUR_FACTOR = 1.3;
+
+/**
+ * Destatis, Berufliche Schulen 2024/25, Tab. 21121-02: Schüler:innen an
+ * beruflichen Schulen in Deutschland, davon in Teilzeit (fast alle duale Ausbildung).
+ */
+export const DESTATIS_BERUFLICH_2024 = { total: 2261831, partTime: 1414134 };
+/** Teilzeitunterricht „in der Regel … an zwei Tagen in der Woche“ (oder gleichwertig im Block). */
+export const PART_TIME_SCHOOL_DAYS = 2;
+const SCHOOL_DAYS_PER_WEEK = 5;
+
+/**
+ * Anteil der Schüler:innen, die an einem Schultag in der Schule sind. Nur
+ * berufliche Schulen weichen ab: Vollzeit jeden Tag, Teilzeit an 2 von 5 Tagen
+ * → 37,5 % + 62,5 % × 2/5 ≈ 62 %. Fehlzeiten bleiben wie bei allen Typen außen vor.
+ */
+export const PRESENCE = {
+  beruflich: {
+    share: 1 - (DESTATIS_BERUFLICH_2024.partTime / DESTATIS_BERUFLICH_2024.total)
+      * (1 - PART_TIME_SCHOOL_DAYS / SCHOOL_DAYS_PER_WEEK),
+    source: 'destatis-beruflich',
+    note: '62,5 % in Teilzeit an 2 von 5 Schultagen, Vollzeit täglich; Deutschland 2024/25'
+  }
+};
+
+/** Anwesenheitsanteil eines Einrichtungstyps (1 = alle jeden Schultag). */
+export function presenceShare(type) {
+  const p = PRESENCE[type];
+  return p && p.share != null ? p.share : 1;
+}
 /** Kappungsradius-Vorschlag: dieses Quantil der Fuß-/Rad-/Auto-Wege (Luftlinie). */
 export const RADIUS_QUANTILE = 0.9;
 export const RADIUS_MIN_M = 1000;
@@ -181,7 +269,20 @@ const TYPE_AGE = {
   grundschule: { tab43: ['7-10'], mid: 'bis10', label: '7–10 Jahre' },
   weiterfuehrend: { tab43: ['11-13', '14-17'], mid: '11-17', label: '11–17 Jahre' },
   // Schulart unbekannt: meist Grundschulen (Annahme)
-  schule: { tab43: ['7-10'], mid: 'bis10', label: '7–10 Jahre (Annahme)' }
+  schule: { tab43: ['7-10'], mid: 'bis10', label: '7–10 Jahre (Annahme)' },
+  // Berufliche Schulen (OSZ, Berufs-, Fachschulen): Tab. 43 endet mit 17 Jahren —
+  // Länge und Split der Auszubildenden aus Tab. 38/Abb. 78, das Verhältnis der
+  // Verkehrsmittel untereinander wie bei den 11- bis 17-Jährigen (Abb. 100)
+  beruflich: {
+    tab43: null, mid: '11-17', label: 'Auszubildende, 18–29 Jahre',
+    modeNote: 'Verhältnis wie bei 11- bis 17-Jährigen, keine Werte für Auszubildende'
+  }
+};
+
+/** Mittel aus den Werten für Männer und Frauen. */
+const meanOfSexes = (byKey) => {
+  const keys = Object.keys(byKey.maenner);
+  return Object.fromEntries(keys.map(k => [k, (byKey.maenner[k] + byKey.frauen[k]) / 2]));
 };
 
 // ---- Funktionen ----
@@ -214,10 +315,36 @@ export function regionGroup(regioStaR7) {
 }
 
 /**
- * Modal-Split-Vorschlag je Einrichtungstyp und Raumtyp-Gruppe (null = bundesweit).
- * @returns {{split: Object, source: string, note: string}}
+ * Split der Auszubildenden (Abb. 78, bundesweit), mit dem Raumtyp-Faktor aller
+ * Wege (Tab. 8: Anteil im Raumtyp ÷ bundesweit) gewichtet und neu normiert.
+ * Ohne bekannten Raumtyp der bundesweite Wert.
  */
-export function splitSuggestion(type, group) {
+export function azubiSplit(regioStaR7) {
+  const base = meanOfSexes(MID2023_ABB78_AZUBI);
+  const row = MID2023_TAB8_MODAL[String(regioStaR7 || '').trim()];
+  if (!row) return normalizeSplit(base);
+  const all = MID2023_TAB8_MODAL.gesamt;
+  return normalizeSplit(Object.fromEntries(MODE_KEYS.map(m => [m, (base[m] * row[m]) / all[m]])));
+}
+
+/**
+ * Modal-Split-Vorschlag je Einrichtungstyp und Raumtyp-Gruppe (null = bundesweit).
+ * Berufliche Schulen nutzen den genauen Raumtyp (regioStaR7).
+ * @returns {{split: Object, source: string, note: string, factorSource?: string}}
+ */
+export function splitSuggestion(type, group, regioStaR7 = null) {
+  if (type === 'beruflich') {
+    const rs = String(regioStaR7 || '').trim();
+    if (!MID2023_TAB8_MODAL[rs]) {
+      return { split: azubiSplit(null), source: 'mid2023-abb78', note: 'Auszubildende 18–29 Jahre, alle Wegezwecke, bundesweit' };
+    }
+    return {
+      split: azubiSplit(rs),
+      source: 'mid2023-abb78',
+      factorSource: 'mid2023-tab8',
+      note: `Auszubildende 18–29 Jahre, alle Wegezwecke, bundesweit; × Raumtyp-Faktor ${REGIOSTAR_LABELS[rs]} (MiD 2023, Tab. 8)`
+    };
+  }
   if (type === 'grundschule') {
     const key = group ? FORSA_FOR_GROUP[group] : 'gesamt';
     return { split: forsaSplit(FORSA2022_GS[key]), source: 'forsa2022', note: FORSA_NOTES[key] };
@@ -239,6 +366,10 @@ export function splitSuggestion(type, group) {
 
 /** Mittlere Kita-/Schulweglänge (km) für Typ und Raumtyp, mit Quelle. */
 export function meanTripLength(type, regioStaR7) {
+  if (type === 'beruflich') {
+    const km = (MID2023_TAB38_AZUBI_KM.maenner + MID2023_TAB38_AZUBI_KM.frauen) / 2;
+    return { km, source: 'mid2023-tab38', note: 'Auszubildende 18–29 Jahre, alle Wegezwecke, bundesweit' };
+  }
   const age = TYPE_AGE[type] || TYPE_AGE.schule;
   const row = MID2023_TAB43_KM[String(regioStaR7 || '').trim()];
   if (row) {
@@ -269,7 +400,7 @@ export function mixtureQuantile(q, components) {
 
 /**
  * Weglängenmodell je Einrichtungstyp und Raumtyp.
- * @param {string} type - 'kindergarten' | 'grundschule' | 'weiterfuehrend' | 'schule'
+ * @param {string} type - 'kindergarten' | 'grundschule' | 'weiterfuehrend' | 'beruflich' | 'schule'
  * @param {string|number|null} regioStaR7 - RegioStaR7-Code (71–77) oder null (bundesweit)
  * @returns {Object} split (Vorschlag), mean (Tab. 43), modes (je Verkehrsmittel:
  *   meanKm, medianKm, sigma, beelineMedianM), scale, radiusM, Quellen
@@ -277,7 +408,7 @@ export function mixtureQuantile(q, components) {
 export function tripModel(type, regioStaR7) {
   const age = TYPE_AGE[type] || TYPE_AGE.schule;
   const group = regionGroup(regioStaR7);
-  const splitEntry = splitSuggestion(type, group);
+  const splitEntry = splitSuggestion(type, group, regioStaR7);
   const split = splitEntry.split;
   const mean = meanTripLength(type, regioStaR7);
   const perMode = MID2023_ABB100_KM[age.mid];
@@ -309,6 +440,7 @@ export function tripModel(type, regioStaR7) {
     .map(m => ({ weight: share(m), median: modes[m].beelineMedianM, sigma: modes[m].sigma }));
   const q = comps.length ? mixtureQuantile(RADIUS_QUANTILE, comps) : RADIUS_MIN_M;
   const radiusM = Math.min(RADIUS_MAX_M, Math.max(RADIUS_MIN_M, Math.ceil(q / RADIUS_STEP_M) * RADIUS_STEP_M));
+  const presence = PRESENCE[type] || null;
 
   return {
     type,
@@ -317,16 +449,24 @@ export function tripModel(type, regioStaR7) {
     ageGroup: age.label,
     split,
     splitSource: splitEntry.source,
+    splitFactorSource: splitEntry.factorSource || null,
     splitNote: splitEntry.note,
     meanKm: mean.km,
     meanSource: mean.source,
     meanNote: mean.note,
     modeSource: 'mid2023-abb100',
+    modeNote: age.modeNote || (age.mid === 'bis10' ? 'bis 10 Jahre' : '11–17 Jahre'),
     scale: { active: kActive, motor: kMotor },
     modes,
     detourFactor: DETOUR_FACTOR,
     radiusM,
-    radiusQuantile: RADIUS_QUANTILE
+    radiusQuantile: RADIUS_QUANTILE,
+    // Quantil in Metern (Luftlinie) und ob die Obergrenze greift
+    radiusQuantileM: q,
+    radiusCapped: q > RADIUS_MAX_M,
+    presence: presenceShare(type),
+    presenceSource: presence ? presence.source : null,
+    presenceNote: presence ? presence.note : null
   };
 }
 
@@ -353,5 +493,7 @@ export function modeShareInBand(model, mode, fromKm, toKm, split = model.split) 
 
 /** Quellen-IDs, die ein Modell verwendet (für Export und Oberfläche). */
 export function modelSourceIds(model) {
-  return [...new Set([model.splitSource, model.meanSource, model.modeSource, 'annahme'])];
+  return [...new Set([
+    model.splitSource, model.splitFactorSource, model.meanSource, model.modeSource, model.presenceSource, 'annahme'
+  ].filter(Boolean))];
 }

@@ -17,6 +17,8 @@ import { MobileLayout } from './mobile-layout.js';
 import { PolygonDraw } from './polygon-draw.js';
 
 const fmtKm = (km) => km.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const de = (v) => v.toLocaleString('de-DE');
+const pct = (share) => Math.round(share * 100);
 
 /** Kurzlabel und Tooltip für die Herkunft der Wegezahl einer Einrichtung. */
 export function tripsSourceInfo(facility, pupilSources = {}) {
@@ -27,36 +29,48 @@ export function tripsSourceInfo(facility, pupilSources = {}) {
     const how = src.match === 'osm'
       ? 'über den OSM-Abgleich (osm-schulabgleich) zugeordnet'
       : `räumlich zugeordnet (${src.distanceM} m entfernt)`;
+    // Berufliche Schulen: nur der Teil, der an einem Schultag da ist
+    const partial = src.presence != null && src.presence < 1;
+    const count = partial
+      ? ` · ${de(src.pupils)} Schüler:innen, davon ${pct(src.presence)} % an einem Schultag = ${de(facility.trips)} Hinwege`
+      : '';
     return {
       kind: 'official',
-      label: `amtlich${src.year ? ` ${String(src.year).replace(/^20(\d\d)\/(\d\d)$/, '$1/$2')}` : ''}`,
+      label: `amtlich${src.year ? ` ${String(src.year).replace(/^20(\d\d)\/(\d\d)$/, '$1/$2')}` : ''}${partial ? ' · anteilig' : ''}`,
       title: `${meta.label || src.source || 'Amtliche Statistik'}${year}: ${src.officialName || ''}`
-        + ` (${src.officialId}) · ${how}`
+        + ` (${src.officialId}) · ${how}${count}`
     };
   }
   if (src.kind === 'manual') {
-    return { kind: 'manual', label: 'eigener Wert', title: 'Von Hand eingetragen' };
-  }
-  if (src.kind === 'excluded') {
-    const official = src.pupils != null
-      ? ` Amtlich ${src.pupils.toLocaleString('de-DE')} Schüler:innen${src.year ? ` (${src.year})` : ''}.`
-      : '';
-    return {
-      kind: 'excluded',
-      label: 'nicht gerechnet',
-      title: 'Berufliche Schule — Schüler:innen meist volljährig, Unterricht oft nur an einzelnen Tagen; '
-        + `passt nicht zum Schulweg-Modell (unter 18, ein Hinweg je Schultag).${official} Bei Bedarf eine Zahl eintragen.`
-    };
+    return { kind: 'manual', label: 'eigener Wert', title: 'Von Hand eingetragen (Hinwege je Schultag)' };
   }
   const type = FACILITY_TYPES[facility.type];
+  if (facility.type === 'kindergarten') {
+    return {
+      kind: 'placeholder',
+      label: 'Platzhalter',
+      title: `Platzhalter für ${type.label} — für Kitas gibt es keine Daten. Bitte anpassen.`
+    };
+  }
+  const presence = type.model ? type.model.presence : 1;
+  const assumed = presence < 1
+    ? `: ${de(type.pupils)} Schüler:innen, davon ${pct(presence)} % an einem Schultag`
+    : '';
   return {
     kind: 'placeholder',
     label: 'Platzhalter',
-    title: facility.type === 'kindergarten'
-      ? `Platzhalter für ${type.label} — für Kitas gibt es keine Daten. Bitte anpassen.`
-      : `Platzhalter für ${type.label} — keine amtliche Schülerzahl gefunden. Bitte anpassen.`
+    title: `Platzhalter für ${type.label}${assumed} — keine amtliche Schülerzahl gefunden. `
+      + 'Bitte anpassen (Hinwege je Schultag).'
   };
 }
+
+// Eingabefeld je Einrichtung: Hinwege je Schultag
+const MAX_TRIPS = 10000;
+const TRIPS_INPUT_LABEL = {
+  kindergarten: 'Kinder (Hinwege je Schultag)',
+  beruflich: 'Anwesende Schüler:innen (Hinwege je Schultag)',
+  schule: 'Schüler:innen (Hinwege je Schultag)'
+};
 
 export const AnalysisPanel = {
   _polygon: null,
@@ -201,17 +215,19 @@ export const AnalysisPanel = {
       return `
       <div class="analysis-facility" data-index="${i}">
         <span class="analysis-facility-name" title="${Utils.escapeHtml(f.name)} — Klick zentriert die Karte">${Utils.escapeHtml(f.name)}</span>
-        <span class="analysis-facility-type">${FACILITY_TYPES[f.type].label}</span>
-        <span class="analysis-facility-src is-${src.kind}" title="${Utils.escapeHtml(src.title)}">${Utils.escapeHtml(src.label)}</span>
-        <input type="number" min="0" max="5000" step="10" value="${f.trips}" data-facility="${i}" class="analysis-trips-input"
-          aria-label="${f.type === 'kindergarten' ? 'Kinder' : 'Schüler:innen'} (Hinwege je Schultag)" />
+        <span class="analysis-facility-tags">
+          <span class="analysis-facility-type">${FACILITY_TYPES[f.type].label}</span>
+          <span class="analysis-facility-src is-${src.kind}" title="${Utils.escapeHtml(src.title)}">${Utils.escapeHtml(src.label)}</span>
+        </span>
+        <input type="number" min="0" max="${MAX_TRIPS}" step="10" value="${f.trips}" data-facility="${i}" class="analysis-trips-input"
+          aria-label="${TRIPS_INPUT_LABEL[f.type] || TRIPS_INPUT_LABEL.schule}" />
       </div>`;
     }).join('');
     listEl.querySelectorAll('.analysis-trips-input').forEach(input => {
       input.addEventListener('change', () => {
         const i = Number(input.dataset.facility);
         const f = this._facilities[i];
-        const value = Utils.validateNumber(input.value, 0, 5000, f.trips);
+        const value = Utils.validateNumber(input.value, 0, MAX_TRIPS, f.trips);
         if (value !== f.trips) {
           f.trips = value;
           f.tripsSource = { kind: 'manual', previous: f.tripsSource || null };
@@ -262,12 +278,11 @@ export const AnalysisPanel = {
     const el = Utils.getElement('#analysis-pupils-info');
     if (!el) return;
     const kind = (f) => (f.tripsSource && f.tripsSource.kind) || 'placeholder';
-    const schools = this._facilities.filter(f => f.type !== 'kindergarten' && kind(f) !== 'excluded');
+    const schools = this._facilities.filter(f => f.type !== 'kindergarten');
     if (this._facilities.length === 0) { el.style.display = 'none'; return; }
     const official = schools.filter(f => kind(f) === 'official');
     const manual = this._facilities.filter(f => kind(f) === 'manual');
-    const excluded = this._facilities.filter(f => kind(f) === 'excluded');
-    const placeholders = this._facilities.length - official.length - manual.length - excluded.length;
+    const placeholders = this._facilities.length - official.length - manual.length;
     const sourceLabels = [...new Set(official.map(f => {
       const meta = AnalysisService.pupilSources[f.tripsSource.source] || {};
       return `${meta.label || f.tripsSource.source}${f.tripsSource.year ? ` ${f.tripsSource.year}` : ''}`;
@@ -277,8 +292,13 @@ export const AnalysisPanel = {
     else if (schools.length) parts.push('Keine amtlichen Schülerzahlen für diesen Bereich gefunden');
     if (manual.length) parts.push(`${manual.length} ${manual.length === 1 ? 'eigener Wert' : 'eigene Werte'}`);
     if (placeholders) parts.push(`${placeholders} Platzhalter`);
-    if (excluded.length) parts.push(`${excluded.length} berufliche ${excluded.length === 1 ? 'Schule' : 'Schulen'} nicht gerechnet`);
-    el.innerHTML = `${parts.join(' · ')}. Eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag; Rückwege gleich viele.`;
+    const vocational = this._typeSettings.beruflich && this._facilities.some(f => f.type === 'beruflich')
+      ? this._typeSettings.beruflich.model.presence
+      : 1;
+    const presenceNote = vocational < 1
+      ? ` Berufliche Schulen: nur wer an einem Schultag da ist (${pct(vocational)} % der Schüler:innen, Teilzeit-Berufsschule an einzelnen Tagen).`
+      : '';
+    el.innerHTML = `${parts.join(' · ')}. Eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag; Rückwege gleich viele.${presenceNote}`;
     el.style.display = 'block';
   },
 
@@ -359,8 +379,9 @@ export const AnalysisPanel = {
       vom Verkehrsmittel ab (MiD 2023): Fußwege kurz, Radwege mittel, Autowege lang.
       ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
       Anfragen gehen an den eigenen Routing-Server). Einzugsgrenzen: Kita/Grundschule
-      nur aus der eigenen Gemeinde; weiterführende Schulen bevorzugt aus dem eigenen
-      Landkreis (außerhalb stark abgewertet, anderes Bundesland noch stärker).</p>
+      nur aus der eigenen Gemeinde; weiterführende und berufliche Schulen bevorzugt
+      aus dem eigenen Landkreis (außerhalb stark abgewertet, anderes Bundesland noch
+      stärker).</p>
       <div id="analysis-sources-slot">${this._sourcesHtml(typesPresent)}</div>`;
     this._bindSourcesToggle();
 
@@ -421,18 +442,29 @@ export const AnalysisPanel = {
         : `${suggested} % nach ${esc(SOURCES[m.splitSource].label)} (${esc(m.splitNote)})`;
       const lengths = MODES.map(x => `${x.label} ${fmtKm(m.modes[x.key].meanKm)}`).join(' · ');
       const radiusNote = s.radiusM === m.radiusM ? '' : ` — eingestellt: ${fmtKm(s.radiusM / 1000)} km`;
+      const quantile = `${pct(m.radiusQuantile)} % der Fuß-, Rad- und Autowege (Luftlinie)`;
+      const radiusText = m.radiusCapped
+        ? `Radius-Vorschlag ${fmtKm(m.radiusM / 1000)} km (Obergrenze; ${quantile} reichen bis ${fmtKm(m.radiusQuantileM / 1000)} km)`
+        : `Radius-Vorschlag ${fmtKm(m.radiusM / 1000)} km = ${quantile}`;
+      const presence = m.presence < 1 && SOURCES[m.presenceSource]
+        ? `<div>An einem Schultag in der Schule: ${pct(m.presence)} % der Schüler:innen nach ${esc(SOURCES[m.presenceSource].label)} (${esc(m.presenceNote)})</div>`
+        : '';
+      const basis = s.basis === 'population'
+        ? '<div>Startpunkte aus der ganzen Bevölkerung (Zensus), nicht nur unter 18-Jährige</div>'
+        : '';
       return `<li><strong>${esc(FACILITY_TYPES[type].label)}</strong>
         <div>Modal Split (Fuß/Rad/ÖPNV/Auto): ${splitText}</div>
         <div>Ø Weg ${fmtKm(m.meanKm)} km nach ${esc(SOURCES[m.meanSource].label)} (${esc(m.meanNote)})</div>
-        <div>Ø je Verkehrsmittel: ${lengths} km — ${esc(SOURCES[m.modeSource].label)}, auf diesen Wert skaliert</div>
-        <div>Radius-Vorschlag ${fmtKm(m.radiusM / 1000)} km = ${Math.round(m.radiusQuantile * 100)} % der Fuß-, Rad- und Autowege (Luftlinie)${radiusNote}</div>
+        <div>Ø je Verkehrsmittel: ${lengths} km — ${esc(SOURCES[m.modeSource].label)} (${esc(m.modeNote)}), auf diesen Wert skaliert</div>
+        <div>${radiusText}${radiusNote}</div>
+        ${presence}${basis}
       </li>`;
     }).join('');
 
     const link = (title, url) => (url
       ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>`
       : esc(title));
-    const sourceItems = [...ids].map(id => {
+    const sourceItems = [...ids].filter(id => SOURCES[id]).map(id => {
       const src = SOURCES[id];
       return `<li><strong>${esc(src.label)}:</strong> ${link(src.title, src.url)}. ${esc(src.citation)}.
         <span class="analysis-sources-note">${esc(src.note)}</span></li>`;
@@ -446,13 +478,12 @@ export const AnalysisPanel = {
         ${src.license ? `Lizenz: ${esc(src.license)}.` : ''}
         <span class="analysis-sources-note">${esc(src.note || '')}</span></li>`);
     }
-    const de = (v) => v.toLocaleString('de-DE');
     return `<details class="analysis-sources"${this._sourcesOpen ? ' open' : ''}>
       <summary>Annahmen &amp; Quellen</summary>
       <ul class="analysis-sources-types">${typeItems}</ul>
       <p>Annahmen: Weglängen lognormal mit Streuung σ Fuß ${de(SIGMA.foot)}, Rad ${de(SIGMA.bike)},
       ÖPNV ${de(SIGMA.transit)}, Auto ${de(SIGMA.car)}; Umwegfaktor Netz/Luftlinie ${de(DETOUR_FACTOR)};
-      eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag.</p>
+      eine Schülerin bzw. ein Schüler = ein Hinweg je Schultag (berufliche Schulen: nur der anwesende Anteil).</p>
       <ul class="analysis-sources-list">${sourceItems.join('')}</ul>
     </details>`;
   },
@@ -494,7 +525,7 @@ export const AnalysisPanel = {
           + `· ${s.ok.toLocaleString('de-DE')} Routen gerechnet${s.fail ? ` (${s.fail} fehlgeschlagen)` : ''}</div>`
           + '<div class="demand-info-sub">Karte zeigt die Hinwege; Rückwege etwa gleich viele auf denselben Kanten in Gegenrichtung.</div>';
         if (s.capacityLimited > 0) {
-          html += `<div class="demand-info-warn">Bei ${s.capacityLimited} Einrichtung/Modus-Kombinationen gab es weniger unter 18-Jährige im Radius als Stichproben-Routen — Gewichte wurden entsprechend angehoben.</div>`;
+          html += `<div class="demand-info-warn">Bei ${s.capacityLimited} Einrichtung/Modus-Kombinationen wohnten weniger mögliche Startpersonen im Radius (unter 18-Jährige, bei beruflichen Schulen alle Einwohner) als Stichproben-Routen — Gewichte wurden entsprechend angehoben.</div>`;
         }
         resultEl.innerHTML = html;
       }

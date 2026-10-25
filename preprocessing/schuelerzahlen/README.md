@@ -54,8 +54,11 @@ Rechtsberatung.
   Hauptstandort. Der gespeicherte Abruf deckt nur die Bezirke 01–08 ab
   (Neukölln bis 08G12); Treptow-Köpenick, Marzahn-Hellersdorf, Lichtenberg und
   Reinickendorf fehlen — dort bleiben Platzhalter.
-- Berufliche Schulen (OSZ, Berufs-, Fachschulen) stehen in den Dateien, die App
-  rechnet sie aber nicht (siehe docs/SCHULWEG_PARAMETER.md, „Grenzen“).
+- Berufliche Schulen (OSZ, Berufs-, Fachschulen) rechnet die App als eigenen
+  Typ: Wege je Schultag = Schüler:innen × Anwesenheitsanteil (Teilzeit-Berufsschule
+  nur an einzelnen Tagen), Split und Weglänge der Auszubildenden (siehe
+  docs/SCHULWEG_PARAMETER.md, „Berufliche Schulen“). Die Dateien enthalten nur die
+  Gesamtzahl je Schule, keine Aufteilung nach Voll- und Teilzeit.
 - Schuljahre unterscheiden sich je Land und Quelle; das Schuljahr steht je
   Schule in der Datei und in der App am Eintrag.
 - Kitas: keine Daten, Platzhalter.

@@ -13,17 +13,18 @@
 //
 // ÖPNV heißt hier: Fußweg ab den zielnächsten Haltestellen (Zubringer-Modell,
 // eigener GH-Server) — KEIN Transitous, die Mengen wären mit Fair Use
-// unvereinbar. Nachfrage-Basis ist fix "unter 18" (Zensus).
+// unvereinbar. Nachfrage-Basis: unter 18-Jährige (Zensus), bei beruflichen
+// Schulen alle Einwohner.
 import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
 import { Geo } from '../domain/geo.js';
 import { exportProperties } from '../domain/infra.js';
 import {
-  applyOfficialSchool, excludeVocational, isVocationalSchool, landFromAgs, matchFacilities, osmRefFromProperties
+  applyOfficialSchool, isVocationalSchool, landFromAgs, matchFacilities, osmRefFromProperties
 } from '../domain/school-stats.js';
 import {
-  drawDistribution, modelSourceIds, REGIOSTAR_LABELS, SOURCES, tripModel
+  drawDistribution, modelSourceIds, presenceShare, REGIOSTAR_LABELS, SOURCES, tripModel
 } from '../domain/school-trips.js';
 import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
@@ -33,9 +34,11 @@ import { SchoolStatsService } from './school-stats-service.js';
 /** Einheit der Belastungskarte: Wege je Einrichtung = Hinwege je Schultag. */
 export const TRIP_UNIT = 'Hinwege/Schultag';
 
-// Defaults je Einrichtungstyp. trips = Platzhalter, wenn keine amtliche
-// Schülerzahl vorliegt; split/radiusM/model = bundesweiter Vorschlag aus
-// domain/school-trips.js (beim Zeichnen durch den Raumtyp ersetzt).
+// Defaults je Einrichtungstyp. pupils = Platzhalter, wenn keine amtliche
+// Schülerzahl vorliegt; trips = Hinwege je Schultag daraus (bei beruflichen
+// Schulen nur der anwesende Anteil); split/radiusM/model = bundesweiter
+// Vorschlag aus domain/school-trips.js (beim Zeichnen durch den Raumtyp ersetzt).
+// basis = wer im Zensus als Startpunkt infrage kommt ('under18' | 'population').
 //
 // boundary = Einzugsgrenze über den Amtlichen Gemeindeschlüssel der
 // Zensus-Zellen (2 Stellen Land · 5 Kreis · 8 Gemeinde):
@@ -48,24 +51,37 @@ export const TRIP_UNIT = 'Hinwege/Schultag';
 const TYPE_BASE = {
   kindergarten: {
     label: 'Kindergarten',
-    trips: 50,
-    boundary: { level: 'gemeinde', mode: 'hard' }
+    pupils: 50,
+    boundary: { level: 'gemeinde', mode: 'hard' },
+    basis: 'under18'
   },
   grundschule: {
     label: 'Grundschule',
-    trips: 200,
-    boundary: { level: 'gemeinde', mode: 'hard' }
+    pupils: 200,
+    boundary: { level: 'gemeinde', mode: 'hard' },
+    basis: 'under18'
   },
   weiterfuehrend: {
     label: 'Weiterführende Schule',
-    trips: 500,
-    boundary: { level: 'kreis', mode: 'penalty' }
+    pupils: 500,
+    boundary: { level: 'kreis', mode: 'penalty' },
+    basis: 'under18'
+  },
+  // Berufliche Schulen (OSZ, Berufs-, Fachschulen): Einzugsbereich wie bei
+  // weiterführenden Schulen der Kreis (in Berlin die ganze Stadt), Schüler:innen
+  // meist volljährig — Startpunkte daher aus der ganzen Bevölkerung
+  beruflich: {
+    label: 'Berufliche Schule',
+    pupils: 800,
+    boundary: { level: 'kreis', mode: 'penalty' },
+    basis: 'population'
   },
   schule: {
     label: 'Schule',
-    trips: 200,
+    pupils: 200,
     // Typ unbekannt (kann auch weiterführend sein) → weich statt hart
-    boundary: { level: 'gemeinde', mode: 'penalty' }
+    boundary: { level: 'gemeinde', mode: 'penalty' },
+    basis: 'under18'
   }
 };
 
@@ -73,7 +89,14 @@ const TYPE_BASE = {
 export function typeSettingsFor(regioStaR7) {
   return Object.fromEntries(Object.entries(TYPE_BASE).map(([type, base]) => {
     const model = tripModel(type, regioStaR7);
-    return [type, { ...base, boundary: { ...base.boundary }, split: { ...model.split }, radiusM: model.radiusM, model }];
+    return [type, {
+      ...base,
+      trips: Math.round(base.pupils * presenceShare(type)),
+      boundary: { ...base.boundary },
+      split: { ...model.split },
+      radiusM: model.radiusM,
+      model
+    }];
   }));
 }
 
@@ -189,6 +212,8 @@ export const AnalysisService = {
    */
   classify(props) {
     if (props.amenity === 'kindergarten') return 'kindergarten';
+    // Vor der Oberstufen-Regel: „Oberstufenzentrum“ enthält „oberstufe“
+    if (isVocationalSchool(props.name)) return 'beruflich';
     // Die Schul-Kacheln heißen das Feld isced_level (OSM-Tag isced:level)
     const isced = String(props.isced_level ?? props['isced:level'] ?? '');
     const name = (props.name || '').toLowerCase();
@@ -216,7 +241,7 @@ export const AnalysisService = {
     const mapped = features.map(f => {
       const type = this.classify(f.properties);
       const osmRef = osmRefFromProperties(f.properties, f.geomType);
-      const facility = {
+      return {
         lat: f.lat,
         lon: f.lon,
         name: f.properties.name || `${FACILITY_TYPES[type].label} (unbenannt)`,
@@ -225,9 +250,6 @@ export const AnalysisService = {
         tripsSource: { kind: 'placeholder' },
         osmRefs: osmRef ? [osmRef] : []
       };
-      // Berufliche Schulen schon am OSM-Namen erkennen (auch ohne amtliche Daten)
-      if (type !== 'kindergarten' && isVocationalSchool(f.properties.name)) excludeVocational(facility);
-      return facility;
     });
     // OSM-Doppel (Node + Gebäude-Way derselben Einrichtung) zusammenfassen:
     // gleicher Name + Typ im Nahbereich. Filialen einer Kita-Kette liegen
@@ -243,17 +265,18 @@ export const AnalysisService = {
     return this.sortFacilities(deduped);
   },
 
-  /** Sortierung der Liste: weiterführend, Grundschule, Schule, Kita; dann Name. */
+  /** Sortierung der Liste: weiterführend, beruflich, Grundschule, Schule, Kita; dann Name. */
   sortFacilities(facilities) {
-    const typeOrder = ['weiterfuehrend', 'grundschule', 'schule', 'kindergarten'];
+    const typeOrder = ['weiterfuehrend', 'beruflich', 'grundschule', 'schule', 'kindergarten'];
     return facilities.sort((a, b) =>
       typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type) || a.name.localeCompare(b.name, 'de'));
   },
 
   /**
    * Belegt die Wege je Einrichtung mit amtlichen Schülerzahlen vor (eine
-   * Schülerin = ein Hinweg je Schultag) und übernimmt die amtliche Schulart,
-   * wenn sie eindeutig ist. Ohne Daten bleibt der Platzhalter des Typs.
+   * Schülerin = ein Hinweg je Schultag, bei beruflichen Schulen anteilig) und
+   * übernimmt die amtliche Schulart, wenn sie eindeutig ist. Ohne Daten bleibt
+   * der Platzhalter des Typs.
    * @returns {Promise<{matched: number, eligible: number, lands: Object}>}
    */
   async prefillPupils(facilities, areaContext) {
@@ -262,12 +285,12 @@ export const AnalysisService = {
     const matches = matchFacilities(facilities, data.schools);
     let matched = 0;
     facilities.forEach((f, i) => {
-      if (matches[i] && applyOfficialSchool(f, matches[i]) && f.tripsSource.kind === 'official') matched++;
+      if (matches[i] && applyOfficialSchool(f, matches[i])) matched++;
     });
     this.sortFacilities(facilities);
     return {
       matched,
-      eligible: facilities.filter(f => f.type !== 'kindergarten' && f.tripsSource.kind !== 'excluded').length,
+      eligible: facilities.filter(f => f.type !== 'kindergarten').length,
       lands: data.lands
     };
   },
@@ -371,7 +394,9 @@ export const AnalysisService = {
           // Weglänge je Verkehrsmittel aus dem Schulweg-Modell (MiD 2023):
           // kurze Wege zu Fuß, mittlere mit dem Rad, lange mit dem Auto. Der
           // Radius kappt nur — Wege von weiter her starten im äußersten Ring.
-          const drawn = DemandService._drawFromCells(cells, target, settings.radiusM, p.sample, p.dist || 'lognormal', 'under18');
+          const drawn = DemandService._drawFromCells(
+            cells, target, settings.radiusM, p.sample, p.dist || 'lognormal', settings.basis || 'under18'
+          );
           points = drawn.points;
           if (drawn.points.length < p.sample) capacityLimited++;
         }

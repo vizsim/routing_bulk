@@ -11,6 +11,7 @@
 //    bei mehreren nur die mit gleichem Namen; nächste zuerst
 // Jede amtliche Schule wird höchstens einer Einrichtung zugeordnet, damit
 // Schüler:innen nicht doppelt zählen (z. B. Knoten und Gebäude derselben Schule).
+import { presenceShare } from './school-trips.js';
 
 /** Ländercode aus den ersten zwei Stellen des Amtlichen Gemeindeschlüssels. */
 export const AGS_LAND = {
@@ -73,28 +74,41 @@ function distanceM(lat1, lon1, lat2, lon2) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const PRIMARY = /grundschule|grund-|primarschule|primarstufe/;
+const SECONDARY = /gymnasium|sekundarschule|oberschule|gesamtschule|realschule|hauptschule|mittelschule|stadtteilschule|regionale schule|regelschule|werkrealschule|sekundarstufe/;
+
 /**
  * Amtliche Schulart → Einrichtungstyp der Gebietsanalyse (oder null, wenn
  * nicht eindeutig — dann bleibt die Einordnung aus den OSM-Attributen).
+ * Mehrere Schularten (Hamburg: „Berufsfachschule|Berufsschule|…“) zählen als
+ * berufliche Schule nur, wenn keine allgemeinbildende Schulart dabei ist.
  */
 export function officialTypeToFacilityType(schoolType) {
-  const s = String(schoolType || '').toLowerCase();
-  if (!s) return null;
-  if (/gemeinschaftsschule/.test(s)) return 'schule'; // Klassen 1–10/13
-  const primary = /grundschule|grund-|primarschule|primarstufe/.test(s);
-  const secondary = /gymnasium|sekundarschule|oberschule|gesamtschule|realschule|hauptschule|mittelschule|stadtteilschule|regionale schule|regelschule|werkrealschule|sekundarstufe/.test(s);
+  const parts = String(schoolType || '').toLowerCase().split(/[|;]/).map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  const general = parts.filter(p => !isVocationalPart(p));
+  const any = (re) => general.some(p => re.test(p));
+  if (any(/gemeinschaftsschule/)) return 'schule'; // Klassen 1–10/13
+  const primary = any(PRIMARY);
+  const secondary = any(SECONDARY);
   if (primary && secondary) return 'schule';
   if (primary) return 'grundschule';
   if (secondary) return 'weiterfuehrend';
+  if (general.length < parts.length) return 'beruflich';
   return null;
 }
 
-// Berufliche Schulen (OSZ, Berufsschule, Fachschule, Berufskolleg …): Schüler:innen
-// meist volljährig, Unterricht in der dualen Ausbildung oft nur an einzelnen
-// Tagen — das passt nicht zum Schulweg-Modell (unter 18-Jährige, ein Hinweg je
-// Schultag, Weglängen nach MiD). Ihre teils sehr großen Schülerzahlen würden
-// die Belastungskarte dominieren.
+// Berufliche Schulen (OSZ, Berufsschule, Fachschule, Berufskolleg …): eigener
+// Einrichtungstyp — Schüler:innen meist volljährig, in der dualen Ausbildung nur
+// an einzelnen Tagen in der Schule (siehe PRESENCE in school-trips.js).
 const VOCATIONAL = /oberstufenzentrum|\bosz\b|berufsschul|beruflich|berufsfachschul|fachoberschul|fachschul|berufskolleg|berufsbildend|berufsoberschul/;
+// Berufliche Bildungsgänge an allgemeinbildenden Schulen (Hamburg „Berufsfachschule
+// (allg. bild.)“, Berlin „Förderschwerp. einschl. beruflichem Teil“)
+const AT_GENERAL_SCHOOL = /allg\.\s*bild|allgemein\s*bild|einschl\.\s*beruflichem teil/;
+
+function isVocationalPart(text) {
+  return VOCATIONAL.test(text) && !AT_GENERAL_SCHOOL.test(text);
+}
 
 /** Berufliche Schule laut amtlicher Schulart oder Name? */
 export function isVocationalSchool(...texts) {
@@ -102,24 +116,10 @@ export function isVocationalSchool(...texts) {
 }
 
 /**
- * Berufliche Schule: bleibt in der Liste, wird aber nicht gerechnet (0 Wege).
- * Typ „weiterführend“, falls jemand doch eine Zahl einträgt.
- * @param {Object} facility - Einrichtung der Gebietsanalyse (wird geändert)
- * @param {Object|null} [official] - Angaben der amtlichen Schule, falls zugeordnet
- */
-export function excludeVocational(facility, official = null) {
-  if (facility.type !== 'weiterfuehrend') {
-    facility.osmType = facility.osmType || facility.type;
-    facility.type = 'weiterfuehrend';
-  }
-  facility.trips = 0;
-  facility.tripsSource = { kind: 'excluded', reason: 'vocational', ...(official || {}) };
-}
-
-/**
- * Übernimmt die zugeordnete amtliche Schule: Schülerzahl als Wege (eine
- * Schülerin = ein Hinweg je Schultag) und die Schulart, wenn sie eindeutig ist.
- * Berufliche Schulen werden ausgenommen (excludeVocational).
+ * Übernimmt die zugeordnete amtliche Schule: Schulart, wenn sie eindeutig ist
+ * (ohne Schulart: berufliche Schule am Namen erkannt), und die Schülerzahl als
+ * Wege — eine Schülerin = ein Hinweg je Schultag, bei beruflichen Schulen
+ * anteilig nach Anwesenheit.
  * @param {Object} facility - Einrichtung (wird geändert)
  * @param {{school: Object, mode: string, distanceM: number}} match - aus matchFacilities
  * @returns {boolean} true, wenn eine amtliche Schülerzahl vorlag
@@ -127,27 +127,28 @@ export function excludeVocational(facility, official = null) {
 export function applyOfficialSchool(facility, match) {
   const s = match && match.school;
   if (!s || !Number.isFinite(s.pupils)) return false;
-  const official = {
+  const officialType = s.type
+    ? officialTypeToFacilityType(s.type)
+    : (isVocationalSchool(s.name) ? 'beruflich' : null);
+  if (officialType && officialType !== facility.type) {
+    facility.osmType = facility.type;
+    facility.type = officialType;
+  }
+  const pupils = Math.max(0, Math.round(s.pupils));
+  const presence = presenceShare(facility.type);
+  facility.trips = Math.round(pupils * presence);
+  facility.tripsSource = {
+    kind: 'official',
     source: s.src || null,
     year: s.year || null,
     officialId: s.id,
     officialName: s.name,
     officialType: s.type || null,
-    pupils: Math.max(0, Math.round(s.pupils)),
+    pupils,
+    presence,
     match: match.mode,
     distanceM: match.distanceM
   };
-  if (isVocationalSchool(s.type, s.name)) {
-    excludeVocational(facility, official);
-    return true;
-  }
-  const officialType = officialTypeToFacilityType(s.type);
-  if (officialType && officialType !== facility.type) {
-    facility.osmType = facility.type;
-    facility.type = officialType;
-  }
-  facility.trips = official.pupils;
-  facility.tripsSource = { kind: 'official', ...official };
   return true;
 }
 

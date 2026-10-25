@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  applyOfficialSchool, excludeVocational, isVocationalSchool, landFromAgs, matchFacilities,
+  applyOfficialSchool, isVocationalSchool, landFromAgs, matchFacilities,
   normalizeSchoolName, officialTypeToFacilityType, osmRefFromProperties
 } from '../src/domain/school-stats.js';
+import { presenceShare } from '../src/domain/school-trips.js';
 
 test('landFromAgs: Ländercode aus dem Gemeindeschlüssel, auch ohne führende Null', () => {
   assert.equal(landFromAgs('11000000'), 'BE');
@@ -26,7 +27,24 @@ test('officialTypeToFacilityType: amtliche Schularten', () => {
   assert.equal(officialTypeToFacilityType('Gymnasium'), 'weiterfuehrend');
   assert.equal(officialTypeToFacilityType('Grund- und Oberschule'), 'schule');
   assert.equal(officialTypeToFacilityType('Gemeinschaftsschule'), 'schule');
-  assert.equal(officialTypeToFacilityType('Berufsschule'), null);
+  assert.equal(officialTypeToFacilityType('Förderschwerp. "Lernen"'), null);
+});
+
+test('officialTypeToFacilityType: berufliche Schulen, auch mit beruflichem Gymnasium', () => {
+  for (const t of ['Berufsschule', 'Oberstufenzentrum', 'Fachoberschule', 'Berufsoberschule',
+    'OSZ mit beruflichem Gymnasium', 'Berufsschule mit sonderpäd. Aufgaben',
+    'Berufliche Gymnasien|Berufsfachschule|Berufsschule|Berufsvorbereitungsschule']) {
+    assert.equal(officialTypeToFacilityType(t), 'beruflich', t);
+  }
+});
+
+test('officialTypeToFacilityType: berufliche Bildungsgänge an allgemeinbildenden Schulen', () => {
+  // Hamburg: Sonderschule mit Grund- und Stadtteilschule und angeschlossener Berufsfachschule
+  assert.equal(officialTypeToFacilityType(
+    'Berufsfachschule (allg. bild.)|Berufsvorbereitungsschule (allg. bild.)|Grundschule|Sonderschule|Stadtteilschule|Vorschulklasse'
+  ), 'schule');
+  assert.equal(officialTypeToFacilityType('Förderschwerp. einschl. beruflichem Teil'), null);
+  assert.equal(officialTypeToFacilityType('Kombinierte allg./berufl. Schule'), null);
 });
 
 test('normalizeSchoolName: Klammerzusätze und Umlaute', () => {
@@ -92,20 +110,32 @@ test('applyOfficialSchool: Schülerzahl und Schulart übernehmen', () => {
   assert.equal(f.tripsSource.year, '2024');
 });
 
-test('applyOfficialSchool: berufliche Schule bleibt sichtbar, wird aber nicht gerechnet', () => {
-  const f = { name: 'OSZ Gesundheit I', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+test('applyOfficialSchool: berufliche Schule mit dem anwesenden Anteil der Schüler:innen', () => {
+  const f = { name: 'OSZ Gesundheit I', type: 'weiterfuehrend', trips: 500, tripsSource: { kind: 'placeholder' } };
   applyOfficialSchool(f, {
     school: { id: 'BE-01B04', name: 'OSZ Gesundheit I', type: 'Oberstufenzentrum', pupils: 2902, year: '2024/25', src: 'be-svz' },
     mode: 'osm', distanceM: 12
   });
-  assert.equal(f.trips, 0);
-  assert.equal(f.type, 'weiterfuehrend');
-  assert.equal(f.tripsSource.kind, 'excluded');
+  const presence = presenceShare('beruflich');
+  assert.ok(presence > 0 && presence < 1, 'Teilzeit-Berufsschüler:innen sind nicht jeden Tag da');
+  assert.equal(f.type, 'beruflich');
+  assert.equal(f.osmType, 'weiterfuehrend');
+  assert.equal(f.trips, Math.round(2902 * presence));
+  assert.equal(f.tripsSource.kind, 'official');
   assert.equal(f.tripsSource.pupils, 2902); // amtliche Zahl bleibt für den Hinweis erhalten
+  assert.equal(f.tripsSource.presence, presence);
 });
 
-test('excludeVocational: auch ohne amtliche Daten (am OSM-Namen erkannt)', () => {
-  const f = { name: 'OSZ Banken', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
-  excludeVocational(f);
-  assert.deepEqual([f.trips, f.type, f.tripsSource.kind], [0, 'weiterfuehrend', 'excluded']);
+test('applyOfficialSchool: ohne amtliche Schulart zählt der Name', () => {
+  const f = { name: 'Schule', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+  applyOfficialSchool(f, { school: { id: 'X-1', name: 'Oberstufenzentrum Havelland', pupils: 2069 }, mode: 'distance', distanceM: 30 });
+  assert.equal(f.type, 'beruflich');
+  // Schulart vorhanden, aber nicht beruflich: der Name entscheidet nicht
+  const g = { name: 'Schule', type: 'schule', trips: 200, tripsSource: { kind: 'placeholder' } };
+  applyOfficialSchool(g, {
+    school: { id: 'X-2', name: 'J.-A.-Zeune-Schule für Blinde und Berufsfachschule Dr. Silex', type: 'Förderschwerp. einschl. beruflichem Teil', pupils: 114 },
+    mode: 'distance', distanceM: 30
+  });
+  assert.equal(g.type, 'schule');
+  assert.equal(g.trips, 114);
 });
