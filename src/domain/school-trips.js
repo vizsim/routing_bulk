@@ -23,7 +23,7 @@
 // 5. Berufliche Schulen: Split und mittlere Weglänge der Auszubildenden (MiD
 //    2023 Abb. 78, Tab. 38); Wege je Schultag = Schüler:innen × Anwesenheit
 //    (PRESENCE), weil Teilzeit-Berufsschüler:innen nur an einzelnen Tagen kommen.
-import { lognormalCdf, lognormalMedianFromMean } from './stats.js';
+import { lognormalCdf, lognormalMedianFromMean, truncatedLognormalMean } from './stats.js';
 import { stopClassShares, stopRadii } from './transit-stops.js';
 
 export const MODE_KEYS = ['foot', 'bike', 'transit', 'car'];
@@ -83,6 +83,23 @@ export const SOURCES = {
     note: 'Alle Personen und Wegezwecke; MIV-Fahrt und -Mitfahrt als Auto. Für berufliche Schulen als Raumtyp-Faktor '
       + '(Anteil im Raumtyp ÷ bundesweit) auf den Split der Auszubildenden angewendet — Annahme: der Raumtyp '
       + 'wirkt bei Auszubildenden wie bei allen Wegen.'
+  },
+  kobel2019: {
+    label: 'Kobel et al. 2019',
+    title: 'Correlates of active transport to school in German primary school children',
+    citation: 'Kobel, S., Wartha, O., Steinacker, J. M., Deutsche Zeitschrift für Sportmedizin 70(3), 67–74',
+    url: 'https://www.germanjournalsportsmedicine.com/archive/archive-2019/issue-3/correlates-of-active-transport-to-school-in-german-primary-school-children/',
+    note: '1.690 Kinder der Klassen 1–2 (Baden-Württemberg): wer aktiv zur Schule kommt, hat Ø 0,9 km Schulweg '
+      + '(Median 0,7 km), gefahrene Kinder Ø 2,9 km. Als Obergrenze für den Mittelwert der Fußwege von Kita- und '
+      + 'Grundschulkindern verwendet.'
+  },
+  schuelerbefoerderung: {
+    label: 'Schülerbeförderung (BY, NRW)',
+    title: 'Anspruch auf Schülerbeförderung bzw. Fahrkosten ab 2 km Schulweg in der Grundschule',
+    citation: 'Bayern: § 2 Abs. 2 Satz 1 Nr. 1 Schülerbeförderungsverordnung (Jahrgangsstufen 1 mit 4 länger als zwei '
+      + 'Kilometer); NRW: Schülerfahrkostenverordnung (Primarstufe mehr als 2 km, kürzester Fußweg)',
+    url: 'https://www.gesetze-bayern.de/Content/Document/BaySchBefV-2',
+    note: 'Fußwege von Kita- und Grundschulkindern höchstens 2 km (Netzlänge) — länger fahren sie Bus oder werden gebracht.'
   },
   'mid2023-oev': {
     label: 'MiD 2023, Abb. 7 und Tab. 24',
@@ -247,6 +264,17 @@ const SETZUNG = {
 export const SIGMA = { foot: 0.6, bike: 0.6, transit: 0.7, car: 0.9 };
 /** Netzlänge ÷ Luftlinie. */
 export const DETOUR_FACTOR = 1.3;
+
+/**
+ * Fußwege von Kita- und Grundschulkindern (Altersgruppe „bis 10“): im Mittel
+ * höchstens 0,9 km (Kobel et al. 2019: Kinder der Klassen 1–2, die aktiv zur
+ * Schule kommen, Ø 0,9 km, Median 0,7 km) und nie über 2 km Fußweg — ab da
+ * besteht für die Jahrgangsstufen 1–4 Anspruch auf Schülerbeförderung
+ * (Bayern § 2 Abs. 2 SchBefV, NRW SchfkVO: Primarstufe mehr als 2 km).
+ * Ohne die Grenze gälte auf dem Land der Mittelwert aller Fußwege der unter
+ * 10-Jährigen (MiD Abb. 100: 1,2 km, inkl. Spaziergänge).
+ */
+export const FOOT_LIMITS = { bis10: { meanMaxKm: 0.9, maxKm: 2.0 } };
 
 /**
  * Destatis, Berufliche Schulen 2024/25, Tab. 21121-02: Schüler:innen an
@@ -432,24 +460,45 @@ export function tripModel(type, regioStaR7) {
   const mean = meanTripLength(type, regioStaR7);
   const perMode = MID2023_ABB100_KM[age.mid];
 
-  // Skalierung: Mittelwert über alle Verkehrsmittel = Tab. 43; Fuß/Rad höchstens ×1
+  // Skalierung: Mittelwert über alle Verkehrsmittel = Tab. 43; Fuß/Rad höchstens ×1,
+  // Fußwege von Kita- und Grundschulkindern zusätzlich höchstens FOOT_LIMITS
   const share = (m) => (split[m] || 0) / 100;
   const raw = MODE_KEYS.reduce((s, m) => s + share(m) * perMode[m], 0);
   const k = raw > 0 ? mean.km / raw : 1;
   const kActive = Math.min(k, 1);
-  const activePart = ACTIVE_MODES.reduce((s, m) => s + share(m) * perMode[m], 0) * kActive;
+  const footLimit = FOOT_LIMITS[age.mid] || null;
+  // Mittelwert der Lognormalverteilung je aktivem Verkehrsmittel (vor einer Obergrenze)
+  const paramMean = (m) => {
+    const km = perMode[m] * kActive;
+    return m === 'foot' && footLimit ? Math.min(km, footLimit.meanMaxKm) : km;
+  };
+  const maxKmOf = (m) => (m === 'foot' && footLimit ? footLimit.maxKm : null);
+  // Tatsächlicher Mittelwert: mit Obergrenze der Mittelwert der abgeschnittenen
+  // Verteilung — so trifft der Mittelwert über alle Verkehrsmittel weiter Tab. 43
+  const effectiveMean = (m) => {
+    const cap = maxKmOf(m);
+    return cap ? truncatedLognormalMean(paramMean(m), SIGMA[m], cap) : paramMean(m);
+  };
+  const activePart = ACTIVE_MODES.reduce((s, m) => s + share(m) * effectiveMean(m), 0);
   const motorRaw = MOTOR_MODES.reduce((s, m) => s + share(m) * perMode[m], 0);
   const kMotor = motorRaw > 0 ? (mean.km - activePart) / motorRaw : kActive;
 
   const modes = {};
   for (const m of MODE_KEYS) {
-    const meanKm = perMode[m] * (ACTIVE_MODES.includes(m) ? kActive : kMotor);
-    const medianKm = lognormalMedianFromMean(meanKm, SIGMA[m]);
+    const active = ACTIVE_MODES.includes(m);
+    const distMeanKm = active ? paramMean(m) : perMode[m] * kMotor;
+    const medianKm = lognormalMedianFromMean(distMeanKm, SIGMA[m]);
+    const maxKm = maxKmOf(m);
     modes[m] = {
-      meanKm,
+      meanKm: active ? effectiveMean(m) : distMeanKm,
+      // Mittelwert der Lognormalverteilung vor der Obergrenze (sonst = meanKm)
+      distMeanKm,
       medianKm,
       sigma: SIGMA[m],
-      beelineMedianM: (medianKm * 1000) / DETOUR_FACTOR
+      beelineMedianM: (medianKm * 1000) / DETOUR_FACTOR,
+      // Obergrenze (Netzlänge) — Wege darüber gibt es mit diesem Verkehrsmittel nicht
+      maxKm,
+      maxBeelineM: maxKm != null ? (maxKm * 1000) / DETOUR_FACTOR : null
     };
   }
 
@@ -493,6 +542,7 @@ export function tripModel(type, regioStaR7) {
     presence: presenceShare(type),
     presenceSource: presence ? presence.source : null,
     presenceNote: presence ? presence.note : null,
+    footLimit: footLimit ? { ...footLimit, sources: ['kobel2019', 'schuelerbefoerderung'] } : null,
     egress
   };
 }
@@ -502,7 +552,9 @@ export function tripModel(type, regioStaR7) {
  * (Format für Distribution.calculateDistribution).
  */
 export function drawDistribution(modeParams) {
-  return { type: 'lognormal-param', medianM: modeParams.beelineMedianM, sigma: modeParams.sigma };
+  const dist = { type: 'lognormal-param', medianM: modeParams.beelineMedianM, sigma: modeParams.sigma };
+  if (modeParams.maxBeelineM) dist.maxM = modeParams.maxBeelineM;
+  return dist;
 }
 
 /**
@@ -512,7 +564,11 @@ export function drawDistribution(modeParams) {
 export function modeShareInBand(model, mode, fromKm, toKm, split = model.split) {
   const mass = (m) => {
     const p = model.modes[m];
-    return ((split[m] || 0) / 100) * (lognormalCdf(toKm, p.medianKm, p.sigma) - lognormalCdf(fromKm, p.medianKm, p.sigma));
+    // Obergrenze: Masse darüber fällt weg, der Rest wird hochgerechnet
+    const cap = p.maxKm || Infinity;
+    const cdf = (x) => lognormalCdf(Math.min(x, cap), p.medianKm, p.sigma);
+    const total = cap < Infinity ? cdf(cap) : 1;
+    return ((split[m] || 0) / 100) * ((cdf(toKm) - cdf(fromKm)) / total);
   };
   const total = MODE_KEYS.reduce((s, m) => s + mass(m), 0);
   return total > 0 ? mass(mode) / total : 0;
@@ -522,6 +578,7 @@ export function modeShareInBand(model, mode, fromKm, toKm, split = model.split) 
 export function modelSourceIds(model) {
   return [...new Set([
     model.splitSource, model.splitFactorSource, model.meanSource, model.modeSource, model.presenceSource,
+    ...((model.footLimit && model.footLimit.sources) || []),
     ...((model.egress && model.egress.sources) || []), 'annahme'
   ].filter(Boolean))];
 }

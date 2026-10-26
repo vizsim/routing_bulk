@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Distribution } from '../src/domain/distribution.js';
 import {
-  azubiSplit, DETOUR_FACTOR, drawDistribution, forsaSplit, FORSA2022_GS, MID2023_ABB100_KM, MID2023_ABB98_SCHOOL,
-  MODE_KEYS, modelSourceIds, modeShareInBand, normalizeSplit, presenceShare, RADIUS_MAX_M, SOURCES,
-  splitSuggestion, tripModel
+  azubiSplit, DETOUR_FACTOR, drawDistribution, FOOT_LIMITS, forsaSplit, FORSA2022_GS, MID2023_ABB100_KM,
+  MID2023_ABB98_SCHOOL, MODE_KEYS, modelSourceIds, modeShareInBand, normalizeSplit, presenceShare, RADIUS_MAX_M,
+  SOURCES, splitSuggestion, tripModel
 } from '../src/domain/school-trips.js';
 import { lognormalCdf, normCdf } from '../src/domain/stats.js';
 
@@ -46,18 +46,66 @@ test('Grundschule in der Metropole: Mittelwert = MiD 2023 Tab. 43, Längen nach 
   const { foot, bike, transit, car } = m.modes;
   assert.ok(foot.meanKm < bike.meanKm && bike.meanKm < transit.meanKm && transit.meanKm < car.meanKm);
   // Verhältnis der Verkehrsmittel wie in Abb. 100
-  assert.ok(Math.abs(bike.meanKm / foot.meanKm - MID2023_ABB100_KM.bis10.bike / MID2023_ABB100_KM.bis10.foot) < 1e-9);
+  // (Verteilungs-Mittel vor der 2-km-Grenze für Fußwege)
+  assert.ok(Math.abs(bike.distMeanKm / foot.distMeanKm - MID2023_ABB100_KM.bis10.bike / MID2023_ABB100_KM.bis10.foot) < 1e-9);
+  assert.ok(foot.meanKm < foot.distMeanKm, 'die 2-km-Grenze senkt den tatsächlichen Mittelwert');
   assert.equal(foot.beelineMedianM, (foot.medianKm * 1000) / DETOUR_FACTOR);
   assert.equal(m.radiusM, 3000);
 });
 
-test('Land: Fuß und Rad höchstens so lang wie bundesweit, den Rest tragen ÖPNV und Auto', () => {
+test('Land: Fußwege von Grundschulkindern im Mittel höchstens 0,9 km, den Rest tragen ÖPNV und Auto', () => {
   const m = tripModel('grundschule', 77); // Tab. 43: 5 km
-  assert.equal(m.modes.foot.meanKm, MID2023_ABB100_KM.bis10.foot);
+  assert.equal(m.modes.foot.distMeanKm, FOOT_LIMITS.bis10.meanMaxKm); // statt 1,2 km aus Abb. 100
+  assert.equal(m.modes.foot.maxKm, 2);
+  // tatsächlicher Mittelwert nach der 2-km-Grenze (abgeschnittene Lognormalverteilung)
+  assert.ok(Math.abs(m.modes.foot.meanKm - 0.805) < 0.001, `Fuß Ø ${m.modes.foot.meanKm}`);
   assert.equal(m.modes.bike.meanKm, MID2023_ABB100_KM.bis10.bike);
   assert.ok(m.scale.motor > 1);
   assert.ok(Math.abs(meanOver(m) - 5) < 1e-9);
   assert.ok(m.radiusM <= 8000);
+  // Kita und „Schule“ (Art unbekannt) ebenso; weiterführende Schulen ohne Grenze
+  assert.equal(tripModel('schule', 77).modes.foot.maxKm, 2);
+  assert.equal(tripModel('kindergarten', 74).modes.foot.maxKm, 2);
+  assert.equal(tripModel('weiterfuehrend', 77).modes.foot.maxKm, null);
+  assert.equal(tripModel('weiterfuehrend', 77).modes.foot.meanKm, MID2023_ABB100_KM['11-17'].foot);
+  // In der Stadt liegt der Mittelwert schon unter 0,9 km
+  assert.ok(Math.abs(tripModel('grundschule', 71).modes.foot.distMeanKm - 0.83) < 0.01);
+  assert.ok(modelSourceIds(m).includes('kobel2019') && modelSourceIds(m).includes('schuelerbefoerderung'));
+});
+
+test('roundToTargets: ganze Punkte je Ring nach dem größten Rest, ohne Schub nach außen', () => {
+  assert.deepEqual(Distribution.roundToTargets([0.4, 0.4, 0.4, 1.8], 3), [1, 0, 0, 2]);
+  assert.deepEqual(Distribution.roundToTargets([3, 2], 4), [2, 2]); // Erwartung zu groß: kürzen
+  assert.deepEqual(Distribution.roundToTargets([0, 2.5, 0, 0.6], 3), [0, 2, 0, 1]); // größter Rest gewinnt
+  // Ringe ohne erwartete Masse bekommen nie einen Punkt
+  const expected = Distribution.calculateDistribution(drawDistribution(tripModel('grundschule', 77).modes.foot), 32, 8000, 37);
+  const targets = Distribution.roundToTargets(expected, 37);
+  assert.equal(targets.reduce((a, b) => a + b, 0), 37);
+  targets.forEach((t, i) => { if (!(expected[i] > 0)) assert.equal(t, 0); });
+  // Summe der Rundung je Ring weicht höchstens um einen Punkt ab
+  targets.forEach((t, i) => assert.ok(Math.abs(t - expected[i]) < 1 + 1e-9));
+});
+
+test('Fußwege über 2 km gibt es nicht: Ziehung und Anteile schneiden ab', () => {
+  const foot = tripModel('grundschule', 77).modes.foot;
+  const dist = drawDistribution(foot);
+  assert.ok(Math.abs(dist.maxM - 2000 / DETOUR_FACTOR) < 1e-9); // 1.538 m Luftlinie
+  const bins = Distribution.calculateDistribution(dist, 32, 8000, 100); // 250-m-Ringe
+  assert.ok(Math.abs(bins.reduce((a, b) => a + b, 0) - 100) < 1e-9);
+  const lastWithMass = bins.reduce((last, v, i) => (v > 0 ? i : last), -1);
+  assert.equal(lastWithMass, Math.floor(dist.maxM / 250));
+  assert.equal(Distribution.getDistanceWeight(dist, 1600, 8000), 0);
+  // Weiterführende Schulen: keine Obergrenze, Autowege weiter bis an den Rand
+  assert.equal(drawDistribution(tripModel('weiterfuehrend', 77).modes.foot).maxM, undefined);
+  // Anteil der Fußwege über 1,5 km Netz: vorher 25 %, jetzt rund 8 %
+  const truncatedShare = (fromKm) => {
+    const cdf = (x) => lognormalCdf(Math.min(x, foot.maxKm), foot.medianKm, foot.sigma);
+    return (cdf(foot.maxKm) - cdf(fromKm)) / cdf(foot.maxKm);
+  };
+  assert.ok(truncatedShare(1.5) > 0.06 && truncatedShare(1.5) < 0.1, `> 1,5 km: ${truncatedShare(1.5)}`);
+  assert.equal(truncatedShare(2), 0);
+  // Im Band über 2 km gehen Grundschulkinder nie zu Fuß
+  assert.equal(modeShareInBand(tripModel('grundschule', 77), 'foot', 2, 3), 0);
 });
 
 test('Weiterführende Schule: Mittel aus 11–13 und 14–17; ohne Raumtyp bundesweit (Abb. 100)', () => {

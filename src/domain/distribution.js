@@ -4,8 +4,9 @@ import { lognormalCdf } from './stats.js';
 
 /**
  * Parametrische Verteilung (Gebietsanalyse): { type: 'lognormal-param',
- * medianM, sigma } — Median der Luftlinie in Metern und σ. Unabhängig vom
- * Radius; der Radius kappt nur (siehe calculateDistribution).
+ * medianM, sigma, maxM? } — Median der Luftlinie in Metern und σ, optional
+ * eine harte Obergrenze. Unabhängig vom Radius; der Radius kappt nur (siehe
+ * calculateDistribution).
  */
 function isParamLognormal(type) {
   return !!type && typeof type === 'object' && type.type === 'lognormal-param'
@@ -26,7 +27,8 @@ export const Distribution = {
     if (radiusM <= 0 || distanceM < 0) return 0;
     const r = Math.min(distanceM, radiusM);
     if (isParamLognormal(type)) {
-      // Dichte der Lognormalverteilung (Median, σ)
+      // Dichte der Lognormalverteilung (Median, σ); jenseits der Obergrenze nichts
+      if (type.maxM > 0 && distanceM > type.maxM) return 0;
       if (r <= 0.1) return 0.01;
       const z = Math.log(r / type.medianM) / type.sigma;
       const w = Math.exp(-(z * z) / 2) / (r * type.sigma * Math.sqrt(2 * Math.PI));
@@ -60,6 +62,35 @@ export const Distribution = {
     }
   },
 
+  /**
+   * Erwartete (gebrochene) Punktzahlen je Ring in ganze Zahlen mit Summe
+   * `total` umwandeln — nach dem größten Rest, damit keine Richtung bevorzugt
+   * wird. Ringe ohne erwartete Masse bleiben leer.
+   * @param {number[]} expected
+   * @param {number} total
+   * @returns {number[]}
+   */
+  roundToTargets(expected, total) {
+    const values = expected.map(e => (e > 0 ? e : 0));
+    const targets = values.map(v => Math.floor(v));
+    let rest = total - targets.reduce((a, b) => a + b, 0);
+    const byRemainder = values
+      .map((v, b) => ({ b, frac: v - targets[b] }))
+      .filter(o => values[o.b] > 0);
+    if (rest > 0 && byRemainder.length) {
+      byRemainder.sort((x, y) => y.frac - x.frac);
+      for (let i = 0; rest > 0; i = (i + 1) % byRemainder.length, rest--) targets[byRemainder[i].b]++;
+    } else if (rest < 0) {
+      // Erwartung summiert sich auf mehr als total: kleinste Reste zuerst kürzen
+      byRemainder.sort((x, y) => x.frac - y.frac);
+      for (let i = 0; rest < 0 && byRemainder.some(o => targets[o.b] > 0); i = (i + 1) % byRemainder.length) {
+        const b = byRemainder[i].b;
+        if (targets[b] > 0) { targets[b]--; rest++; }
+      }
+    }
+    return targets;
+  },
+
   // Berechnet eine Verteilung für die gegebenen Parameter
   calculateDistribution(type, numBins, radiusM, totalPoints) {
     const binSize = radiusM / numBins;
@@ -68,11 +99,16 @@ export const Distribution = {
     if (isParamLognormal(type)) {
       // Anteil je Ring aus der Verteilungsfunktion. Die Masse jenseits des
       // Radius landet im äußersten Ring (Kappung statt Umverteilung): Wege
-      // von weiter her erreichen das Gebiet über dessen Rand.
+      // von weiter her erreichen das Gebiet über dessen Rand. Eine Obergrenze
+      // (maxM, z. B. Fußwege von Grundschulkindern) schneidet dagegen ab: Masse
+      // darüber fällt weg, der Rest wird hochgerechnet.
+      const maxM = type.maxM > 0 ? type.maxM : Infinity;
+      const cdf = (x) => lognormalCdf(Math.min(x, maxM), type.medianM, type.sigma);
+      const total = maxM < Infinity ? cdf(maxM) : 1;
       let previous = 0;
       for (let i = 0; i < numBins; i++) {
-        const upper = i === numBins - 1 ? 1 : lognormalCdf((i + 1) * binSize, type.medianM, type.sigma);
-        expectedBins[i] = Math.max(0, upper - previous) * totalPoints;
+        const upper = i === numBins - 1 ? total : cdf((i + 1) * binSize);
+        expectedBins[i] = total > 0 ? (Math.max(0, upper - previous) / total) * totalPoints : 0;
         previous = upper;
       }
       return expectedBins;

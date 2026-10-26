@@ -107,6 +107,7 @@ In der Oberfläche als „Setzung“ gekennzeichnet.
 | Streuung σ der Weglänge (lognormal) | Fuß 0,6 · Rad 0,6 · ÖPNV 0,7 · Auto 0,9 | Stuttgart 2005 ergibt für alle Wege zur Grundschule σ ≈ 0,6 (Median 0,9 km, knapp 90 % unter 2 km), für Realschule/Gymnasium 0,8–0,9; Autowege streuen am stärksten (kurze Elterntaxi-Fahrten und lange Wege zu Wahlschulen). Die Ergebnisse unten ändern sich mit σ ± 0,1 kaum. |
 | Umwegfaktor Netz/Luftlinie | 1,3 | übliche Größenordnung 1,2–1,4 |
 | Fuß und Rad höchstens so lang wie bundesweit | k_aktiv = min(k, 1) | Kinder gehen auch auf dem Land nicht weiter zu Fuß; längere Wege tragen ÖPNV und Auto |
+| Fußwege von Kita- und Grundschulkindern | Ø höchstens 0,9 km, nie über 2 km (Netzlänge) | Abb. 100 gilt für alle Wegezwecke inkl. Spaziergänge (1,2 km). Kinder der Klassen 1–2, die aktiv zur Schule kommen: Ø 0,9 km, Median 0,7 km (Kobel et al. 2019). Ab 2 km Schulweg haben Grundschulkinder Anspruch auf Schülerbeförderung (Bayern § 2 SchBefV, NRW SchfkVO). Gilt für Kita, Grundschule und „Schule“ (Art unbekannt). Ohne Grenze gingen auf dem Land 25 % der laufenden Grundschulkinder über 1,5 km, jetzt rund 8 %. |
 | Radius-Vorschlag | 90 %-Quantil der Fuß-, Rad- und Autowege, 1–8 km | Rechenaufwand begrenzen; der Rest startet am Rand |
 | Ein Hinweg je Schüler:in und Schultag | — | Anwesenheit (Krankheit u. Ä.) vernachlässigt; berufliche Schulen anteilig (siehe [Berufliche Schulen](#berufliche-schulen)) |
 
@@ -116,8 +117,14 @@ Mit Split s_m (Vorschlag), Abb.-100-Mittel A_m und Tab.-43-Mittel L:
 
 - k = L ÷ Σ s_m·A_m
 - k_aktiv = min(k, 1) für Fuß und Rad
-- k_mot = (L − k_aktiv·Σ_{Fuß,Rad} s_m·A_m) ÷ Σ_{ÖPNV,Auto} s_m·A_m
-- Ø_m = A_m · k_(aktiv|mot), Median_m = Ø_m ÷ e^(σ²/2), Luftlinien-Median = Median_m ÷ 1,3
+- Verteilungsmittel Fuß = min(A_Fuß · k_aktiv, 0,9 km) bei Kita und Grundschule, Rad = A_Rad · k_aktiv
+- Fußwege von Kita- und Grundschulkindern enden bei 2 km Netzlänge (1.538 m
+  Luftlinie): Die Masse darüber fällt weg, der Rest wird hochgerechnet; Zellen
+  jenseits davon starten keine Fußwege. Der tatsächliche Mittelwert Ø_Fuß ist
+  der der abgeschnittenen Lognormalverteilung (Metropole 0,76 statt 0,83 km,
+  übrige Raumtypen 0,81 statt 0,90 km).
+- k_mot = (L − s_Fuß·Ø_Fuß − s_Rad·Ø_Rad) ÷ Σ_{ÖPNV,Auto} s_m·A_m
+- Ø_m = A_m · k_mot für ÖPNV und Auto, Median_m = Verteilungsmittel ÷ e^(σ²/2), Luftlinien-Median = Median_m ÷ 1,3
 
 Damit trifft der Mittelwert über alle Verkehrsmittel genau Tab. 43. Ändert man
 den Split in der Oberfläche, bleiben die Verteilungen je Verkehrsmittel gleich
@@ -131,14 +138,14 @@ Erzeugt aus dem Code (`tripModel`); „Radius“ ist der Vorschlag in Luftlinie.
 
 | Raumtyp | Split Fuß/Rad/ÖPNV/Auto (%) | Quelle Split | Ø Weg | Ø Fuß | Ø Rad | Ø ÖPNV | Ø Auto | Radius |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 71 Metropole | 54/16/16/14 | forsa 2022 | 2,0 | 0,83 | 1,52 | 3,59 | 5,25 | 3,0 km |
-| 72 Regiopole/Großstadt | 54/16/16/14 | forsa 2022 | 2,0 | 0,83 | 1,52 | 3,59 | 5,25 | 3,0 km |
-| 73 Mittelstadt (Stadtregion) | 55/15/16/14 | forsa 2022 | 3,0 | 1,20 | 2,20 | 5,51 | 8,06 | 4,0 km |
-| 74 Kleinstädtisch/dörflich (Stadtregion) | 39/13/29/19 | forsa 2022 | 5,0 | 1,20 | 2,20 | 7,48 | 10,93 | 8,0 km |
-| 75 Zentrale Stadt (ländlich) | 55/15/16/14 | forsa 2022 | 2,0 | 0,83 | 1,52 | 3,60 | 5,27 | 3,0 km |
-| 76 Mittelstadt (ländliche Region) | 55/15/16/14 | forsa 2022 | 4,0 | 1,20 | 2,20 | 8,26 | 12,07 | 5,5 km |
-| 77 Kleinstädtisch/dörflich (ländlich) | 39/13/29/19 | forsa 2022 | 5,0 | 1,20 | 2,20 | 7,48 | 10,93 | 8,0 km |
-| ohne Raumtyp (bundesweit) | 48/14/21/17 | forsa 2022 | 2,8 | 1,03 | 1,88 | 4,46 | 6,51 | 4,0 km |
+| 71 Metropole | 54/16/16/14 | forsa 2022 | 2,0 | 0,76 | 1,52 | 3,70 | 5,40 | 3,0 km |
+| 72 Regiopole/Großstadt | 54/16/16/14 | forsa 2022 | 2,0 | 0,76 | 1,52 | 3,70 | 5,40 | 3,0 km |
+| 73 Mittelstadt (Stadtregion) | 55/15/16/14 | forsa 2022 | 3,0 | 0,81 | 2,20 | 6,11 | 8,93 | 4,5 km |
+| 74 Kleinstädtisch/dörflich (Stadtregion) | 39/13/29/19 | forsa 2022 | 5,0 | 0,81 | 2,20 | 7,75 | 11,33 | 8,0 km |
+| 75 Zentrale Stadt (ländlich) | 55/15/16/14 | forsa 2022 | 2,0 | 0,76 | 1,52 | 3,71 | 5,43 | 3,0 km |
+| 76 Mittelstadt (ländliche Region) | 55/15/16/14 | forsa 2022 | 4,0 | 0,81 | 2,20 | 8,85 | 12,94 | 5,5 km |
+| 77 Kleinstädtisch/dörflich (ländlich) | 39/13/29/19 | forsa 2022 | 5,0 | 0,81 | 2,20 | 7,75 | 11,33 | 8,0 km |
+| ohne Raumtyp (bundesweit) | 48/14/21/17 | forsa 2022 | 2,8 | 0,81 | 1,88 | 4,69 | 6,85 | 4,0 km |
 
 #### Weiterführende Schule
 
@@ -157,14 +164,14 @@ Erzeugt aus dem Code (`tripModel`); „Radius“ ist der Vorschlag in Luftlinie.
 
 | Raumtyp | Split Fuß/Rad/ÖPNV/Auto (%) | Quelle Split | Ø Weg | Ø Fuß | Ø Rad | Ø ÖPNV | Ø Auto | Radius |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 71 Metropole | 60/10/5/25 | Setzung | 2,0 | 0,77 | 1,42 | 3,35 | 4,90 | 3,5 km |
-| 72 Regiopole/Großstadt | 55/10/5/30 | Setzung | 2,0 | 0,70 | 1,29 | 3,04 | 4,44 | 4,0 km |
-| 73 Mittelstadt (Stadtregion) | 45/10/5/40 | Setzung | 3,0 | 0,89 | 1,63 | 3,84 | 5,62 | 5,5 km |
-| 74 Kleinstädtisch/dörflich (Stadtregion) | 30/5/5/60 | Setzung | 3,0 | 0,68 | 1,25 | 2,95 | 4,31 | 5,5 km |
-| 75 Zentrale Stadt (ländlich) | 45/10/5/40 | Setzung | 3,0 | 0,89 | 1,63 | 3,84 | 5,62 | 5,5 km |
-| 76 Mittelstadt (ländliche Region) | 45/10/5/40 | Setzung | 3,0 | 0,89 | 1,63 | 3,84 | 5,62 | 5,5 km |
-| 77 Kleinstädtisch/dörflich (ländlich) | 30/5/5/60 | Setzung | 3,0 | 0,68 | 1,25 | 2,95 | 4,31 | 5,5 km |
-| ohne Raumtyp (bundesweit) | 37/15/14/34 | MiD 2023, Abb. 98 | 2,8 | 0,82 | 1,51 | 3,56 | 5,21 | 5,0 km |
+| 71 Metropole | 60/10/5/25 | Setzung | 2,0 | 0,72 | 1,42 | 3,44 | 5,02 | 3,5 km |
+| 72 Regiopole/Großstadt | 55/10/5/30 | Setzung | 2,0 | 0,66 | 1,29 | 3,08 | 4,51 | 4,0 km |
+| 73 Mittelstadt (Stadtregion) | 45/10/5/40 | Setzung | 3,0 | 0,80 | 1,63 | 3,91 | 5,71 | 6,0 km |
+| 74 Kleinstädtisch/dörflich (Stadtregion) | 30/5/5/60 | Setzung | 3,0 | 0,65 | 1,25 | 2,96 | 4,33 | 5,5 km |
+| 75 Zentrale Stadt (ländlich) | 45/10/5/40 | Setzung | 3,0 | 0,80 | 1,63 | 3,91 | 5,71 | 6,0 km |
+| 76 Mittelstadt (ländliche Region) | 45/10/5/40 | Setzung | 3,0 | 0,80 | 1,63 | 3,91 | 5,71 | 6,0 km |
+| 77 Kleinstädtisch/dörflich (ländlich) | 30/5/5/60 | Setzung | 3,0 | 0,65 | 1,25 | 2,96 | 4,33 | 5,5 km |
+| ohne Raumtyp (bundesweit) | 37/15/14/34 | MiD 2023, Abb. 98 | 2,8 | 0,75 | 1,51 | 3,60 | 5,27 | 5,0 km |
 
 „Schule“ (Art unbekannt) verwendet die Längen der Grundschule mit den
 bisherigen Setzungen für den Split (siehe Code).
@@ -288,10 +295,10 @@ Einrichtung (kein Fahrplan-Routing). Welche Haltestelle, entscheidet
 
    | Einrichtung (Raumtyp) | Ø ÖPNV-Weg | Schiene | Straßenbahn | Bus | nur Schiene + Bus im Einzugsbereich: Schiene |
    | --- | ---: | ---: | ---: | ---: | ---: |
-   | Grundschule (Metropole) | 3,6 km | 31 % | 14 % | 55 % | 36 % |
+   | Grundschule (Metropole) | 3,7 km | 31 % | 14 % | 55 % | 36 % |
    | Weiterführende Schule (Metropole) | 5,5 km | 33 % | 13 % | 53 % | 39 % |
    | Berufliche Schule (Metropole) | 18,9 km | 55 % | 9 % | 36 % | 60 % |
-   | Grundschule (dörflich, ländlich) | 7,5 km | 37 % | 13 % | 51 % | 42 % |
+   | Grundschule (dörflich, ländlich) | 7,8 km | 37 % | 13 % | 50 % | 42 % |
    | Weiterführende Schule (dörflich, ländlich) | 12,0 km | 44 % | 11 % | 45 % | 50 % |
 
 Die Anteile werden auf die Typen verteilt, die im Einzugsbereich vorkommen;
@@ -314,35 +321,44 @@ gehen; folgt aus Split und Längenverteilungen):
 
 | Netzlänge | Modell Metropole | Modell bundesweit | Scheiner et al. 2019 (MiD, bundesweit) |
 | --- | ---: | ---: | ---: |
-| unter 0,6 km | 91 % | 92 % | 85 % |
-| 0,6–1,2 km | 72 % | 78 % | rund 60 % |
-| 1,2–2,0 km | 42 % | 51 % | 34 % (Scheiner: „ab 1,2 km“, ohne Obergrenze) |
+| unter 0,6 km | 91 % | 94 % | 85 % |
+| 0,6–1,2 km | 73 % | 79 % | rund 60 % |
+| 1,2–2,0 km | 44 % | 47 % | 34 % (Scheiner: „ab 1,2 km“, ohne Obergrenze) |
 
 Verlauf passt, das Modell fällt aber langsamer ab: Bei mittleren Entfernungen
 (0,6–2 km) legt es Wege eher zu Fuß als die MiD-Auswertung. Vermutliche
 Ursache: Abb. 100 gilt für alle Zwecke, Elterntaxi-Fahrten zur Grundschule sind
-kürzer (Kobel et al. 2019, Klassen 1–2: gefahrene Kinder Ø 2,9 km). Der
+kürzer (Kobel et al. 2019, Klassen 1–2: gefahrene Kinder Ø 2,9 km). Die
+Grenze für Fußwege von Grundschulkindern (Ø höchstens 0,9 km, nie über 2 km)
+senkt den Fußanteil bei 1,2–2 km bundesweit von 51 auf 47 %. Der
 Radanteil ist im Modell zwischen 1,2 und 2 km am höchsten, wie bei Scheiner.
 
 **Weglängen** gegen Stuttgart 2005 (Gieck 2006, Netzdistanz): Grundschule
-Median 0,9 km, knapp 90 % unter 2 km — Modell Metropole 1,06 km und 73 %.
+Median 0,9 km, knapp 90 % unter 2 km — Modell Metropole 1,03 km und 75 %.
 Realschule/Gymnasium Median 2,0–2,2 km, 20–26 % ab 4 km — Modell weiterführend
 Metropole 2,6 km und 34 %. Das Modell folgt der neueren MiD 2023 (Ø 2 bzw. 4 km);
 die Werte liegen höher als in Stuttgart vor 20 Jahren. Tab. 43 ist auf ganze km
 gerundet — 2 km kann auch 1,5 km bedeuten.
 
 **Nächste Grundschule:** in Berlin im Mittel 477 m Luftlinie (BBSR 2021,
-einwohnergewichtet). Modell Metropole: Fußwege Ø 637 m, Median 532 m Luftlinie —
+einwohnergewichtet). Modell Metropole: Fußwege Ø 583 m, Median 517 m Luftlinie —
 etwas länger, weil nicht alle Kinder die nächste Schule besuchen.
 
 **Effektive Ziehung** (echter Code `DemandService._drawFromCells`, synthetisches
-Raster, 200 × 100 Startpunkte; Luftlinie):
+Raster aus 100-m-Zellen, 300 × 100 Startpunkte; Luftlinie; Stand mit 2-km-Grenze
+für Fußwege und Rundung je Ring nach dem größten Rest):
 
 | Grundschule Metropole | Soll-Median | Ist-Median | unter 250 m | vorher (R/4, σ = 2) |
 | --- | ---: | ---: | ---: | --- |
-| Fuß | 532 m | 530 m | 11 % | Median ~320 m, 42 % unter 250 m |
-| Rad | 976 m | 990 m | 1 % | Median ~300 m |
-| Auto | 2.693 m | 2.670 m (Kappung bei 3 km) | 0 % | gleichverteilt im Radius |
+| Fuß | 517 m (bis 1.538 m) | 534 m | 10 % | Median ~320 m, 42 % unter 250 m |
+| Rad | 976 m | 993 m | 1 % | Median ~300 m |
+| Auto | 2.772 m | 2.770 m (Kappung bei 3 km) | 0 % | gleichverteilt im Radius |
+
+Die Ist-Mediane liegen 2–3 % über dem Soll: Innerhalb eines 200-m-Rings
+verteilen sich die Startpunkte nach Fläche, also etwas nach außen. Bis Oktober
+2026 wurde die Zielzahl je Ring einzeln gerundet und die Differenz von innen her
+ausgeglichen — das schob Startpunkte zusätzlich nach außen (Fußwege mit Grenze
+Median 541 statt 517 m).
 
 ## Grenzen
 
@@ -377,6 +393,13 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 - Destatis: *Qualitätsbericht Statistik der beruflichen Schulen*, erschienen am
   21.10.2025, S. 13.
   <https://www.destatis.de/DE/Methoden/Qualitaet/Qualitaetsberichte/Bildung/berufliche-schulen.pdf?__blob=publicationFile>
+- Bayern: *Schülerbeförderungsverordnung* (SchBefV), § 2 Abs. 2 Satz 1 Nr. 1:
+  Beförderungspflicht, wenn der Schulweg für die Jahrgangsstufen 1 mit 4 länger
+  als zwei Kilometer ist.
+  <https://www.gesetze-bayern.de/Content/Document/BaySchBefV-2>
+- NRW: *Schülerfahrkostenverordnung* (SchfkVO): Fahrkosten notwendig, wenn der
+  Schulweg (kürzester Fußweg) in der Primarstufe mehr als 2 km beträgt.
+  <https://www.schulministerium.nrw/fragen-und-antworten-zu-schuelerfahrkosten-und-schuelerticket>
 - Bayerisches Staatsministerium für Wirtschaft, Verkehr und Technologie:
   *Leitlinie zur Nahverkehrsplanung in Bayern*, Anhang C, Tab. 1 (Grenz- und
   Richtwerte: Einzugsbereiche), wiedergegeben vom Bayerischen Landkreistag am

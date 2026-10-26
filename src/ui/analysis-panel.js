@@ -492,6 +492,11 @@ export const AnalysisPanel = {
       const basis = s.basis === 'population'
         ? '<div>Startpunkte aus der ganzen Bevölkerung (Zensus), nicht nur unter 18-Jährige</div>'
         : '';
+      const fl = m.footLimit;
+      const footLimit = fl
+        ? `<div>Fußwege im Mittel höchstens ${fmtKm(fl.meanMaxKm)} km und nie über ${de(fl.maxKm)} km —
+          ${esc(SOURCES.kobel2019.label)}, ${esc(SOURCES.schuelerbefoerderung.label)}</div>`
+        : '';
       const eg = m.egress;
       const egress = eg
         ? `<div>ÖPNV-Ausstieg: Schiene ${pct(eg.shares.rail)} · Straßenbahn ${pct(eg.shares.tram)} · Bus ${pct(eg.shares.bus)} %
@@ -502,6 +507,7 @@ export const AnalysisPanel = {
         <div>Modal Split (Fuß/Rad/ÖPNV/Auto): ${splitText}</div>
         <div>Ø Weg ${fmtKm(m.meanKm)} km nach ${esc(SOURCES[m.meanSource].label)} (${esc(m.meanNote)})</div>
         <div>Ø je Verkehrsmittel: ${lengths} km — ${esc(SOURCES[m.modeSource].label)} (${esc(m.modeNote)}), auf diesen Wert skaliert</div>
+        ${footLimit}
         <div>${radiusText}${radiusNote}</div>
         ${egress}${presence}${basis}
       </li>`;

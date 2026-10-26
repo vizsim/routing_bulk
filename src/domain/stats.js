@@ -25,3 +25,15 @@ export function lognormalCdf(x, median, sigma) {
 export function lognormalMedianFromMean(mean, sigma) {
   return mean / Math.exp((sigma * sigma) / 2);
 }
+
+/**
+ * Mittelwert einer bei `cap` abgeschnittenen Lognormalverteilung (nur Werte
+ * ≤ cap, neu normiert): E[X | X ≤ c] = Mittel · Φ((ln c − ln m)/σ − σ) / Φ((ln c − ln m)/σ).
+ */
+export function truncatedLognormalMean(mean, sigma, cap) {
+  if (!(cap > 0) || !Number.isFinite(cap)) return mean;
+  const median = lognormalMedianFromMean(mean, sigma);
+  const z = Math.log(cap / median) / sigma;
+  const below = normCdf(z);
+  return below > 0 ? (mean * normCdf(z - sigma)) / below : 0;
+}

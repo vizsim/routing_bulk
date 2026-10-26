@@ -24,21 +24,11 @@ export const DemandService = {
   _binTargets(numPoints, numBins, distType, radiusM) {
     const targets = new Array(numBins).fill(0);
     if (Distribution && Distribution.calculateDistribution) {
-      const expected = Distribution.calculateDistribution(distType, numBins, radiusM, numPoints);
-      let sum = 0;
-      for (let b = 0; b < numBins; b++) {
-        targets[b] = Math.max(0, Math.round(expected[b] || 0));
-        sum += targets[b];
-      }
-      // Rundungsdifferenz auf Bins mit erwarteter Masse verteilen
-      let diff = numPoints - sum;
-      let idx = 0;
-      while (diff !== 0 && idx < numBins * 4) {
-        const b = idx % numBins;
-        if (diff > 0 && (expected[b] || 0) > 0) { targets[b]++; diff--; }
-        else if (diff < 0 && targets[b] > 0) { targets[b]--; diff++; }
-        idx++;
-      }
+      // Ganze Punkte je Ring nach dem größten Rest — einzeln runden und die
+      // Differenz von innen her ausgleichen schob Startpunkte nach außen
+      return Distribution.roundToTargets(
+        Distribution.calculateDistribution(distType, numBins, radiusM, numPoints), numPoints
+      );
     } else {
       for (let b = 0; b < numBins; b++) targets[b] = Math.floor(numPoints / numBins);
       targets[0] += numPoints - targets.reduce((s, c) => s + c, 0);
@@ -65,8 +55,12 @@ export const DemandService = {
    */
   _drawFromCells(cells, target, radiusM, numPoints, distType, basis) {
     const capacityOf = (c) => Math.max(0, Math.round(basis === 'under18' ? c.under18 : c.population));
+    // Harte Obergrenze der Verteilung (z. B. Fußwege von Grundschulkindern): Zellen
+    // jenseits davon kommen für diesen Verkehrsmittel gar nicht infrage
+    const maxM = distType && typeof distType === 'object' && distType.maxM > 0 ? distType.maxM : Infinity;
 
     const pool = cells
+      .filter(c => maxM === Infinity || Geo.distanceMeters(c.center[0], c.center[1], target[0], target[1]) <= maxM)
       .map(c => ({ cell: c, remaining: capacityOf(c) }))
       .filter(e => e.remaining > 0);
     const capacity = pool.reduce((s, e) => s + e.remaining, 0);
