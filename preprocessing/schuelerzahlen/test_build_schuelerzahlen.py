@@ -328,6 +328,25 @@ class TestBuild(unittest.TestCase):
             index = json.loads((out / "index.json").read_text(encoding="utf-8"))
             self.assertNotIn("BE", index["laender"])
 
+    def test_main_be_falls_back_to_web_archive(self):
+        # SVZ_Fakt5 offline (404): Stand im Webarchiv, in der Quelle vermerkt
+        def fake_read(url):
+            if url == b.BE_SVZ_URL:
+                raise OSError("HTTP Error 404: Not Found")
+            if url == b.BE_SVZ_ARCHIVE_URL:
+                return SVZ_HTML
+            return Path(url).read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path, out = self._files(tmp)
+            with quiet() as log, mock.patch.object(b, "read_text", side_effect=fake_read):
+                code = b.main(["--laender", "BE", "--matches-csv", str(csv_path), "--out", str(out)])
+            self.assertEqual(code, 0)
+            self.assertIn("Webarchiv", log.getvalue())
+            data = json.loads((out / "BE.json").read_text(encoding="utf-8"))
+            self.assertEqual({s["id"] for s in data["schools"]}, {"BE-01G01", "BE-08G12"})
+            self.assertIn("Stand 14.07.2026 aus dem Webarchiv", data["sources"]["be-svz"]["note"])
+            self.assertIn("web.archive.org/web/20260714154715id_/", b.BE_SVZ_ARCHIVE_URL)
+
     def test_main_nw_with_local_file_and_jedeschule_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             csv_path, out = self._files(tmp)
@@ -386,11 +405,18 @@ class TestBuild(unittest.TestCase):
                 self.assertEqual(b.main(["--laender", "BE", "--be-svz", str(svz),
                                          "--matches-csv", str(csv_path), "--out", str(out)]), 0)
             before = (out / "BE.json").read_text(encoding="utf-8")
-            # Quelle gesperrt (robots.txt): BE scheitert, NW läuft trotzdem, BE-Datei bleibt
+            # Quelle gesperrt (robots.txt), auch das Webarchiv: BE scheitert, NW läuft
+            # trotzdem, BE-Datei bleibt. Ohne Netz: jeder URL-Abruf wird abgelehnt.
             anzahlen = Path(tmp, "anzahlen.csv")
             anzahlen.write_text(NW_CSV_SEP, encoding="utf-8")
-            refused = b.FetchRefused("https://www.bildungsstatistik.berlin.de/…: robots.txt")
-            with quiet() as log, mock.patch.object(b, "parse_be_svz", side_effect=refused), \
+            original_read = b.read_text
+
+            def offline_read(path_or_url):
+                if b.is_url(path_or_url):
+                    raise b.FetchRefused(f"{path_or_url}: robots.txt")
+                return original_read(path_or_url)
+
+            with quiet() as log, mock.patch.object(b, "read_text", side_effect=offline_read), \
                     mock.patch.object(b, "fetch_jedeschule", return_value=[]):
                 code = b.main(["--laender", "BE,NW", "--nw-anzahlen", str(anzahlen),
                                "--matches-csv", str(csv_path), "--out", str(out)])

@@ -6,7 +6,7 @@ Analyse sie den OSM-Schulen aus `schools.pmtiles` zuordnen kann.
 
 ```bash
 # aus der Repo-Wurzel, nur Standardbibliothek (Python ≥ 3.10)
-python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-svz berlin_schuelerzahlen_2024-25.csv   # BE, BB, HH, BY
+python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py            # BE, BB, HH, BY
 python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender NW --nw-anzahlen ~/Downloads/anzahlen.csv   # Datei von Hand
 python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender MV,ST   # Lizenz eingeschränkt, siehe unten
 python3 -m unittest discover -s preprocessing/schuelerzahlen            # Tests ohne Netz
@@ -39,7 +39,7 @@ noch nicht.
 
 | Land | Schülerzahl | Stand | Lizenz | Standard |
 | --- | --- | --- | --- | --- |
-| BE | [Bildungsstatistik Berlin, SVZ_Fakt5](https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx) — Schüler:innen je Schulnummer (BSN). Seit Oktober 2026 nicht erreichbar (404); gesicherter Abruf vom 24./25.10.2026 als CSV über `--be-svz` (Bezirke 01–08) | Schuljahr 2024/25 | CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut [daten.berlin.de](https://daten.berlin.de/datensaetze/schulen-in-berlin-1096779); vor einer Veröffentlichung prüfen) | ja |
+| BE | [Bildungsstatistik Berlin, SVZ_Fakt5](https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx) — Schüler:innen je Schulnummer (BSN). Seit Oktober 2026 nicht erreichbar; das Skript nimmt dann den [Stand vom 14.07.2026 im Webarchiv](https://web.archive.org/web/20260714154715/https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx) (alle 12 Bezirke, 909 Schulen) | Schuljahr 2024/25 | CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut [Datensatz auf daten.berlin.de](https://daten.berlin.de/datensaetze/c3f96c4b-e891-41a7-aa13-39db8bc97008), der weiter auf SVZ_Fakt5 verweist) | ja |
 | BB | WFS `Schul_Standorte` des MBJS, Feld `schueler` (über JedeSchule) | meist 2022 | dl-de/by-2-0 | ja |
 | HH | Schulstammdaten Hamburg, `anzahl_schueler` je Standort (über JedeSchule) | 2024 | dl-de/by-2-0 | ja |
 | NW | [Open Data des Schulministeriums](https://www.schulministerium.nrw/open-data): „Gesamtanzahl der Schülerinnen und Schüler je Schule“ (`anzahlen.csv`), Lage über die Schulnummer aus dem Abgleich bzw. den Schulgrunddaten (JedeSchule). Der Download-Server (`www.schulministerium.nrw.de/BiPo/…`) war am 25.10.2026 nicht erreichbar — Datei im Browser laden und mit `--nw-anzahlen` übergeben; ungetestet mit der echten Datei | Stichtag 15.10. des Vorjahres, derzeit 2025/26 | dl-de/by-2-0 | nein |
@@ -91,12 +91,12 @@ Veröffentlichung der erzeugten Dateien kurz bei osmberlin nachfragen.
 
 ## Bekannte Grenzen
 
-- Berlin: SVZ_Fakt5 ist derzeit nicht erreichbar (Stand Oktober 2026); bis
-  dahin eine gesicherte Liste per `--be-svz` übergeben. Der gesicherte Abruf
-  deckt nur die Bezirke 01–08 ab (Neukölln bis 08G12); Treptow-Köpenick,
-  Marzahn-Hellersdorf, Lichtenberg und Reinickendorf fehlen — dort bleiben
-  Platzhalter. Nur Hauptstandorte: Filialen bleiben Platzhalter, die
-  Schülerzahl einer Schule mit mehreren Standorten landet am Hauptstandort.
+- Berlin: SVZ_Fakt5 ist seit Oktober 2026 nicht erreichbar; das Skript liest
+  dann den Stand vom 14.07.2026 aus dem Webarchiv (Schuljahr 2024/25, alle 12
+  Bezirke). Er stimmt für die 572 Schulen des gesicherten Abrufs vom
+  24./25.10.2026 (Bezirke 01–08) genau mit diesem überein. Nur Hauptstandorte:
+  Filialen bleiben Platzhalter, die Schülerzahl einer Schule mit mehreren
+  Standorten landet am Hauptstandort.
 - Berufliche Schulen (OSZ, Berufskollegs, Berufs-, Fachschulen) rechnet die App
   als eigenen Typ: Wege je Schultag = Schüler:innen × Anwesenheitsanteil
   (Teilzeit-Berufsschule nur an einzelnen Tagen), Split und Weglänge der

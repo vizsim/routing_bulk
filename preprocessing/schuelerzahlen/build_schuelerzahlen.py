@@ -9,7 +9,8 @@ Quellen:
   Schulart) und das OSM-Objekt, das ihnen zugeordnet ist.
 - Berlin: Bildungsstatistik der Senatsverwaltung, Tabelle SVZ_Fakt5
   (Schüler je Schule, Berliner Schulnummer BSN) — als Webseite oder als
-  gesicherte CSV (die Seite ist seit Oktober 2026 nicht erreichbar).
+  gesicherte CSV. Die Seite ist seit Oktober 2026 nicht erreichbar; dann nimmt
+  das Skript den Stand vom 14.07.2026 aus dem Webarchiv (alle 12 Bezirke).
 - Brandenburg, Hamburg, Bayern: Schülerzahl aus den Rohdaten der
   Landesquellen, abgerufen über die JedeSchule-API.
 - Nur auf Wunsch: Nordrhein-Westfalen (Open Data des Schulministeriums,
@@ -24,7 +25,7 @@ bleibt dessen vorhandene Datei stehen; die übrigen Länder laufen weiter.
 
 Nur Standardbibliothek. Aufruf aus der Repo-Wurzel:
 
-    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --be-svz berlin_schuelerzahlen_2024-25.csv
+    python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py
     python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py --laender NW --nw-anzahlen anzahlen.csv
 """
 
@@ -47,6 +48,9 @@ from pathlib import Path
 
 MATCHES_CSV_URL = "https://schulabgleich.osm-verkehrswende.org/datasets/schools_matches.csv"
 BE_SVZ_URL = "https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx"
+# SVZ_Fakt5 ist seit Oktober 2026 nicht erreichbar; Stand 14.07.2026 im Webarchiv
+# (Schuljahr 2024/25, alle 12 Bezirke, 909 Schulen) — „id_“ liefert die Seite ohne Archiv-Rahmen
+BE_SVZ_ARCHIVE_URL = f"https://web.archive.org/web/20260714154715id_/{BE_SVZ_URL}"
 NW_ANZAHLEN_URL = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/SchuelerGesamtZahl/anzahlen.csv"
 # Der Dienst heißt je Schuljahr anders (…_2025_26_…); neuere Fassung mit --st-dienst
 ST_DIENST_URL = ("https://services-eu1.arcgis.com/3jNCHSftk0N4t7dd/arcgis/rest/services/"
@@ -79,7 +83,8 @@ SOURCES = {
         "label": "Bildungsstatistik Berlin",
         "title": "Schüler- und Lehrkräftezahlen je Schule (SVZ_Fakt5)",
         "url": BE_SVZ_URL,
-        "license": "CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut daten.berlin.de; vor einer Veröffentlichung prüfen)",
+        "license": ("CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut Datensatz "
+                    "https://daten.berlin.de/datensaetze/c3f96c4b-e891-41a7-aa13-39db8bc97008)"),
         "note": "Schüler:innen insgesamt je Berliner Schulnummer (BSN); nur Hauptstandorte.",
     },
     "nw-msb": {
@@ -593,8 +598,18 @@ def build_land(land: str, officials: dict[str, dict], pupils: dict[str, dict], s
 def collect_pupils(land: str, args, officials: dict[str, dict]) -> dict[str, dict]:
     """Schülerzahlen eines Landes aus seiner Quelle: {official_id: {pupils, year, …}}."""
     if land == "BE":
-        print(f"  Quelle: {args.be_svz}")
-        svz = parse_be_svz(read_text(args.be_svz))
+        source = args.be_svz
+        print(f"  Quelle: {source}")
+        try:
+            svz = parse_be_svz(read_text(source))
+        except (OSError, ValueError, FetchRefused) as err:
+            if source != BE_SVZ_URL:
+                raise
+            # Seit Oktober 2026 offline: Stand vom 14.07.2026 im Webarchiv
+            print(f"  nicht erreichbar ({err}) — nehme den Stand im Webarchiv: {BE_SVZ_ARCHIVE_URL}")
+            source = BE_SVZ_ARCHIVE_URL
+            svz = parse_be_svz(read_text(source))
+        args.be_svz_used = source
         districts = sorted({bsn[:2] for bsn in svz})
         if len(districts) < 12:
             print(f"  Warnung: nur Bezirke {', '.join(districts)} in der Tabelle — vollständig?")
@@ -708,9 +723,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  Vorhandene Datei bleibt: {old_file} (Stand {old.get('generated', '?')})")
             continue
         source = SOURCES[source_id]
-        if land == "BE" and not is_url(args.be_svz):
-            # Die Seite ist offline; die Zahlen stammen aus einem gesicherten Abruf
-            source = {**source, "note": f"{source['note']} Aus einem gesicherten Abruf ({Path(args.be_svz).name})."}
+        used = getattr(args, "be_svz_used", args.be_svz) if land == "BE" else None
+        if used == BE_SVZ_ARCHIVE_URL:
+            source = {**source, "note": f"{source['note']} Stand 14.07.2026 aus dem Webarchiv (web.archive.org); "
+                                        "die Seite selbst ist seit Oktober 2026 nicht erreichbar."}
+        elif used and not is_url(used):
+            source = {**source, "note": f"{source['note']} Aus einem gesicherten Abruf ({Path(used).name})."}
         with_osm = sum(1 for s in schools if s["osm"])
         data = {"format": 1, "land": land, "generated": today,
                 "sources": {source_id: source, "osm-schulabgleich": SOURCES["osm-schulabgleich"]},
