@@ -587,7 +587,7 @@ export const MapRenderer = {
    * (unabhängig vom deutschlandweiten Schul-Layer, der ein Toggle bleibt).
    * Nutzt die beim Schul-Layer registrierten Icon-Bilder.
    * @param {Array} facilities - {lat, lon, name, type}; der Array-Index ist die Feature-ID
-   * @param {{onHover?: (index: number|null) => void}} [callbacks] - Karte → Panel
+   * @param {{onHover?: (index: number|null) => void, onClick?: (index: number) => void}} [callbacks] - Karte → Panel
    */
   setAnalysisFacilities(facilities, callbacks) {
     const map = this._ready && this._map;
@@ -642,6 +642,8 @@ export const MapRenderer = {
         .setLngLat(e.lngLat)
         .setHTML(`<div class="pop-eyebrow">${typ} · Gebietsanalyse</div><div class="pop-title">${Utils.escapeHtml(p.name || typ)}</div>`)
         .addTo(this._map);
+      // Erst der Klick führt im Panel zur Zeile (Hover markiert sie nur)
+      this._analysisFacilityCallbacks?.onClick?.(f.id);
     });
     map.on('mousemove', 'analysis-facility-icons', (e) => {
       const f = e.features && e.features[0];

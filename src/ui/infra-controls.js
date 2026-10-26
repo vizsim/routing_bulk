@@ -15,6 +15,9 @@ import { MapRenderer } from '../visualization/map-renderer.js';
 
 const CONTROL_HOSTS = ['#infra-controls', '#analysis-infra-controls'];
 const LEGEND_HOSTS = ['#infra-legend', '#analysis-infra-legend'];
+// Erst hervorheben, wenn der Zeiger kurz auf einem Eintrag bleibt — beim
+// Überstreichen der Legende sonst ein Eintrag nach dem anderen auf der Karte
+const HOVER_DELAY_MS = 150;
 
 export const InfraControls = {
   // Letzte gezeichnete Ansicht (vorhandene Modi, aufgelöster Modus/Merkmal)
@@ -26,6 +29,9 @@ export const InfraControls = {
   _pinnedCls: null,
   _appliedCls: null,
   _legendView: null,
+  // Hover-Verzögerung: Klasse, auf die gewartet wird, und der Timer dazu
+  _pendingHover: undefined,
+  _hoverTimer: null,
 
   init() {
     CONTROL_HOSTS.forEach(sel => {
@@ -39,10 +45,11 @@ export const InfraControls = {
       // Touch hat kein Hover: dort zählt nur das Tippen (Festhalten)
       host.addEventListener('pointerover', (e) => {
         if (e.pointerType === 'touch') return;
-        this._hoverCls = e.target.closest('.infra-legend-row')?.dataset.cls || null;
-        this._applyHighlight();
+        this._scheduleHover(e.target.closest('.infra-legend-row')?.dataset.cls || null);
       });
       host.addEventListener('pointerleave', () => {
+        // Legende verlassen: sofort zurück zur festgehaltenen Klasse (bzw. keiner)
+        this._cancelHover();
         this._hoverCls = null;
         this._applyHighlight();
       });
@@ -164,6 +171,7 @@ export const InfraControls = {
       const keys = shown.map(c => c.key);
       if (!keys.includes(this._hoverCls)) this._hoverCls = null;
       if (!keys.includes(this._pinnedCls)) this._pinnedCls = null;
+      if (this._pendingHover && !keys.includes(this._pendingHover)) this._cancelHover();
       const rows = shown
         .map(c => {
           const share = total > 0 ? (stats.get(c.key) / total) * 100 : 0;
@@ -185,6 +193,7 @@ export const InfraControls = {
           : ''}<br>Eintrag überfahren oder antippen: Abschnitte auf der Karte hervorheben</p>`;
     } else {
       this._hoverCls = this._pinnedCls = null;
+      this._cancelHover();
     }
     // Routing-Tab nur mit aggregierter Darstellung, Analyse-Legende nur im Analyse-Tab
     const analysis = State.isAnalysisMode();
@@ -207,6 +216,30 @@ export const InfraControls = {
         row.classList.toggle('is-pinned', row.dataset.cls === this._pinnedCls);
       });
     });
+  },
+
+  /**
+   * Hover mit kurzer Verzögerung: Die Karte wechselt erst, wenn der Zeiger
+   * HOVER_DELAY_MS auf demselben Eintrag (oder außerhalb der Einträge) bleibt.
+   * Zurück auf den schon gezeigten Eintrag bricht das Warten ab.
+   */
+  _scheduleHover(cls) {
+    if (cls === this._pendingHover) return;
+    this._cancelHover();
+    if (cls === this._hoverCls) return;
+    this._pendingHover = cls;
+    this._hoverTimer = setTimeout(() => {
+      this._hoverTimer = null;
+      this._pendingHover = undefined;
+      this._hoverCls = cls;
+      this._applyHighlight();
+    }, HOVER_DELAY_MS);
+  },
+
+  _cancelHover() {
+    if (this._hoverTimer) clearTimeout(this._hoverTimer);
+    this._hoverTimer = null;
+    this._pendingHover = undefined;
   },
 
   /** Karte: überfahrene Klasse hervorheben, sonst die festgehaltene. */

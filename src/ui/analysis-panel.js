@@ -230,7 +230,8 @@ export const AnalysisPanel = {
     this._pupilInfo = await AnalysisService.prefillPupils(this._facilities, areaContext)
       .catch(err => { Utils.logError('AnalysisPanel', err); return null; });
     MapRenderer.setAnalysisFacilities(this._facilities, {
-      onHover: (index) => this._highlightRow(index)
+      onHover: (index) => this._highlightRow(index),
+      onClick: (index) => this._revealRow(index)
     });
     if (this._facilities.length === 0) {
       listEl.innerHTML = '<div class="config-hint">Keine Schulen oder Kindergärten im Bereich gefunden.</div>';
@@ -376,11 +377,20 @@ export const AnalysisPanel = {
   _highlightRow(index) {
     document.querySelectorAll('.analysis-facility.is-hovered').forEach(el => el.classList.remove('is-hovered'));
     if (index == null) return;
+    // Nur markieren — gescrollt wird erst beim Klick (_revealRow), sonst springt
+    // das Panel bei jeder Bewegung über die Karte
+    document.querySelector(`.analysis-facility[data-index="${index}"]`)?.classList.add('is-hovered');
+  },
+
+  /** Klick auf eine Einrichtung in der Karte: Zeile im Panel zeigen und kurz aufleuchten lassen. */
+  _revealRow(index) {
     const row = document.querySelector(`.analysis-facility[data-index="${index}"]`);
-    if (row) {
-      row.classList.add('is-hovered');
-      row.scrollIntoView({ block: 'nearest' });
-    }
+    if (!row) return;
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    row.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+    row.classList.remove('is-revealed');
+    void row.offsetWidth; // Animation neu starten, auch beim zweiten Klick
+    row.classList.add('is-revealed');
   },
 
   _renderTypeSettings() {

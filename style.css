@@ -1227,6 +1227,17 @@ select {
 .analysis-facility.is-hovered {
   background: #fef3c7; /* Hover-Kopplung Panel ↔ Karte (Analyse-Amber) */
 }
+/* Klick auf die Einrichtung in der Karte: Zeile leuchtet kurz auf */
+.analysis-facility.is-revealed {
+  animation: analysis-row-reveal 1.4s ease-out;
+}
+/* ohne 100 %-Schritt: endet beim normalen Hintergrund (auch dem Hover-Amber) */
+@keyframes analysis-row-reveal {
+  0%, 35% { background: #fde68a; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .analysis-facility.is-revealed { animation: none; }
+}
 .analysis-facility-name {
   grid-column: 1 / -1;
   min-width: 0;
