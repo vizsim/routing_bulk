@@ -26,7 +26,8 @@ Tests: [`tests/school-trips.test.js`](../tests/school-trips.test.js).
 5. **Radius = Kappung:** Vorschlag = 90 % der Fuß-, Rad- und Autowege
    (Luftlinie, auf 500 m aufgerundet, 1–8 km). Wege von weiter her starten im
    äußersten Ring — sie erreichen das Gebiet über dessen Rand. ÖPNV startet
-   weiterhin an den zielnächsten Haltestellen.
+   an einer Haltestelle nahe der Einrichtung — siehe Abschnitt
+   „ÖPNV: Ausstiegshaltestelle“.
 
 Berufliche Schulen (Oberstufenzentren, Berufs-, Fachschulen) sind ein eigener
 Typ mit Werten für Auszubildende und anteiliger Anwesenheit — siehe
@@ -252,6 +253,60 @@ ein Wert für alle Länder.
 Beispiel OSZ Gesundheit I (Berlin, 2.902 Schüler:innen 2024/25): 1.813 Hinwege je
 Schultag. Ohne amtliche Zahl: Platzhalter 800 Schüler:innen → 500 Hinwege.
 
+## ÖPNV: Ausstiegshaltestelle
+
+Die Gebietsanalyse routet bei ÖPNV nur den Fußweg von der Haltestelle zur
+Einrichtung (kein Fahrplan-Routing). Welche Haltestelle, entscheidet
+[`src/domain/transit-stops.js`](../src/domain/transit-stops.js) in drei Schritten:
+
+1. **Typ** aus den Attributen der Haltestellen-Kacheln: Straßenbahn
+   (`tram=yes`), Schiene = S-, U- und Eisenbahn (`railway=platform` ohne
+   `tram`, `train=yes`), sonst Bus. Der Name hilft nicht — in Berlin heißen
+   gerade die Bushaltestellen am U-Bahnhof „U Schönleinstraße“, der Bahnsteig
+   nur „Schönleinstraße“. Liegen Bahnsteig und Bushaltestelle an einem Ort
+   (unter 30 m oder gleicher Name bis 250 m), zählt der höhere Typ.
+2. **Einzugsbereich je Typ** (Luftlinie), Grenzwerte der Leitlinie zur
+   Nahverkehrsplanung in Bayern (Anhang C, Tab. 1, Ober-/Mittelzentren);
+   Metropolen und Großstädte als hohe Nutzungsdichte (Annahme):
+
+   | Gebiet | Bus/Straßenbahn | Schiene |
+   | --- | ---: | ---: |
+   | Metropole, Großstadt (hohe Nutzungsdichte) | 500 m | 800 m |
+   | übrige Raumtypen (niedrige Nutzungsdichte) | 800 m | 1.200 m |
+
+   Liegt keine Haltestelle im Einzugsbereich, gelten wie bisher die drei
+   nächsten, nach Nähe gewichtet.
+3. **Anteil je Typ nach Länge der ÖPNV-Wege.** MiD 2023: Anteil an allen
+   Wegen Bus 4 %, U-/Stadtbahn 2 %, S-Bahn/Nahverkehrszug 2 %, Straßenbahn 1 %
+   (Abb. 7, S. 49); mittlere Weglänge im Straßenpersonenverkehr (Bus,
+   Straßenbahn, U-Bahn) 9 km, im SPNV (S-Bahn, Regionalzug) 26 km (Tab. 24,
+   S. 103). Mit beiden Längen als Lognormalverteilung (Streuung wie die
+   ÖPNV-Wege, σ = 0,7 — Annahme) ergibt sich P(SPNV | Länge); gemittelt über
+   die Längenverteilung der ÖPNV-Wege des Einrichtungstyps. Schiene = U-Bahn +
+   SPNV (in OSM nicht zu trennen); im Straßenpersonenverkehr bleibt das
+   Verhältnis Bus 4 : U-Bahn 2 : Straßenbahn 1.
+
+   | Einrichtung (Raumtyp) | Ø ÖPNV-Weg | Schiene | Straßenbahn | Bus | nur Schiene + Bus im Einzugsbereich: Schiene |
+   | --- | ---: | ---: | ---: | ---: | ---: |
+   | Grundschule (Metropole) | 3,6 km | 31 % | 14 % | 55 % | 36 % |
+   | Weiterführende Schule (Metropole) | 5,5 km | 33 % | 13 % | 53 % | 39 % |
+   | Berufliche Schule (Metropole) | 18,9 km | 55 % | 9 % | 36 % | 60 % |
+   | Grundschule (dörflich, ländlich) | 7,5 km | 37 % | 13 % | 51 % | 42 % |
+   | Weiterführende Schule (dörflich, ländlich) | 12,0 km | 44 % | 11 % | 45 % | 50 % |
+
+Die Anteile werden auf die Typen verteilt, die im Einzugsbereich vorkommen;
+innerhalb eines Typs zählt die Nähe (1/(d + 100 m)). Beispiel: Bushaltestelle
+in 110 m, U-Bahnhof in 700 m, keine Straßenbahn → Grundschule 36 % U-Bahn,
+berufliche Schule 60 %. Vorher (die drei nächsten Haltestellen, nur nach
+Nähe) bekam der U-Bahnhof hier ein Fünftel, eine U-Bahn hinter drei näheren
+Bushaltestellen nichts. Das Ergebnis der Analyse zeigt, wo die ÖPNV-Wege
+enden (Anteil je Typ).
+
+Grenzen: Die Anteile sind bundesweit; wie stark eine Linie fährt, kennen die
+Kacheln nicht. Genauer wären Abfahrten je Haltestelle aus dem bundesweiten
+Fahrplan (GTFS). Straßenbahnsteige ohne `tram=yes` gelten als Schiene.
+Der Weg vom Wohnort zur Einstiegshaltestelle ist nicht enthalten.
+
 ## Plausibilitätsprüfung
 
 **Fußanteil nach Entfernung** (Anteil der Wege im Entfernungsband, die zu Fuß
@@ -311,8 +366,9 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 
 - MiD 2023: infas, DLR, IVT Research, infas 360: *Mobilität in Deutschland –
   MiD 2023. Ergebnisbericht*, im Auftrag des Bundesministeriums für Verkehr,
-  November 2025, Tab. 8 (S. 47), Tab. 38 (S. 154), Abb. 78 (S. 156),
-  Tab. 43 (S. 179), Abb. 98 (S. 177), Abb. 100 (S. 179).
+  November 2025, Abb. 7 (S. 49), Tab. 8 (S. 47), Tab. 24 (S. 103),
+  Tab. 38 (S. 154), Abb. 78 (S. 156), Tab. 43 (S. 179), Abb. 98 (S. 177),
+  Abb. 100 (S. 179).
   <https://www.mobilitaet-in-deutschland.de/pdf/MiD2023_Ergebnisbericht.pdf>
 - Destatis: *Berufliche Schulen und Schulen des Gesundheitswesens – Grunddaten,
   Schuljahr 2024/25*, Statistischer Bericht, Tab. 21121-02 (Schüler:innen nach
@@ -321,6 +377,11 @@ Raster, 200 × 100 Startpunkte; Luftlinie):
 - Destatis: *Qualitätsbericht Statistik der beruflichen Schulen*, erschienen am
   21.10.2025, S. 13.
   <https://www.destatis.de/DE/Methoden/Qualitaet/Qualitaetsberichte/Bildung/berufliche-schulen.pdf?__blob=publicationFile>
+- Bayerisches Staatsministerium für Wirtschaft, Verkehr und Technologie:
+  *Leitlinie zur Nahverkehrsplanung in Bayern*, Anhang C, Tab. 1 (Grenz- und
+  Richtwerte: Einzugsbereiche), wiedergegeben vom Bayerischen Landkreistag am
+  10.06.2025.
+  <https://www.bay-landkreistag.de/media/106196/vwi-10062025-weiterentwicklung-der-leitlinie-zur-nahverkehrs.pdf>
 - KMK: *Rahmenvereinbarung über die Berufsschule*, Beschluss vom 12.03.2015
   i. d. F. vom 21.03.2024, Nr. 3.2 und 4.1.
   <https://www.kmk.org/fileadmin/Dateien/veroeffentlichungen_beschluesse/2015/2015_03_12-RV-Berufsschule.pdf>

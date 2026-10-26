@@ -7,6 +7,7 @@ import { CONFIG } from '../core/config.js';
 import { State } from '../core/state.js';
 import { Utils } from '../core/utils.js';
 import { SOURCES, SIGMA, DETOUR_FACTOR, modelSourceIds } from '../domain/school-trips.js';
+import { STOP_CLASS_LABELS, STOP_CLASSES } from '../domain/transit-stops.js';
 import {
   AnalysisService, FACILITY_TYPES, MODES, TRIP_UNIT, typeSettingsFor
 } from '../services/analysis-service.js';
@@ -404,8 +405,10 @@ export const AnalysisPanel = {
       <p class="config-hint">Radius in Metern — nur Kappung: Wege von weiter her
       starten am Rand. Split-Summe je Zeile sollte 100 % sein. Die Weglänge hängt
       vom Verkehrsmittel ab (MiD 2023): Fußwege kurz, Radwege mittel, Autowege lang.
-      ÖPNV = Fußweg ab der zielnächsten Haltestelle (kein Fahrplan-Routing, alle
-      Anfragen gehen an den eigenen Routing-Server). Einzugsgrenzen: Kita/Grundschule
+      ÖPNV = Fußweg ab einer Haltestelle nahe der Einrichtung: Schiene mit größerem
+      Einzugsbereich als Bus und Straßenbahn, und je länger die ÖPNV-Wege, desto
+      öfter Schiene (kein Fahrplan-Routing, alle Anfragen gehen an den eigenen
+      Routing-Server). Einzugsgrenzen: Kita/Grundschule
       nur aus der eigenen Gemeinde; weiterführende und berufliche Schulen bevorzugt
       aus dem eigenen Landkreis (außerhalb stark abgewertet, anderes Bundesland noch
       stärker).</p>
@@ -479,12 +482,18 @@ export const AnalysisPanel = {
       const basis = s.basis === 'population'
         ? '<div>Startpunkte aus der ganzen Bevölkerung (Zensus), nicht nur unter 18-Jährige</div>'
         : '';
+      const eg = m.egress;
+      const egress = eg
+        ? `<div>ÖPNV-Ausstieg: Schiene ${pct(eg.shares.rail)} · Straßenbahn ${pct(eg.shares.tram)} · Bus ${pct(eg.shares.bus)} %
+          (aufgeteilt auf die Typen im Einzugsbereich: Schiene ${de(eg.radii.rail)} m, Bus/Straßenbahn ${de(eg.radii.bus)} m) —
+          ${esc(SOURCES['mid2023-oev'].label)}, ${esc(SOURCES['leitlinie-nvp-by'].label)}</div>`
+        : '';
       return `<li><strong>${esc(FACILITY_TYPES[type].label)}</strong>
         <div>Modal Split (Fuß/Rad/ÖPNV/Auto): ${splitText}</div>
         <div>Ø Weg ${fmtKm(m.meanKm)} km nach ${esc(SOURCES[m.meanSource].label)} (${esc(m.meanNote)})</div>
         <div>Ø je Verkehrsmittel: ${lengths} km — ${esc(SOURCES[m.modeSource].label)} (${esc(m.modeNote)}), auf diesen Wert skaliert</div>
         <div>${radiusText}${radiusNote}</div>
-        ${presence}${basis}
+        ${egress}${presence}${basis}
       </li>`;
     }).join('');
 
@@ -551,6 +560,15 @@ export const AnalysisPanel = {
         let html = `<div>${s.facilities} Einrichtungen · ${s.totalTrips.toLocaleString('de-DE')} ${TRIP_UNIT} `
           + `· ${s.ok.toLocaleString('de-DE')} Routen gerechnet${s.fail ? ` (${s.fail} fehlgeschlagen)` : ''}</div>`
           + '<div class="demand-info-sub">Karte zeigt die Hinwege; Rückwege etwa gleich viele auf denselben Kanten in Gegenrichtung.</div>';
+        // Wo die ÖPNV-Wege enden: Mix der Ausstiegshaltestellen
+        const byClass = s.transitByClass || {};
+        const transitTotal = Object.values(byClass).reduce((a, b) => a + b, 0);
+        if (transitTotal > 0) {
+          const parts = STOP_CLASSES.filter(c => byClass[c] > 0)
+            .map(c => `${STOP_CLASS_LABELS[c]} ${pct(byClass[c] / transitTotal)} %`);
+          html += `<div class="demand-info-sub">ÖPNV-Wege enden an: ${parts.join(' · ')} `
+            + `(${Math.round(transitTotal).toLocaleString('de-DE')} Hinwege)</div>`;
+        }
         if (s.capacityLimited > 0) {
           html += `<div class="demand-info-warn">Bei ${s.capacityLimited} Einrichtung/Modus-Kombinationen wohnten weniger mögliche Startpersonen im Radius (unter 18-Jährige, bei beruflichen Schulen alle Einwohner) als Stichproben-Routen — Gewichte wurden entsprechend angehoben.</div>`;
         }

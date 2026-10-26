@@ -11,10 +11,11 @@
 //    CONFIG.ANALYSIS_MAX_SAMPLE Routen gerechnet, jede Route trägt das Gewicht
 //    Wege ÷ Stichprobengröße; die Kanten-Aggregation summiert Gewichte.
 //
-// ÖPNV heißt hier: Fußweg ab den zielnächsten Haltestellen (Zubringer-Modell,
-// eigener GH-Server) — KEIN Transitous, die Mengen wären mit Fair Use
-// unvereinbar. Nachfrage-Basis: unter 18-Jährige (Zensus), bei beruflichen
-// Schulen alle Einwohner.
+// ÖPNV heißt hier: Fußweg ab einer Haltestelle nahe der Einrichtung (Zubringer-
+// Modell, eigener GH-Server) — welche, folgt aus Haltestellentyp, Einzugsbereich
+// und Länge der ÖPNV-Wege (domain/transit-stops.js). KEIN Transitous, die
+// Mengen wären mit Fair Use unvereinbar. Nachfrage-Basis: unter 18-Jährige
+// (Zensus), bei beruflichen Schulen alle Einwohner.
 import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
 import { API } from '../domain/api.js';
@@ -26,6 +27,7 @@ import {
 import {
   drawDistribution, modelSourceIds, presenceShare, REGIOSTAR_LABELS, SOURCES, tripModel
 } from '../domain/school-trips.js';
+import { drawEgressStops, stopClass, stopRadii } from '../domain/transit-stops.js';
 import { AggregationService } from './aggregation-service.js';
 import { DemandService } from './demand-service.js';
 import { PopulationService } from './population-service.js';
@@ -108,9 +110,12 @@ const BOUNDARY_PENALTY_OUTSIDE = 0.3;
 const BOUNDARY_PENALTY_OUTSIDE_LAND = 0.1;
 const AGS_PREFIX = { gemeinde: 8, kreis: 5, land: 2 };
 
+// Ohne Modell (sollte nicht vorkommen): alle Haltestellentypen gleich, weite Einzugsbereiche
+const DEFAULT_EGRESS = { shares: { rail: 1 / 3, tram: 1 / 3, bus: 1 / 3 }, radii: stopRadii(null) };
+
 // Verkehrsmittel der Gebietsanalyse. Die Weglänge je Modus kommt aus dem
-// Schulweg-Modell (typeSettings[typ].model.modes); ÖPNV hat keine eigene
-// Längenverteilung — er startet an den zielnächsten Haltestellen.
+// Schulweg-Modell (typeSettings[typ].model.modes); ÖPNV startet an einer
+// Haltestelle nahe der Einrichtung (typeSettings[typ].model.egress).
 export const MODES = [
   { key: 'foot', label: 'Fuß', ghProfile: 'foot' },
   { key: 'bike', label: 'Rad', ghProfile: 'bike' },
@@ -348,9 +353,14 @@ export const AnalysisService = {
       facilities.reduce((s, f) => s + f.lat, 0) / facilities.length,
       facilities.reduce((s, f) => s + f.lon, 0) / facilities.length
     ];
-    const coverRadius = Math.max(...facilities.map(f =>
-      Geo.distanceMeters(center[0], center[1], f.lat, f.lon) + typeSettings[f.type].radiusM
-    ));
+    // Einzugsbereich je Einrichtung: Radius der Startpunkte, mindestens der
+    // weiteste Haltestellen-Einzugsbereich (ÖPNV-Ausstieg)
+    const coverRadius = Math.max(...facilities.map(f => {
+      const s = typeSettings[f.type];
+      const egress = (s.model && s.model.egress) || DEFAULT_EGRESS;
+      return Geo.distanceMeters(center[0], center[1], f.lat, f.lon)
+        + Math.max(s.radiusM, ...Object.values(egress.radii));
+    }));
     if (onProgress) onProgress({ phase: 'prepare', done: 0, total: facilities.length });
     const [allCells, rawStops] = await Promise.all([
       PopulationService.getPopulationFeaturesInRadius(center[0], center[1], coverRadius),
@@ -361,13 +371,15 @@ export const AnalysisService = {
           )
         : []
     ]);
-    const allStops = DemandService._dedupeStops(rawStops);
+    // Typ je Haltestelle vor dem Zusammenfassen (der höhere Typ bleibt erhalten)
+    const allStops = DemandService._dedupeStops(rawStops.map(s => ({ ...s, stopClass: stopClass(s.properties) })));
     if (signal.aborted) return null;
 
     // 1. Jobs erzeugen: je Einrichtung×Modus Startpunkte ziehen
     const jobs = []; // {start, target, ghProfile, mode, weight}
     let capacityLimited = 0;
     let prepared = 0;
+    const transitByClass = {}; // ÖPNV-Wege je Haltestellentyp (Hinwege/Schultag)
     for (const facility of facilities) {
       if (signal.aborted) return null;
       const settings = typeSettings[facility.type];
@@ -386,10 +398,17 @@ export const AnalysisService = {
 
       for (const p of plan) {
         let points = [];
+        let egressClasses = null;
         if (p.mode === 'transit') {
           if (allStops.length === 0) continue;
-          const stops = allStops.filter(s => inRadius(s.lat, s.lon, settings.radiusM));
-          points = DemandService._drawFromStops(stops, target, p.sample, CONFIG.DEMAND_TRANSIT_STOPS || 3).points;
+          // Ausstieg nach Haltestellentyp: Einzugsbereich je Typ, Anteil je Typ
+          // aus der Länge der ÖPNV-Wege (domain/transit-stops.js)
+          const egress = (settings.model && settings.model.egress) || DEFAULT_EGRESS;
+          const drawn = drawEgressStops(allStops, target, p.sample, {
+            shares: egress.shares, radii: egress.radii, fallbackStops: CONFIG.DEMAND_TRANSIT_STOPS || 3
+          });
+          points = drawn.points;
+          egressClasses = drawn.classes;
         } else {
           // Weglänge je Verkehrsmittel aus dem Schulweg-Modell (MiD 2023):
           // kurze Wege zu Fuß, mittlere mit dem Rad, lange mit dem Auto. Der
@@ -404,6 +423,11 @@ export const AnalysisService = {
         const weight = points.length > 0 ? p.trips / points.length : 0;
         for (const start of points) {
           jobs.push({ start, target, ghProfile: p.ghProfile, mode: p.mode, weight });
+        }
+        if (egressClasses) {
+          for (const [cls, count] of Object.entries(egressClasses)) {
+            transitByClass[cls] = (transitByClass[cls] || 0) + count * weight;
+          }
         }
       }
       prepared++;
@@ -452,7 +476,8 @@ export const AnalysisService = {
       fail,
       facilities: facilities.length,
       capacityLimited,
-      totalTrips: facilities.reduce((s, f) => s + f.trips, 0)
+      totalTrips: facilities.reduce((s, f) => s + f.trips, 0),
+      transitByClass
     };
     // Länge je gerechneter Route (für die Längenverteilung): Routenlänge laut
     // GraphHopper und Luftlinie Start → Einrichtung, mit dem Gewicht der Route
@@ -539,7 +564,7 @@ export const AnalysisService = {
         typeSettings: Object.fromEntries(usedTypes.map(t => [t, result.typeSettings[t]])),
         areaContext: this.areaContext,
         boundaryPenalties: { outside: BOUNDARY_PENALTY_OUTSIDE, outsideLand: BOUNDARY_PENALTY_OUTSIDE_LAND },
-        transitModel: 'zielnaechste-haltestellen',
+        transitModel: 'ausstieg-nach-haltestellentyp',
         sources: Object.fromEntries([...sourceIds].map(id => [id, SOURCES[id]])),
         pupilSources: Object.fromEntries([...pupilSourceIds].map(id => [id, this.pupilSources[id] || null])),
         sampleCap: CONFIG.ANALYSIS_MAX_SAMPLE,

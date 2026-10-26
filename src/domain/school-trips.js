@@ -24,6 +24,7 @@
 //    2023 Abb. 78, Tab. 38); Wege je Schultag = Schüler:innen × Anwesenheit
 //    (PRESENCE), weil Teilzeit-Berufsschüler:innen nur an einzelnen Tagen kommen.
 import { lognormalCdf, lognormalMedianFromMean } from './stats.js';
+import { stopClassShares, stopRadii } from './transit-stops.js';
 
 export const MODE_KEYS = ['foot', 'bike', 'transit', 'car'];
 const ACTIVE_MODES = ['foot', 'bike'];
@@ -82,6 +83,24 @@ export const SOURCES = {
     note: 'Alle Personen und Wegezwecke; MIV-Fahrt und -Mitfahrt als Auto. Für berufliche Schulen als Raumtyp-Faktor '
       + '(Anteil im Raumtyp ÷ bundesweit) auf den Split der Auszubildenden angewendet — Annahme: der Raumtyp '
       + 'wirkt bei Auszubildenden wie bei allen Wegen.'
+  },
+  'mid2023-oev': {
+    label: 'MiD 2023, Abb. 7 und Tab. 24',
+    title: 'Hochaufgelöster Modal Split der Wege; Eckwerte der Nachfrage in ÖSPV, SPNV und SPFV',
+    citation: `${MID2023_CITATION}, S. 49 und S. 103`,
+    url: MID2023_URL,
+    note: 'Anteil an allen Wegen: Bus 4 %, U-/Stadtbahn 2 %, S-Bahn/Nahverkehrszug 2 %, Straßenbahn 1 %. '
+      + 'Mittlere Weglänge: ÖSPV (Bus, Straßenbahn, U-Bahn) 9 km, SPNV (S-Bahn, Regionalzug) 26 km. '
+      + 'Daraus der Anteil der Schiene nach Länge der ÖPNV-Wege (lognormal, gleiche Streuung — Annahme).'
+  },
+  'leitlinie-nvp-by': {
+    label: 'Leitlinie Nahverkehrsplanung Bayern',
+    title: 'Leitlinie zur Nahverkehrsplanung in Bayern, Anhang C, Tab. 1: Einzugsbereiche von Haltestellen',
+    citation: 'Bayerisches Staatsministerium für Wirtschaft, Verkehr und Technologie; wiedergegeben vom Bayerischen '
+      + 'Landkreistag, 10.06.2025',
+    url: 'https://www.bay-landkreistag.de/media/106196/vwi-10062025-weiterentwicklung-der-leitlinie-zur-nahverkehrs.pdf',
+    note: 'Grenzwerte in m Luftlinie für Ober-/Mittelzentren: hohe Nutzungsdichte Bus/Straßenbahn 500, S-/U-/Eisenbahn 800; '
+      + 'niedrige Nutzungsdichte 800 bzw. 1.200. Metropolen und Großstädte als hohe Nutzungsdichte (Annahme).'
   },
   'destatis-beruflich': {
     label: 'Destatis 2024/25',
@@ -441,6 +460,13 @@ export function tripModel(type, regioStaR7) {
   const q = comps.length ? mixtureQuantile(RADIUS_QUANTILE, comps) : RADIUS_MIN_M;
   const radiusM = Math.min(RADIUS_MAX_M, Math.max(RADIUS_MIN_M, Math.ceil(q / RADIUS_STEP_M) * RADIUS_STEP_M));
   const presence = PRESENCE[type] || null;
+  // ÖPNV-Ausstieg: Anteil je Haltestellentyp aus der Länge der ÖPNV-Wege,
+  // Einzugsbereich je Typ aus dem Raumtyp (domain/transit-stops.js)
+  const egress = {
+    shares: stopClassShares(modes.transit),
+    radii: { ...stopRadii(group) },
+    sources: ['mid2023-oev', 'leitlinie-nvp-by']
+  };
 
   return {
     type,
@@ -466,7 +492,8 @@ export function tripModel(type, regioStaR7) {
     radiusCapped: q > RADIUS_MAX_M,
     presence: presenceShare(type),
     presenceSource: presence ? presence.source : null,
-    presenceNote: presence ? presence.note : null
+    presenceNote: presence ? presence.note : null,
+    egress
   };
 }
 
@@ -494,6 +521,7 @@ export function modeShareInBand(model, mode, fromKm, toKm, split = model.split) 
 /** Quellen-IDs, die ein Modell verwendet (für Export und Oberfläche). */
 export function modelSourceIds(model) {
   return [...new Set([
-    model.splitSource, model.splitFactorSource, model.meanSource, model.modeSource, model.presenceSource, 'annahme'
+    model.splitSource, model.splitFactorSource, model.meanSource, model.modeSource, model.presenceSource,
+    ...((model.egress && model.egress.sources) || []), 'annahme'
   ].filter(Boolean))];
 }

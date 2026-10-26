@@ -13,13 +13,8 @@
 import { CONFIG } from '../core/config.js';
 import { Distribution } from '../domain/distribution.js';
 import { Geo } from '../domain/geo.js';
+import { dedupeStops } from '../domain/transit-stops.js';
 import { PopulationService } from './population-service.js';
-
-/** Haltestellen dichter als das gelten als eine (Node + Bahnsteig doppelt gemappt). */
-const STOP_DEDUP_M = 30;
-/** Gleichnamige Haltestellen in diesem Umkreis sind Steige derselben Haltestelle
- *  (Richtungspaare, Bussteige) — für die Nachfrage ein einziger Ausstiegsort. */
-const STOP_SAME_NAME_M = 250;
 
 export const DemandService = {
   /**
@@ -175,43 +170,9 @@ export const DemandService = {
     return { points, used };
   },
 
-  /**
-   * Fasst Haltestellen zusammen, die faktisch eine sind:
-   * - Punkte dichter als STOP_DEDUP_M (Node + Bahnsteig doppelt gemappt)
-   * - gleichnamige Steige im Umkreis STOP_SAME_NAME_M (Richtungspaare, Bussteige) —
-   *   sonst wären „die 3 nächsten Haltestellen“ oft dreimal dieselbe.
-   */
+  /** Fasst Haltestellen zusammen, die faktisch eine sind (domain/transit-stops.js). */
   _dedupeStops(stops) {
-    const kept = [];
-    // Grid-Bucket, damit der Vergleich nicht quadratisch wird
-    const cell = STOP_SAME_NAME_M / 111320;
-    const buckets = new Map();
-    const nameOf = (s) => ((s.properties && s.properties.name) || '').trim().toLowerCase();
-
-    for (const s of stops) {
-      const bx = Math.round(s.lat / cell);
-      const by = Math.round(s.lon / cell);
-      const neighbours = [];
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          const bucket = buckets.get(`${bx + dx}:${by + dy}`);
-          if (bucket) neighbours.push(...bucket);
-        }
-      }
-      const name = nameOf(s);
-      const duplicate = neighbours.some(o => {
-        const d = Geo.distanceMeters(s.lat, s.lon, o.lat, o.lon);
-        if (d < STOP_DEDUP_M) return true;
-        return name && name === nameOf(o) && d < STOP_SAME_NAME_M;
-      });
-      if (duplicate) continue;
-
-      kept.push(s);
-      const key = `${bx}:${by}`;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(s);
-    }
-    return kept;
+    return dedupeStops(stops);
   },
 
   /**

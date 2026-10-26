@@ -325,16 +325,18 @@ import { Utils } from '../core/utils.js';
   }
 
   /**
-   * Liest Punkt-Features eines beliebigen PMTiles-Archivs im Radius (z. B.
-   * ÖPNV-Haltestellen). Generisch, damit nicht jede Quelle ihren eigenen
-   * Tile-/MVT-Code braucht.
+   * Liest Features eines beliebigen PMTiles-Archivs im Radius als Punkte (z. B.
+   * ÖPNV-Haltestellen). Linien und Flächen gehen mit ihrem Mittelpunkt ein:
+   * Bahnsteige sind in OSM fast immer Flächen, Straßenbahn- und viele
+   * Bussteige Linien — nur Punkte zu lesen, ließ S- und U-Bahn ganz weg.
+   * Generisch, damit nicht jede Quelle ihren eigenen Tile-/MVT-Code braucht.
    * @param {string} url - PMTiles-URL
    * @param {string} layerName - Source-Layer (leer = alle Layer im Tile)
    * @param {number} lat - Mittelpunkt
    * @param {number} lon - Mittelpunkt
    * @param {number} radiusM - Radius in Metern
    * @param {number} [desiredZoom] - Wunsch-Zoom (wird auf maxZoom des Archivs begrenzt)
-   * @returns {Promise<Array<{ lat: number, lon: number, properties: Object }>>}
+   * @returns {Promise<Array<{ lat: number, lon: number, properties: Object, geomType: number }>>}
    */
   async function readPointFeaturesInRadius(url, layerName, lat, lon, radiusM, desiredZoom) {
     const pm = pmtilesFor(url);
@@ -364,13 +366,21 @@ import { Utils } from '../core/utils.js';
           if (!layer) continue;
           const extent = layer.extent || DEFAULT_EXTENT;
           for (const f of layer.features) {
-            if (f.type !== 1) continue; // 1 = Point
+            if (f.type !== 1 && f.type !== 2 && f.type !== 3) continue; // Punkt, Linie, Fläche
             const geom = f.loadGeometry();
-            const pt = geom && geom[0] && geom[0][0];
-            if (!pt) continue;
+            const first = geom && geom[0];
+            if (!first || first.length === 0) continue;
+            // Punkt: der Punkt; Linie/Fläche: Mittel der Stützpunkte (erste Linie bzw. Außenring)
+            let pt = first[0];
+            if (f.type !== 1) {
+              let sx = 0;
+              let sy = 0;
+              for (const p of first) { sx += p.x; sy += p.y; }
+              pt = { x: sx / first.length, y: sy / first.length };
+            }
             const [plat, plon] = tileCoordToWgs84(pt.x, pt.y, z, tileX, tileY, extent);
             if (!pointInCircle(plat, plon, lat, lon, radiusM)) continue;
-            out.push({ lat: plat, lon: plon, properties: f.properties || {} });
+            out.push({ lat: plat, lon: plon, properties: f.properties || {}, geomType: f.type });
           }
         }
       } catch (e) {
