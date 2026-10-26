@@ -23,6 +23,12 @@ Das Skript beachtet robots.txt: Schließt eine Seite automatische Abrufe aus,
 die Datei im Browser speichern und als Pfad übergeben. Scheitert ein Land,
 bleibt dessen vorhandene Datei stehen; die übrigen Länder laufen weiter.
 
+Veröffentlicht werden nur Länder, deren Quelle das erlaubt (PUBLIC_LAENDER):
+<LAND>.json und index.json gehören ins Repo und landen auf GitHub Pages. Die
+übrigen schreibt das Skript als <LAND>.local.json, aufgeführt in
+index.local.json (beides in .gitignore); die App liest sie nur beim
+Entwickeln (npm run dev).
+
 Nur Standardbibliothek. Aufruf aus der Repo-Wurzel:
 
     python3 preprocessing/schuelerzahlen/build_schuelerzahlen.py
@@ -51,6 +57,7 @@ BE_SVZ_URL = "https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt
 # SVZ_Fakt5 ist seit Oktober 2026 nicht erreichbar; Stand 14.07.2026 im Webarchiv
 # (Schuljahr 2024/25, alle 12 Bezirke, 909 Schulen) — „id_“ liefert die Seite ohne Archiv-Rahmen
 BE_SVZ_ARCHIVE_URL = f"https://web.archive.org/web/20260714154715id_/{BE_SVZ_URL}"
+BE_SVZ_ARCHIVE_VIEW_URL = f"https://web.archive.org/web/20260714154715/{BE_SVZ_URL}"  # zum Verlinken
 NW_ANZAHLEN_URL = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/SchuelerGesamtZahl/anzahlen.csv"
 # Der Dienst heißt je Schuljahr anders (…_2025_26_…); neuere Fassung mit --st-dienst
 ST_DIENST_URL = ("https://services-eu1.arcgis.com/3jNCHSftk0N4t7dd/arcgis/rest/services/"
@@ -62,7 +69,13 @@ DEFAULT_LAENDER = ["BE", "BB", "HH", "BY"]
 #   anzahlen.csv im Browser laden und mit --nw-anzahlen übergeben
 # - MV, ST: Landesquelle schränkt Vervielfältigung/Verbreitung ein
 OPT_IN_LAENDER = ["NW", "MV", "ST"]
+# Veröffentlicht (Repo, GitHub Pages) werden nur Länder, deren Quelle das erlaubt
+# (CC BY bzw. dl-de/by-2-0): <LAND>.json, aufgeführt in index.json. Alle anderen
+# bleiben lokal: <LAND>.local.json und index.local.json (.gitignore). Bayern:
+# laut Nutzungsbedingungen von km.bayern.de nur eigener Gebrauch.
+PUBLIC_LAENDER = ["BE", "BB", "HH", "NW"]
 JEDESCHULE_LAENDER = ["BB", "HH", "MV", "BY"]
+DL_DE_BY_URL = "https://www.govdata.de/dl-de/by-2-0"
 USER_AGENT = "routing_bulk-schuelerzahlen/1.1 (+https://github.com/vizsim/routing_bulk)"
 
 # Wo ein Land die Datei von Hand bekommt, wenn der Abruf nicht geht
@@ -76,15 +89,16 @@ SOURCES = {
         "label": "OSM Schulabgleich",
         "title": "Abgleich amtlicher Schulstammdaten (JedeSchule) mit OpenStreetMap",
         "url": "https://schulabgleich.osm-verkehrswende.org/",
-        "license": "OSM-Daten © OpenStreetMap-Mitwirkende (ODbL); amtliche Daten je Land",
+        "license": "Zuordnung zu OSM: © OpenStreetMap-Mitwirkende, ODbL; amtliche Angaben unter der Lizenz des Landes",
+        "licenseUrl": "https://www.openstreetmap.org/copyright",
         "note": "Zuordnung amtliche Schule ↔ OSM-Objekt sowie amtliche Lage und Schulart.",
     },
     "be-svz": {
         "label": "Bildungsstatistik Berlin",
         "title": "Schüler- und Lehrkräftezahlen je Schule (SVZ_Fakt5)",
         "url": BE_SVZ_URL,
-        "license": ("CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut Datensatz "
-                    "https://daten.berlin.de/datensaetze/c3f96c4b-e891-41a7-aa13-39db8bc97008)"),
+        "license": "CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut Datensatz auf daten.berlin.de)",
+        "licenseUrl": "https://daten.berlin.de/datensaetze/c3f96c4b-e891-41a7-aa13-39db8bc97008",
         "note": "Schüler:innen insgesamt je Berliner Schulnummer (BSN); nur Hauptstandorte.",
     },
     "nw-msb": {
@@ -92,6 +106,7 @@ SOURCES = {
         "title": "Gesamtanzahl der Schülerinnen und Schüler je Schule (Open Data)",
         "url": "https://www.schulministerium.nrw/open-data",
         "license": "dl-de/by-2-0, Ministerium für Schule und Bildung NRW",
+        "licenseUrl": DL_DE_BY_URL,
         "note": ("Amtliche Schuldaten, Stichtag 15.10. des Vorjahres (Veröffentlichung jeweils zum 1.3.); "
                  "Lage über Schulnummer aus den Schulgrunddaten (Abgleich bzw. JedeSchule)."),
     },
@@ -99,21 +114,27 @@ SOURCES = {
         "label": "Schulverzeichnis Brandenburg",
         "title": "WFS Schul_Standorte des MBJS, Feld schueler (über die JedeSchule-API)",
         "url": "https://schullandschaft.brandenburg.de/edugis/wfs/schulen",
-        "license": "dl-de/by-2-0",
+        # Bereitsteller wie in den Nutzungsbedingungen des WFS verlangt
+        "license": "dl-de/by-2-0, © Ministerium für Bildung, Jugend und Sport",
+        "licenseUrl": DL_DE_BY_URL,
         "note": "Stand je Schule angegeben (meist 2022).",
     },
     "jedeschule-hh": {
         "label": "Schulstammdaten Hamburg",
         "title": "Schulstammdaten und Schülerzahlen der Hamburger Schulen (über die JedeSchule-API)",
         "url": "https://api.hamburg.de/datasets/v1/schulen",
-        "license": "dl-de/by-2-0",
+        # Quellenvermerk laut Metadaten (metaver.de, D3DDBBA3-7329-475C-BB07-14D539ED6B1E)
+        "license": "dl-de/by-2-0, Freie und Hansestadt Hamburg, Behörde für Schule und Berufsausbildung",
+        "licenseUrl": DL_DE_BY_URL,
         "note": "Schüler:innen je Standort.",
     },
     "jedeschule-by": {
         "label": "Schulsuche Bayern",
         "title": "Eckdaten je Schule des Kultusministeriums (über die JedeSchule-API)",
         "url": "https://www.km.bayern.de/schule-und-mehr/schulsuche",
-        "license": "keine Angabe in der Schulsuche (vor einer Veröffentlichung prüfen)",
+        "license": ("nur eigener Gebrauch: Veröffentlichung nur mit Einwilligung des Kultusministeriums "
+                    "(Nutzungsbedingungen km.bayern.de)"),
+        "licenseUrl": "https://www.km.bayern.de/impressum",
         "note": "Schüler:innen gesamt im angegebenen Schuljahr; öffentliche und private Schulen.",
     },
     "jedeschule-mv": {
@@ -658,6 +679,52 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+def land_file(land: str) -> str:
+    """Dateiname eines Landes: veröffentlicht <LAND>.json, sonst <LAND>.local.json."""
+    return f"{land}.json" if land in PUBLIC_LAENDER else f"{land}.local.json"
+
+
+def _drop_other_name(out_dir: Path, land: str) -> None:
+    """Löscht die Datei des Landes unter dem anderen Namen (aus einem Lauf mit anderer Freigabe)."""
+    for name in (f"{land}.json", f"{land}.local.json"):
+        if name != land_file(land):
+            (out_dir / name).unlink(missing_ok=True)
+
+
+def _previous_file(out_dir: Path, land: str, entry: dict) -> Path | None:
+    """Datei eines früheren Laufs, umbenannt auf den Namen, der zur Freigabe passt
+    (z. B. BY.json → BY.local.json); None, wenn keine da ist."""
+    target = out_dir / land_file(land)
+    names = dict.fromkeys(filter(None, [entry.get("file"), target.name, f"{land}.json", f"{land}.local.json"]))
+    found = next((out_dir / n for n in names if (out_dir / n).exists()), None)
+    if found is None:
+        return None
+    if found != target:
+        found.replace(target)
+    _drop_other_name(out_dir, land)
+    return target
+
+
+def _write_if_changed(path: Path, data: dict, **dump_args) -> dict:
+    """Schreibt data als JSON. Ist der Inhalt bis auf „generated“ gleich, bleibt die
+    vorhandene Datei samt Datum stehen (kein Diff im Repo). Gibt den geltenden Inhalt zurück."""
+    def strip(d: dict) -> dict:
+        return {k: v for k, v in d.items() if k != "generated"}
+
+    old = _load_json(path)
+    if old and strip(old) == strip(data):
+        return old
+    path.write_text(json.dumps(data, ensure_ascii=False, **dump_args), encoding="utf-8")
+    return data
+
+
+def public_index(index: dict) -> dict:
+    """index.json: nur die veröffentlichten Länder und deren Quellen."""
+    laender = {land: e for land, e in index["laender"].items() if land in PUBLIC_LAENDER}
+    used = {"osm-schulabgleich"} | {e.get("source") for e in laender.values()}
+    return {**index, "laender": laender, "sources": {k: v for k, v in index["sources"].items() if k in used}}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--laender", default=",".join(DEFAULT_LAENDER),
@@ -688,14 +755,24 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    previous = _load_json(out_dir / "index.json")
+    # index.local.json führt alle Länder, index.json nur die veröffentlichten
+    previous = _load_json(out_dir / "index.local.json") or _load_json(out_dir / "index.json")
     today = dt.date.today().isoformat()
     index = {"format": 1, "generated": today, "laender": {}, "sources": {"osm-schulabgleich": SOURCES["osm-schulabgleich"]}}
+
+    def keep_previous(land: str) -> Path | None:
+        """Datei eines früheren Laufs mit ihrem Indexeintrag übernehmen."""
+        entry = (previous.get("laender") or {}).get(land)
+        path = _previous_file(out_dir, land, entry) if entry else None
+        if path:
+            index["laender"][land] = {**entry, "file": path.name}
+            index["sources"].update(_load_json(path).get("sources") or {})
+        return path
+
     # Länder, die diesmal nicht laufen, bleiben im Index
-    for land, entry in (previous.get("laender") or {}).items():
-        if land not in laender and (out_dir / entry.get("file", f"{land}.json")).exists():
-            index["laender"][land] = entry
-            index["sources"].update(_load_json(out_dir / entry.get("file", f"{land}.json")).get("sources") or {})
+    for land in previous.get("laender") or {}:
+        if land not in laender:
+            keep_previous(land)
 
     failed = []
     for land in laender:
@@ -715,33 +792,35 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  Fehler: {err}")
             if land in MANUAL_HINT:
                 print(f"  Datei im Browser speichern und übergeben: {MANUAL_HINT[land]}")
-            old = (previous.get("laender") or {}).get(land)
-            old_file = out_dir / (old or {}).get("file", f"{land}.json")
-            if old and old_file.exists():
-                index["laender"][land] = old
-                index["sources"].update(_load_json(old_file).get("sources") or {})
-                print(f"  Vorhandene Datei bleibt: {old_file} (Stand {old.get('generated', '?')})")
+            path = keep_previous(land)
+            if path:
+                print(f"  Vorhandene Datei bleibt: {path} (Stand {index['laender'][land].get('generated', '?')})")
             continue
         source = SOURCES[source_id]
         used = getattr(args, "be_svz_used", args.be_svz) if land == "BE" else None
         if used == BE_SVZ_ARCHIVE_URL:
-            source = {**source, "note": f"{source['note']} Stand 14.07.2026 aus dem Webarchiv (web.archive.org); "
-                                        "die Seite selbst ist seit Oktober 2026 nicht erreichbar."}
+            source = {**source, "url": BE_SVZ_ARCHIVE_VIEW_URL,
+                      "note": f"{source['note']} Stand 14.07.2026 aus dem Webarchiv (web.archive.org); "
+                              "die Seite selbst ist seit Oktober 2026 nicht erreichbar."}
         elif used and not is_url(used):
             source = {**source, "note": f"{source['note']} Aus einem gesicherten Abruf ({Path(used).name})."}
         with_osm = sum(1 for s in schools if s["osm"])
         data = {"format": 1, "land": land, "generated": today,
                 "sources": {source_id: source, "osm-schulabgleich": SOURCES["osm-schulabgleich"]},
                 "schools": schools}
-        (out_dir / f"{land}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        index["laender"][land] = {"file": f"{land}.json", "schools": len(schools), "withOsm": with_osm,
-                                  "source": source_id, "generated": today}
+        path = out_dir / land_file(land)
+        written = _write_if_changed(path, data, separators=(",", ":"))
+        _drop_other_name(out_dir, land)
+        index["laender"][land] = {"file": path.name, "schools": len(schools), "withOsm": with_osm,
+                                  "source": source_id, "generated": written.get("generated", today)}
         index["sources"][source_id] = source
         years = sorted({s["year"] for s in schools if s["year"]})
         print(f"  {len(schools)} Schulen mit Schülerzahl, davon {with_osm} mit OSM-Zuordnung"
-              + (f"; Schuljahr {', '.join(years)}" if years else ""))
+              + (f"; Schuljahr {', '.join(years)}" if years else "")
+              + ("" if land in PUBLIC_LAENDER else f" — nur lokal ({path.name})"))
 
-    (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    _write_if_changed(out_dir / "index.local.json", index, indent=1)
+    _write_if_changed(out_dir / "index.json", public_index(index), indent=1)
     print(f"Geschrieben: {out_dir}")
     if failed:
         print(f"Nicht aktualisiert: {', '.join(failed)}")

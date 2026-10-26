@@ -60,6 +60,7 @@ schrott/
 # Python
 __pycache__/
 *.pyc
-# Erzeugte Schülerzahlen: erst nach Klärung der Lizenzen veröffentlichen
-# (preprocessing/schuelerzahlen/README.md)
-public/data/schuelerzahlen/
+# Schülerzahlen: veröffentlicht werden nur Länder mit offener Lizenz (<LAND>.json,
+# index.json); die übrigen erzeugt das Skript als *.local.json, nur für die
+# lokale Nutzung (preprocessing/schuelerzahlen/README.md)
+public/data/schuelerzahlen/*.local.json

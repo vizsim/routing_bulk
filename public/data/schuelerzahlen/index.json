@@ -1,0 +1,61 @@
+{
+ "format": 1,
+ "generated": "2026-10-26",
+ "laender": {
+  "BE": {
+   "file": "BE.json",
+   "schools": 896,
+   "withOsm": 831,
+   "source": "be-svz",
+   "generated": "2026-10-26"
+  },
+  "BB": {
+   "file": "BB.json",
+   "schools": 933,
+   "withOsm": 757,
+   "source": "jedeschule-bb",
+   "generated": "2026-10-26"
+  },
+  "HH": {
+   "file": "HH.json",
+   "schools": 524,
+   "withOsm": 428,
+   "source": "jedeschule-hh",
+   "generated": "2026-10-26"
+  }
+ },
+ "sources": {
+  "osm-schulabgleich": {
+   "label": "OSM Schulabgleich",
+   "title": "Abgleich amtlicher Schulstammdaten (JedeSchule) mit OpenStreetMap",
+   "url": "https://schulabgleich.osm-verkehrswende.org/",
+   "license": "Zuordnung zu OSM: © OpenStreetMap-Mitwirkende, ODbL; amtliche Angaben unter der Lizenz des Landes",
+   "licenseUrl": "https://www.openstreetmap.org/copyright",
+   "note": "Zuordnung amtliche Schule ↔ OSM-Objekt sowie amtliche Lage und Schulart."
+  },
+  "be-svz": {
+   "label": "Bildungsstatistik Berlin",
+   "title": "Schüler- und Lehrkräftezahlen je Schule (SVZ_Fakt5)",
+   "url": "https://web.archive.org/web/20260714154715/https://www.bildungsstatistik.berlin.de/statistik/ListGen/SVZ_Fakt5.aspx",
+   "license": "CC BY, Senatsverwaltung für Bildung, Jugend und Familie (laut Datensatz auf daten.berlin.de)",
+   "licenseUrl": "https://daten.berlin.de/datensaetze/c3f96c4b-e891-41a7-aa13-39db8bc97008",
+   "note": "Schüler:innen insgesamt je Berliner Schulnummer (BSN); nur Hauptstandorte. Stand 14.07.2026 aus dem Webarchiv (web.archive.org); die Seite selbst ist seit Oktober 2026 nicht erreichbar."
+  },
+  "jedeschule-bb": {
+   "label": "Schulverzeichnis Brandenburg",
+   "title": "WFS Schul_Standorte des MBJS, Feld schueler (über die JedeSchule-API)",
+   "url": "https://schullandschaft.brandenburg.de/edugis/wfs/schulen",
+   "license": "dl-de/by-2-0, © Ministerium für Bildung, Jugend und Sport",
+   "licenseUrl": "https://www.govdata.de/dl-de/by-2-0",
+   "note": "Stand je Schule angegeben (meist 2022)."
+  },
+  "jedeschule-hh": {
+   "label": "Schulstammdaten Hamburg",
+   "title": "Schulstammdaten und Schülerzahlen der Hamburger Schulen (über die JedeSchule-API)",
+   "url": "https://api.hamburg.de/datasets/v1/schulen",
+   "license": "dl-de/by-2-0, Freie und Hansestadt Hamburg, Behörde für Schule und Berufsausbildung",
+   "licenseUrl": "https://www.govdata.de/dl-de/by-2-0",
+   "note": "Schüler:innen je Standort."
+  }
+ }
+}

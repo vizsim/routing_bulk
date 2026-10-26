@@ -107,7 +107,9 @@ Vorher zogen alle Modi ihre Startpunkte aus **derselben** Längenverteilung im
 - **Echte Schülerzahlen statt Typ-Pauschalen** ✅ (umgesetzt 2026-10-25 für
   BE, BB, HH, BY; NW/MV/ST optional): `preprocessing/schuelerzahlen/` erzeugt
   `public/data/schuelerzahlen/<LAND>.json`, die Zuordnung zu OSM kommt aus
-  osm-schulabgleich (OSM-ID), sonst räumlich (150 m). Wege je Schule =
+  osm-schulabgleich (OSM-ID), sonst räumlich (150 m). Online (GitHub Pages)
+  seit 2026-10-26 BE, BB, HH; BY nur lokal (`BY.local.json`), weil die
+  Schulsuche nur den eigenen Gebrauch erlaubt. Wege je Schule =
   Schüler:innen = Hinwege je Schultag; die Herkunft steht am Eintrag
   (amtlich/Platzhalter/eigener Wert) und im Export. Die amtliche Schulart
   schärft zugleich den Einrichtungstyp. Offen: NW automatisch (Download-Server

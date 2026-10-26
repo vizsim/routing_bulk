@@ -524,11 +524,17 @@ export const AnalysisPanel = {
     const pupilIds = [...new Set(this._facilities
       .filter(f => f.tripsSource && f.tripsSource.kind === 'official' && f.tripsSource.source)
       .map(f => f.tripsSource.source))];
+    // Lage, Schulart und OSM-Zuordnung der amtlichen Schulen kommen aus dem Schulabgleich
+    if (pupilIds.length && AnalysisService.pupilSources['osm-schulabgleich']) pupilIds.push('osm-schulabgleich');
     for (const id of pupilIds) {
       const src = AnalysisService.pupilSources[id] || { label: id, title: id };
       sourceItems.push(`<li><strong>${esc(src.label || id)}:</strong> ${link(src.title || id, src.url)}.
-        ${src.license ? `Lizenz: ${esc(src.license)}.` : ''}
+        ${src.license ? `Lizenz: ${link(src.license, src.licenseUrl)}.` : ''}
         <span class="analysis-sources-note">${esc(src.note || '')}</span></li>`);
+    }
+    if (pupilIds.length) {
+      sourceItems.push(`<li><span class="analysis-sources-note">Schülerzahlen für die App aufbereitet:
+        nur die Gesamtzahl je Schule, den Schulen aus OpenStreetMap zugeordnet.</span></li>`);
     }
     return `<details class="analysis-sources"${this._sourcesOpen ? ' open' : ''}>
       <summary>Annahmen &amp; Quellen</summary>

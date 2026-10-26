@@ -547,6 +547,7 @@ export const AnalysisService = {
     const pupilSourceIds = new Set(result.facilities
       .filter(f => f.tripsSource && f.tripsSource.kind === 'official' && f.tripsSource.source)
       .map(f => f.tripsSource.source));
+    if (pupilSourceIds.size && this.pupilSources['osm-schulabgleich']) pupilSourceIds.add('osm-schulabgleich');
 
     const geoJson = {
       type: 'FeatureCollection',

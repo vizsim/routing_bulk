@@ -346,6 +346,8 @@ class TestBuild(unittest.TestCase):
             self.assertEqual({s["id"] for s in data["schools"]}, {"BE-01G01", "BE-08G12"})
             self.assertIn("Stand 14.07.2026 aus dem Webarchiv", data["sources"]["be-svz"]["note"])
             self.assertIn("web.archive.org/web/20260714154715id_/", b.BE_SVZ_ARCHIVE_URL)
+            # verlinkt wird die Archivseite, nicht die tote Adresse
+            self.assertEqual(data["sources"]["be-svz"]["url"], b.BE_SVZ_ARCHIVE_VIEW_URL)
 
     def test_main_nw_with_local_file_and_jedeschule_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -376,7 +378,7 @@ class TestBuild(unittest.TestCase):
             with quiet(), mock.patch.object(b, "fetch_arcgis_features", return_value=ST_FEATURES):
                 code = b.main(["--laender", "ST", "--matches-csv", str(csv_path), "--out", str(out)])
             self.assertEqual(code, 0)
-            data = json.loads((out / "ST.json").read_text(encoding="utf-8"))
+            data = json.loads((out / "ST.local.json").read_text(encoding="utf-8"))
             by_id = {s["id"]: s for s in data["schools"]}
             self.assertEqual(by_id["ST-STALA-1"]["osm"], ["way/4001"])
             self.assertEqual(by_id["ST-STALA-1"]["pupils"], 57)
@@ -390,7 +392,7 @@ class TestBuild(unittest.TestCase):
             with quiet(), mock.patch.object(b, "fetch_jedeschule", return_value=BY_RECORDS):
                 code = b.main(["--laender", "BY", "--matches-csv", str(csv_path), "--out", str(out)])
             self.assertEqual(code, 0)
-            schools = json.loads((out / "BY.json").read_text(encoding="utf-8"))["schools"]
+            schools = json.loads((out / "BY.local.json").read_text(encoding="utf-8"))["schools"]
             self.assertEqual(len(schools), 1)  # ältere Kennung ohne Schülerzahl fällt weg
             self.assertEqual(schools[0]["id"], "BY-0950")
             self.assertEqual(schools[0]["osm"], ["way/5001"])
@@ -432,6 +434,54 @@ class TestBuild(unittest.TestCase):
                         "--matches-csv", str(csv_path), "--out", str(out)])
             index = json.loads((out / "index.json").read_text(encoding="utf-8"))
             self.assertEqual(set(index["laender"]), {"BE", "NW"})
+
+    def test_main_publishes_only_open_lands(self):
+        # Berlin (CC BY) wird veröffentlicht, Bayern nur lokal; BY.json aus einem
+        # früheren Lauf heißt danach BY.local.json
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path, out = self._files(tmp)
+            svz = Path(tmp, "svz.html")
+            svz.write_text(SVZ_HTML, encoding="utf-8")
+            out.mkdir()
+            (out / "BY.json").write_text("{}", encoding="utf-8")
+            with quiet(), mock.patch.object(b, "fetch_jedeschule", return_value=BY_RECORDS):
+                code = b.main(["--laender", "BE,BY", "--be-svz", str(svz),
+                               "--matches-csv", str(csv_path), "--out", str(out)])
+            self.assertEqual(code, 0)
+            self.assertEqual(sorted(p.name for p in out.iterdir()),
+                             ["BE.json", "BY.local.json", "index.json", "index.local.json"])
+            public = json.loads((out / "index.json").read_text(encoding="utf-8"))
+            local = json.loads((out / "index.local.json").read_text(encoding="utf-8"))
+            self.assertEqual(set(public["laender"]), {"BE"})
+            self.assertEqual(set(public["sources"]), {"osm-schulabgleich", "be-svz"})
+            self.assertEqual(set(local["laender"]), {"BE", "BY"})
+            self.assertEqual(local["laender"]["BY"]["file"], "BY.local.json")
+
+    def test_main_renames_kept_file_of_unpublished_land(self):
+        # Bayern scheitert, die Datei aus einem früheren Lauf (BY.json) bleibt — als BY.local.json
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path, out = self._files(tmp)
+            out.mkdir()
+            (out / "BY.json").write_text(json.dumps({"land": "BY", "sources": {}, "schools": []}), encoding="utf-8")
+            (out / "index.json").write_text(json.dumps({"laender": {"BY": {"file": "BY.json", "source": "jedeschule-by",
+                                                                           "generated": "2026-10-25"}}}), encoding="utf-8")
+            with quiet(), mock.patch.object(b, "fetch_jedeschule", side_effect=OSError("offline")):
+                code = b.main(["--laender", "BY", "--matches-csv", str(csv_path), "--out", str(out)])
+            self.assertEqual(code, 1)
+            self.assertFalse((out / "BY.json").exists())
+            local = json.loads((out / "index.local.json").read_text(encoding="utf-8"))
+            self.assertEqual(local["laender"]["BY"]["file"], "BY.local.json")
+            self.assertEqual(json.loads((out / "index.json").read_text(encoding="utf-8"))["laender"], {})
+
+    def test_write_if_changed_ignores_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "x.json")
+            b._write_if_changed(path, {"generated": "2026-01-01", "a": 1})
+            kept = b._write_if_changed(path, {"generated": "2026-02-02", "a": 1})
+            self.assertEqual(kept["generated"], "2026-01-01")
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["generated"], "2026-01-01")
+            b._write_if_changed(path, {"generated": "2026-03-03", "a": 2})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["generated"], "2026-03-03")
 
     def test_unknown_land(self):
         with quiet(), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

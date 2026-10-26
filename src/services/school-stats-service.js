@@ -7,6 +7,11 @@
 import { CONFIG } from '../core/config.js';
 import { Utils } from '../core/utils.js';
 
+// index.json führt die Länder, deren Daten veröffentlicht werden dürfen (im
+// Repo, auch auf GitHub Pages). index.local.json führt zusätzlich die nur
+// lokal erzeugten (<LAND>.local.json, z. B. Bayern) — nur beim Entwickeln.
+const INDEX_FILES = import.meta.env?.DEV ? ['index.local.json', 'index.json'] : ['index.json'];
+
 const cache = new Map();
 
 function resolveUrl(file) {
@@ -20,7 +25,8 @@ async function fetchJson(file) {
   if (!url) return null;
   if (!cache.has(url)) {
     cache.set(url, fetch(url)
-      .then(r => (r.ok ? r.json() : null))
+      // Der Vite-Dev-Server antwortet auf fehlende Dateien mit index.html
+      .then(r => (r.ok && !(r.headers.get('content-type') || '').includes('text/html') ? r.json() : null))
       .catch(err => {
         Utils.logError('SchoolStatsService', err);
         return null;
@@ -38,7 +44,11 @@ export const SchoolStatsService = {
   async loadLands(lands) {
     const empty = { schools: [], sources: {}, lands: {} };
     if (!lands || lands.length === 0) return empty;
-    const index = await fetchJson('index.json');
+    let index = null;
+    for (const file of INDEX_FILES) {
+      index = await fetchJson(file);
+      if (index && index.laender) break;
+    }
     if (!index || !index.laender) return empty;
     const available = lands.filter(l => index.laender[l]);
     const files = await Promise.all(available.map(l => fetchJson(index.laender[l].file || `${l}.json`)));
